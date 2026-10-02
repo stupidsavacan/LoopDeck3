@@ -1,4 +1,4 @@
-name: LoopDeck CI
+name: LoopDeck3 CI
 
 on:
   push:
@@ -71,14 +71,14 @@ jobs:
       - name: Verify single-file HTML
         run: |
           set -euo pipefail
-          test -s LoopDeck-single.html
-          echo "Single HTML size: $(wc -c < LoopDeck-single.html) bytes"
+          test -s LoopDeck3.html
+          echo "Single HTML size: $(wc -c < LoopDeck3.html) bytes"
 
       - name: Upload single-file HTML
         uses: actions/upload-artifact@v7
         with:
-          name: LoopDeck-single-html
-          path: LoopDeck-single.html
+          name: LoopDeck3-html
+          path: LoopDeck3.html
           if-no-files-found: error
           retention-days: 7
 
@@ -116,6 +116,6 @@ jobs:
           path: |
             qa-report/
             qa-results/
-            LoopDeck-single.html
+            LoopDeck3.html
           if-no-files-found: warn
           retention-days: 7

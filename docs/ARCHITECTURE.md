@@ -1,72 +1,33 @@
-# LoopDeck architecture and source of truth
+# LoopDeck3 architecture
 
-This document identifies which repository paths are authoritative and which are generated or archival.
+## Product boundary
 
-## Application source
+One offline HTML application, two delivery formats. TypeScript owns study behavior, routes, data validation and rendering. Android owns only WebView hosting and system file import/export. There is no separate native study UI, server, account system or old internal API compatibility requirement.
 
-- `src/`: production TypeScript and CSS.
-- `src/main.ts`: application entry point and stylesheet load order.
-- `tests/`: behavior/regression tests.
+Initial reference: LoopDeck2 PR #115, commit `656ed528419a8e6f35294f258b7604fe2bb59d42`. Existing learning behavior is the starting point, not an obligation to preserve every old implementation detail.
 
-For machine navigation, run `npm run code:map` and query the ignored `.codex-code-map.json`. It records source imports, public names, named functions/locations and body hashes. Regenerate it after source changes; it is generated evidence, not source.
+## Source ownership
 
-The main debugging paths are:
+- `src/core/`: question models, answer judgment, session and review logic.
+- `src/storage/`: IndexedDB, session state, study preferences, backup validation and persistence.
+- `src/packs/`: built-in/imported data and asset resolution.
+- `src/screens/`, `src/ui/`, `src/main.ts`: HTML application and navigation.
+- `src/platform/`: browser downloads and the Android system-file bridge.
+- `android/`: host and signing/build configuration.
+- `scripts/code-map.mjs`: generated dependency/export/function index.
 
-- `src/storage/db.ts`: the stable application storage facade.
-- `src/storage/indexedDb.ts`: connection, schema/index creation and transaction completion/abort handling.
-- `src/storage/packStorage.ts`: pack priority, assets, validation and recovery.
-- `src/storage/backupStorage.ts`: restore transaction composition.
-- `src/storage/sessionStorage.ts`: resume payload read/restore/save/clear, including legacy compatibility.
-- `src/core/studySettings.ts`: study defaults and runtime queue settings.
-- `src/core/quizAnswer.ts`: answer-mode selection and attempt construction.
-- `src/ui/quizBookmark.ts`: bookmark button state and persistence.
-- `src/screens/inlineQuiz.ts`: quiz render ownership, timing, answer/save/next orchestration and input events.
+Size and formatting are not correctness gates. Type safety, asynchronous error handling, dependency cycles, behavior tests and artifact validation remain gates. Run `npm run code:map` after edits to regenerate the ignored JSON index.
 
-Existing `db.ts` and `moduleScreen.ts` exports remain available through imports/re-exports. Refactoring these paths must preserve storage keys/versions, transaction order, timing, DOM labels and callbacks. Source length and expansion/compression are unrestricted; check correctness with `npm run verify` and browser QA.
+## Single distribution source
 
-The current visual target is the editorial UI. Until the stylesheet-collapse work in Issue #16 is completed, `editorialUi.css` is the final visual-authority layer and is intentionally loaded after the older base/feature/mobile sheets. New visual work should not create another chronological override sheet.
+`npm run build:single` bundles scripts, styles, fonts and images into `LoopDeck3.html`. The APK bundles the exact same bytes as `assets/loopdeck/index.html`. Gradle fails if the HTML has not been built. Release checks compare the file extracted from the APK with the downloadable HTML.
 
-## Built-in study content
+The Android WebView loads it from `https://appassets.androidplatform.net/assets/loopdeck/index.html` through AndroidX WebViewAssetLoader. File-origin access is disabled; unmatched network resources and navigation outside the local document are blocked. AndroidX WebKit 1.12.1 is pinned for compatibility with the inherited compileSdk 35 build toolchain. See [Android local-content guidance](https://developer.android.com/develop/ui/views/layout/webapps/load-local-content).
 
-- `data/builtin/loopdeck_builtin.loopdeck.json`: the only built-in runtime pack.
-- `public/images/history/`: authoritative built-in image files referenced by that pack.
+## Data boundary
 
-`src/packs/builtinLoader.ts` imports the built-in JSON directly. Rescue/archive files are not runtime inputs.
+The new Android package has its own browser storage and app data. No automatic LoopDeck2 storage migration is attempted. The inherited validated backup import is the explicit migration path. Imported packs are data, not executable HTML/JavaScript. Compatibility applies to supported data formats, not old internal TypeScript APIs.
 
-## Rescue provenance
+## Release contract
 
-- `rescued-data/`: archive only. It contains the rescued raw question bank, original rescued image binaries, per-module conversion outputs, and conversion reports.
-
-Nothing under `rescued-data/` should be treated as live application data. Git history preserves earlier migration layouts.
-
-## Generated web outputs
-
-- `dist/`: normal Vite build output; generated by `npm run build`.
-- `dist-single/` and `LoopDeck-single.html`: single-file build intermediates/output; generated by `npm run build:single`.
-
-These outputs are ignored and must not become manually maintained source.
-
-## Android packaging
-
-The Android project is a WebView wrapper around the normal Vite build.
-
-`android/app/build.gradle.kts` defines `syncLoopDeckDist`, which syncs `dist/` into:
-
-```text
-android/app/src/main/assets/loopdeck/
-```
-
-That directory is generated packaging input and is ignored by Git. Build `dist/` first; Gradle `preBuild` performs the sync. Do not commit a second copy of web assets there.
-
-Debug APKs are uploaded as GitHub Actions artifacts. Signed release APKs and the corresponding single-file HTML are published as GitHub Release assets by `.github/workflows/build-android-release.yml`.
-
-## Browser storage
-
-IndexedDB `loopdeck-db` stores attempts, bookmarks, imported packs/assets, review cards, and review logs. There is no standalone IndexedDB `settings` object store; database upgrades remove the obsolete legacy settings store.
-
-Two separate localStorage responsibilities must not be conflated:
-
-- `loopdeck_session_<moduleId>` stores in-progress session resume state, including the already-built queue, timing, attempts, and runtime session settings. Queue-generation settings such as range, count, and shuffle are intentionally normalized after the queue has been created.
-- `loopdeck_study_prefs_v2_<JSON([packId,moduleId])>` stores the reusable per-pack/per-module study preferences chosen on the pre-study settings screen. These preferences survive session completion and are validated against the current module when restored. Unambiguous v1 keys remain readable for migration.
-
-Reusable study preferences are intentionally separate from resume state so completing or discarding a session cannot erase the user's next-session defaults, and different packs with the same module ID do not share preferences.
+A version tag triggers verification, browser QA, signed APK creation and signature verification before publishing both assets plus checksums. The app label, HTML title and repository identify LoopDeck3. The displayed web version comes from package.json; Android versionName and versionCode are supplied by the release workflow. Signing uses one persistent repository-specific key, never a newly generated per-run key.

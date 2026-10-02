@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { seed } from './fixtures.mjs';
 
-const artifact = resolve(process.env.QA_ARTIFACT || 'LoopDeck-single.html');
+const artifact = resolve(process.env.QA_ARTIFACT || 'LoopDeck3.html');
 const url = process.env.QA_BASE_URL || pathToFileURL(artifact).href;
 
 async function go(page, route) {

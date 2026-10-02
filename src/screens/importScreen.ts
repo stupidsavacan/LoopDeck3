@@ -453,23 +453,7 @@ export async function renderImportScreen(
     dangerZone
   );
 
-  const apkCard = el('details', 'card v2-dev-zone');
-  apkCard.append(el('summary', '', '開発者向け · APKビルド'));
-  const apkBody = el('div', 'v2-dev-body');
-  apkBody.append(
-    el('h2', '', 'APK書き出し'),
-    el(
-      'p',
-      'hint',
-      '署名付き APK は、GitHub Secrets に登録した LoopDeck 用 keystore から GitHub Actions で作成します。通常の学習データとは分けて安全に扱います。'
-    ),
-    infoList([
-      'debug APK: Build Android Debug APK workflow の LoopDeck-debug-apk artifact',
-      'signed release APK: Build Android Signed Release APK workflow が GitHub Releases に公開する LoopDeck2-signed-release-...apk',
-      '署名の詳しい手順は android/README_SIGNING.md にまとめています。'
-    ])
-  );
-  apkCard.append(apkBody);
+
 
   const note = el('details', 'card safe-note');
   note.append(
@@ -483,6 +467,6 @@ export async function renderImportScreen(
     ])
   );
 
-  screen.append(header, card, authoringCard, uploadCard, preview, packageList, dataCard, apkCard, note);
+  screen.append(header, card, authoringCard, uploadCard, preview, packageList, dataCard, note);
   root.append(screen);
 }

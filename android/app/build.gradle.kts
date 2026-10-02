@@ -20,15 +20,15 @@ fun releaseSigningProperty(key: String): String = keystoreProperties.getProperty
     ?: throw GradleException("Missing $key in android/keystore.properties for signed release builds.")
 
 android {
-    namespace = "com.loopdeck.app"
+    namespace = "com.loopdeck3.app"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.loopdeck.app"
+        applicationId = "com.loopdeck3.app"
         minSdk = 23
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = providers.gradleProperty("appVersionCode").orElse("1").get().toInt()
+        versionName = providers.gradleProperty("appVersionName").orElse("0.1.0").get()
     }
 
     buildFeatures {
@@ -72,11 +72,14 @@ tasks.matching { task -> task.name == "assembleRelease" || task.name == "bundleR
 }
 
 tasks.register<Sync>("syncLoopDeckDist") {
-    val distDir = rootProject.file("../dist")
-    from(distDir)
+    val html = rootProject.file("../LoopDeck3.html")
+    from(html) { rename { "index.html" } }
     into(layout.projectDirectory.dir("src/main/assets/loopdeck"))
+    doFirst { check(html.isFile) { "Run npm run build:single before building the APK." } }
 }
 
 tasks.named("preBuild") {
     dependsOn("syncLoopDeckDist")
 }
+
+dependencies { implementation("androidx.webkit:webkit:1.12.1") }

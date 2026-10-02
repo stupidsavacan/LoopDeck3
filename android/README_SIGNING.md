@@ -1,111 +1,16 @@
-# Building LoopDeck APKs
+# LoopDeck3 Android host
 
-LoopDeck's Android project packages the built Vite app as a small local Android wrapper. It uses the files generated in `dist` and does not execute imported study packs as code.
+Build `LoopDeck3.html` first with `npm run build:single`. Then run Gradle `assembleDebug` in this directory, or use the debug workflow. The Android application ID is `com.loopdeck3.app` (debug adds `.debug`).
 
-## Debug APK
+Release tags and manual runs use four GitHub Actions secrets:
 
-The easiest path is GitHub Actions:
+- `ANDROID_KEYSTORE_BASE64`
+- `KEYSTORE_PASSWORD`
+- `KEY_ALIAS`
+- `KEY_PASSWORD`
 
-```text
-.github/workflows/build-android-debug.yml
-```
+The initial LoopDeck3 signing key is backed up locally at `C:/Users/gamit/AndroidKeys/LoopDeck3/release.jks`. Its password is saved with Windows DPAPI in `password.dpapi.xml` beside it, bound to the current Windows user. These files are outside the repository. Preserve the key and arrange a separate secure backup before changing computers; do not replace it for subsequent releases.
 
-Run it manually and download the `LoopDeck-debug-apk` artifact.
+Signing material is prepared only inside CI and removed afterwards. Never commit keys or passwords. Releases verify the APK signature and compare the packaged HTML byte-for-byte with the HTML download.
 
-Debug builds do not need signing secrets.
-
-## Signed Release APK from GitHub Actions
-
-Use this workflow:
-
-```text
-.github/workflows/build-android-release.yml
-```
-
-It builds the web app, prepares release signing files from GitHub Secrets, runs `assembleRelease`, publishes the signed APK and single-file HTML as assets on a GitHub Release, and removes the temporary signing files.
-
-The release assets are named with the workflow run number and attempt, for example:
-
-```text
-LoopDeck2-signed-release-<run>-<attempt>.apk
-LoopDeck2-single-<run>-<attempt>.html
-```
-
-Required GitHub Actions secrets:
-
-```text
-ANDROID_KEYSTORE_BASE64
-KEYSTORE_PASSWORD
-KEY_ALIAS
-KEY_PASSWORD
-```
-
-The workflow decodes `ANDROID_KEYSTORE_BASE64` into a temporary `android/loopdeck-release.jks` file and creates `android/keystore.properties` during CI. Those files must never be committed.
-
-The signed-release workflow runs on `main` pushes and manual `workflow_dispatch`. It fails clearly if any required signing secret is missing. Debug APKs remain GitHub Actions artifacts; signed release outputs are GitHub Release assets.
-
-## Creating ANDROID_KEYSTORE_BASE64
-
-After creating or locating your release keystore locally, copy its base64 value to the clipboard.
-
-PowerShell example:
-
-```powershell
-[Convert]::ToBase64String([IO.File]::ReadAllBytes("C:\\Users\\gamit\\AndroidKeys\\loopdeck-release.jks")) | Set-Clipboard
-```
-
-Paste that clipboard value into the GitHub Secret named `ANDROID_KEYSTORE_BASE64`.
-
-Then add the remaining GitHub Secrets with their real values:
-
-```text
-KEYSTORE_PASSWORD
-KEY_ALIAS
-KEY_PASSWORD
-```
-
-Do not paste those values into README files, source files, workflow logs, issues, or normal text files.
-
-## Local Android Studio Build
-
-From the repository root, build web assets first:
-
-```bash
-npm ci --include=dev
-npm run build
-```
-
-Then open `android/` in Android Studio and run `assembleDebug`.
-
-## Local Signed Release
-
-Copy:
-
-```bash
-cp android/keystore.properties.example android/keystore.properties
-```
-
-Then edit `android/keystore.properties`:
-
-```properties
-storeFile=/absolute/path/to/your/loopdeck-release.jks
-storePassword=YOUR_STORE_PASSWORD
-keyAlias=YOUR_KEY_ALIAS
-keyPassword=YOUR_KEY_PASSWORD
-```
-
-Run `assembleRelease` from the Android project.
-
-If `android/keystore.properties` is missing or incomplete, debug builds still work. Release builds fail with a clear signing message so an unsigned release is not mistaken for a signed APK.
-
-## Safety Rules
-
-Never commit:
-
-```text
-*.jks
-*.keystore
-android/keystore.properties
-```
-
-Only store real signing secrets in GitHub Actions Secrets or in a local file that is ignored by git.
+No native learning screen is implemented. WebView hosts the same offline HTML used in the browser; the inherited bounded file-save bridge remains for Android's system document picker. Runtime behavior on actual Android devices still needs separate testing.

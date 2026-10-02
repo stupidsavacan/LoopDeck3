@@ -12,5 +12,5 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-rootProject.name = "LoopDeckAndroid"
+rootProject.name = "LoopDeck3"
 include(":app")

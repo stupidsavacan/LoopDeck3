@@ -5,7 +5,7 @@ import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { fixture, seed } from './fixtures.mjs';
 
-const artifact = resolve(process.env.QA_ARTIFACT || 'LoopDeck-single.html');
+const artifact = resolve(process.env.QA_ARTIFACT || 'LoopDeck3.html');
 const url = process.env.QA_BASE_URL || pathToFileURL(artifact).href;
 const test = base.extend({
   page: async ({ page, browser }, use, info) => {

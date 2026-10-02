@@ -1,5 +1,5 @@
 {
-  "name": "loopdeck",
+  "name": "loopdeck3",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -7,7 +7,7 @@
     "dev": "vite --host 0.0.0.0",
     "dev:local": "vite",
     "build": "npm run typecheck && vite build",
-    "build:single": "npm run typecheck && vite build --mode single && node scripts/make-single-html.mjs dist-single LoopDeck-single.html",
+    "build:single": "npm run typecheck && vite build --mode single && node scripts/make-single-html.mjs dist-single LoopDeck3.html",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "check:architecture": "node scripts/check-architecture.mjs",

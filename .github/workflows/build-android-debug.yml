@@ -37,7 +37,7 @@ jobs:
         run: npm test
 
       - name: Build web assets
-        run: npm run build
+        run: npm run build:single
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -57,7 +57,7 @@ jobs:
         with:
           gradle-version: 8.10.2
 
-      - name: Build unsigned debug APK
+      - name: Build debug-signed APK
         working-directory: android
         run: gradle --no-daemon assembleDebug
 
@@ -87,7 +87,7 @@ jobs:
         if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v7
         with:
-          name: LoopDeck-debug-apk
+          name: LoopDeck3-debug-apk
           path: artifacts/debug-apk/*.apk
           if-no-files-found: error
           retention-days: 7

@@ -1,4 +1,4 @@
-package com.loopdeck.app;
+package com.loopdeck3.app;
 
 import android.app.Activity;
 import android.content.Intent;
@@ -13,6 +13,9 @@ import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebChromeClient.FileChooserParams;
 import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
+import androidx.webkit.WebViewAssetLoader;
+import java.io.ByteArrayInputStream;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -31,7 +34,7 @@ import java.util.Map;
 public class MainActivity extends Activity {
     private static final int FILE_CHOOSER_REQUEST = 2410;
     private static final int SAVE_FILE_REQUEST = 2411;
-    private static final String ASSET_BASE_URL = "file:///android_asset/loopdeck/";
+    private static final String ASSET_BASE_URL = "https://appassets.androidplatform.net/assets/loopdeck/";
 
     private static final int SAVE_RAW_CHUNK_BYTES = 48 * 1024;
     private static final int MAX_SAVE_BYTES = 256 * 1024 * 1024;
@@ -238,11 +241,10 @@ public class MainActivity extends Activity {
         settings.setJavaScriptEnabled(true); // Bundled LoopDeck app code only; imported study content is data.
         settings.setDomStorageEnabled(true);
         settings.setDatabaseEnabled(true);
-        // TODO(#13): migrate this file:// origin only with an explicit IndexedDB/localStorage migration.
-        // Switching directly to appassets would strand existing user data under the old origin.
-        settings.setAllowFileAccess(true);
+        // LoopDeck3 starts with its own HTTPS origin; no old file-origin migration.
+        settings.setAllowFileAccess(false);
         settings.setAllowContentAccess(true);
-        settings.setAllowFileAccessFromFileURLs(true);
+        settings.setAllowFileAccessFromFileURLs(false);
         settings.setAllowUniversalAccessFromFileURLs(false);
         settings.setMediaPlaybackRequiresUserGesture(true);
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
@@ -250,7 +252,15 @@ public class MainActivity extends Activity {
         }
 
         webView.addJavascriptInterface(new LoopDeckBridge(), "LoopDeckAndroid");
+        final WebViewAssetLoader assetLoader = new WebViewAssetLoader.Builder()
+                .addPathHandler("/assets/", new WebViewAssetLoader.AssetsPathHandler(this))
+                .build();
         webView.setWebViewClient(new WebViewClient() {
+            @Override
+            public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                WebResourceResponse local = assetLoader.shouldInterceptRequest(request.getUrl());
+                return local != null ? local : new WebResourceResponse("text/plain", "UTF-8", 403, "Blocked", null, new ByteArrayInputStream(new byte[0]));
+            }
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 return shouldBlockNavigation(request.getUrl());

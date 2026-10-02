@@ -2,7 +2,7 @@ import { readFile, writeFile, readdir } from 'node:fs/promises';
 import { extname, dirname, join, relative, resolve, sep } from 'node:path';
 
 const distDir = resolve(process.cwd(), process.argv[2] ?? 'dist-single');
-const outputPath = resolve(process.cwd(), process.argv[3] ?? 'LoopDeck-single.html');
+const outputPath = resolve(process.cwd(), process.argv[3] ?? 'LoopDeck3.html');
 const indexPath = join(distDir, 'index.html');
 
 const textExtensions = new Set(['.html', '.css', '.js', '.mjs', '.cjs', '.json', '.svg', '.txt', '.xml']);

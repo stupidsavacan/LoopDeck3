@@ -10,9 +10,13 @@ android/app/src/main/assets/loopdeck/
 *.keystore
 
 dist-single/
-LoopDeck-single.html
+LoopDeck3.html
 qa-results/
 qa-report/
 qa-report-web/
 
 /.codex-code-map.json
+
+LoopDeck3.apk
+SHA256SUMS.txt
+packaged.html

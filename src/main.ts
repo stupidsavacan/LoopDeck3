@@ -1,4 +1,5 @@
 import './styles.css';
+import { version as appVersion } from '../package.json';
 import './homeFeatures.css';
 import './mobileUxFixes.css';
 import './editorialUi.css';
@@ -50,7 +51,7 @@ function renderStartupError(error: unknown): void {
     level: 'error',
     area: 'startup',
     code: 'APP-STARTUP',
-    userMessage: 'LoopDeckを起動できませんでした。',
+    userMessage: 'LoopDeck3を起動できませんでした。',
     detail: errorMessage(error),
     stack: error instanceof Error ? error.stack : undefined
   });
@@ -69,7 +70,7 @@ function renderStartupError(error: unknown): void {
   eyebrow.className = 'eyebrow';
   eyebrow.textContent = 'SYSTEM ERROR';
   const title = document.createElement('h1');
-  title.textContent = 'LoopDeckを起動できませんでした';
+  title.textContent = 'LoopDeck3を起動できませんでした';
   const body = document.createElement('p');
   body.className = 'system-error-detail';
   body.textContent = errorMessage(error);
@@ -224,8 +225,8 @@ function appendHomeManagementLinks(): void {
   });
   screen.append(management);
 
-  const version = button('LoopDeck v0.1.0', 'version-trigger');
-  version.setAttribute('aria-label', 'LoopDeck バージョン情報');
+  const version = button(`LoopDeck3 v${appVersion}`, 'version-trigger');
+  version.setAttribute('aria-label', 'LoopDeck3 バージョン情報');
   let tapCount = 0;
   let resetTimer = 0;
   version.onclick = () => {
