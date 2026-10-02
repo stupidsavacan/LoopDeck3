@@ -108,6 +108,16 @@ for (const sourceFile of sourceFiles) {
 }
 
 const errors = [];
+for (const source of sourceFiles) {
+  if (areaOf(source.fileName) === 'app') continue;
+  for (const statement of source.statements) {
+    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) continue;
+    if (!statement.moduleSpecifier.text.endsWith('/studyRepository')) continue;
+    const bindings = statement.importClause?.namedBindings;
+    const importsSingleton = bindings && (ts.isNamespaceImport(bindings) || bindings.elements.some(element => (element.propertyName ?? element.name).text === 'studyStore'));
+    if (importsSingleton) errors.push('global repository dependency: ' + repoPath(source.fileName) + '\n  Receive the repository from the application context instead.');
+  }
+}
 
 for (const [source, targets] of graph) {
   for (const target of targets) {

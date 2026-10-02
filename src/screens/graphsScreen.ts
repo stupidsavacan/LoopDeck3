@@ -7,7 +7,7 @@ import {
   type ModuleStudyStat
 } from '../core/analyticsEngine';
 import { getActiveModules, getActiveQuestions } from '../packs/packResolver';
-import { studyStore } from '../storage/studyRepository';
+
 import { button, clear, el } from '../ui/dom';
 import { appendIconLabel } from '../ui/icons';
 
@@ -113,7 +113,7 @@ function renderBreakdown(root: HTMLElement, breakdown: MistakeBreakdownItem[]): 
 }
 
 export async function renderGraphsScreen(context: ScreenContext): Promise<void> {
-  const { root: root, catalog: packView, isCurrent } = context;
+  const { store: studyStore, root: root, catalog: packView, isCurrent } = context;
   const { home: navigateHome, review: navigateReview } = context.navigation;
 
   if (!isCurrent()) return;

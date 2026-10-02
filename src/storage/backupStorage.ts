@@ -1,9 +1,9 @@
 import { validateBackupPayload } from './backupValidator';
-import { database, USER_DATA_STORES } from './indexedDb';
+import { USER_DATA_STORES, type LocalDatabase } from './indexedDb';
 import { putPacksInInstallOrder } from './packStorage';
 import type { BackupImportMode } from './storageTypes';
 
-export async function importBackup(rawBackup: unknown, mode: BackupImportMode): Promise<void> {
+export async function importBackup(database: LocalDatabase, rawBackup: unknown, mode: BackupImportMode): Promise<void> {
   if (mode !== 'merge' && mode !== 'replace') throw new Error('Explicit backup import mode is required.');
   const backup = validateBackupPayload(rawBackup);
   await database.transact([...USER_DATA_STORES], 'readwrite', (tx) => {

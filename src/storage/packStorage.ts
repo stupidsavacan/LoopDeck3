@@ -2,7 +2,7 @@ import { validatePack } from '../packs/packValidator';
 import type { LoopDeckPack } from '../core/models';
 import type { ImportedPackAsset, PackAssetWriteStrategy } from '../packs/packTypes';
 import type { StoredPackAsset } from './storageTypes';
-import { database } from './indexedDb';
+import type { LocalDatabase } from './indexedDb';
 
 export function packAssetId(packId: string, path: string): string {
   return `${packId}:${path}`;
@@ -31,7 +31,7 @@ export function putPacksInInstallOrder(store: IDBObjectStore, packs: LoopDeckPac
   };
 }
 
-export async function savePackWithAssets(pack: LoopDeckPack, assets: ImportedPackAsset[], strategy: PackAssetWriteStrategy): Promise<void> {
+export async function savePackWithAssets(database: LocalDatabase, pack: LoopDeckPack, assets: ImportedPackAsset[], strategy: PackAssetWriteStrategy): Promise<void> {
   await database.transact(['packs', 'packAssets'], 'readwrite', (tx) => {
     putPacksInInstallOrder(tx.objectStore('packs'), [pack]);
     const assetStore = tx.objectStore('packAssets');
@@ -57,7 +57,7 @@ export async function savePackWithAssets(pack: LoopDeckPack, assets: ImportedPac
   });
 }
 
-export async function deletePackAndAssets(packId: string): Promise<void> {
+export async function deletePackAndAssets(database: LocalDatabase, packId: string): Promise<void> {
   await database.transact(['packs', 'packAssets'], 'readwrite', (tx) => {
     tx.objectStore('packs').delete(packId);
     const assetStore = tx.objectStore('packAssets');

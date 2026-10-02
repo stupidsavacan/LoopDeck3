@@ -92,7 +92,7 @@ describe('zipExporter', () => {
       'replace'
     );
 
-    const blob = await createLoopDeckZipBlob(storedPack);
+    const blob = await createLoopDeckZipBlob(storedPack, await studyStore.getImportedPackAssets());
     const zip = await JSZip.loadAsync(await blob.arrayBuffer());
 
     expect(await zip.file('images/map.png')!.async('base64')).toBe('c3RvcmVk');

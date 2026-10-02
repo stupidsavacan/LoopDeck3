@@ -1,6 +1,5 @@
 import JSZip from 'jszip';
 import type { LoopDeckPack } from '../core/models';
-import { studyStore } from '../storage/studyRepository';
 import { isSafeImageAssetRef, isSafeImageDataUrl } from './assetSafety';
 import type { ImportedPackAsset } from './packTypes';
 
@@ -63,9 +62,8 @@ export function stringifyLoopDeckJson(pack: LoopDeckPack): string {
   return stringifyJson(pack);
 }
 
-export async function createLoopDeckZipBlob(pack: LoopDeckPack, assets?: ImportedPackAsset[]): Promise<Blob> {
-  const availableAssets = assets ?? (await studyStore.getImportedPackAssets());
-  return createZip(pack, availableAssets).generateAsync({
+export async function createLoopDeckZipBlob(pack: LoopDeckPack, assets: ImportedPackAsset[] = []): Promise<Blob> {
+  return createZip(pack, assets).generateAsync({
     type: 'blob',
     compression: 'DEFLATE',
     compressionOptions: { level: 6 }

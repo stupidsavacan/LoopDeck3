@@ -1,3 +1,4 @@
+import { studyStore } from '../src/storage/studyRepository';
 // @vitest-environment jsdom
 import 'fake-indexeddb/auto';
 import { describe, expect, it, vi } from 'vitest';
@@ -58,7 +59,7 @@ describe('renderInlineQuiz wrong answer feedback', () => {
       choiceQuestion,
       otherQuestion
     ]);
-    renderInlineQuiz(container, session, { onSessionChange() {}, onComplete() {} });
+    renderInlineQuiz(container, session, { onSessionChange() {}, onComplete() {} }, { store: studyStore });
 
     [...container.querySelectorAll<HTMLButtonElement>('.choice-btn')].find((button) => button.textContent === chloroplast)!.click();
     await settle();
@@ -83,7 +84,7 @@ describe('renderInlineQuiz wrong answer feedback', () => {
       'normal',
       [inputQuestion, otherQuestion]
     );
-    renderInlineQuiz(container, session, { onSessionChange() {}, onComplete() {} });
+    renderInlineQuiz(container, session, { onSessionChange() {}, onComplete() {} }, { store: studyStore });
 
     const input = container.querySelector<HTMLInputElement>('input.text-input')!;
     input.value = '\u8449 \u7dd1\u4f53';
@@ -145,7 +146,7 @@ describe('renderInlineQuiz wrong answer feedback', () => {
     );
     const random = vi.spyOn(Math, 'random').mockReturnValue(0);
     try {
-      renderInlineQuiz(container, session, { onSessionChange() {}, onComplete() {} });
+      renderInlineQuiz(container, session, { onSessionChange() {}, onComplete() {} }, { store: studyStore });
       [...container.querySelectorAll<HTMLButtonElement>('.choice-btn')].find((button) => button.textContent === '\u82b1\u7c89')!.click();
       await settle();
 
@@ -168,7 +169,7 @@ describe('renderInlineQuiz wrong answer feedback', () => {
       'normal',
       [inputQuestion, otherQuestion]
     );
-    renderInlineQuiz(container, session, { onSessionChange() {}, onComplete() {} });
+    renderInlineQuiz(container, session, { onSessionChange() {}, onComplete() {} }, { store: studyStore });
 
     const input = container.querySelector<HTMLInputElement>('input.text-input')!;
     input.value = '\u5168\u304f\u9055\u3046\u7b54\u3048';
@@ -191,7 +192,7 @@ describe('renderInlineQuiz wrong answer feedback', () => {
       'normal',
       [inputQuestion, otherQuestion]
     );
-    renderInlineQuiz(container, session, { onSessionChange() {}, onComplete() {} });
+    renderInlineQuiz(container, session, { onSessionChange() {}, onComplete() {} }, { store: studyStore });
 
     const input = container.querySelector<HTMLInputElement>('input.text-input')!;
     input.value = mitochondria;

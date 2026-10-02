@@ -31,7 +31,7 @@ describe('renderInlineQuiz input lock', () => {
     const container = document.createElement('div');
     const session = createSession(moduleInfo, [question], { shuffle: false, autoNext: false, questionLimit: 'all', answerFormat: 'input' });
 
-    renderInlineQuiz(container, session, { onSessionChange() {}, onComplete() {} });
+    renderInlineQuiz(container, session, { onSessionChange() {}, onComplete() {} }, { store: studyStore });
 
     const input = container.querySelector<HTMLInputElement>('input.text-input')!;
     const submit = [...container.querySelectorAll<HTMLButtonElement>('button')].find((item) => item.textContent === '\u56de\u7b54\u3059\u308b')!;

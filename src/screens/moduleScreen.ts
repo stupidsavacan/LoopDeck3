@@ -8,7 +8,7 @@ import {
 } from '../core/questionPresentation';
 import { buildRangeOptions, createSession, listQuestionCategories, selectSessionQuestions, type QuizSession } from '../core/sessionEngine';
 import { getModuleById, getQuestionsForModule } from '../packs/packResolver';
-import { studyStore } from '../storage/studyRepository';
+
 import { readStoredSession, restoreStoredSession, saveStoredSession, clearStoredSession } from '../storage/sessionStorage';
 import { defaultStudySettings, runtimeSettings } from '../core/studySettings';
 import { readStudyPreferences, sanitizeStudyPreferences, writeStudyPreferences } from '../storage/studyPreferences';
@@ -28,7 +28,7 @@ function makeSelect(labelText: string, className = 'study-select'): { wrap: HTML
 }
 
 export async function renderModuleScreen(context: ScreenContext & { moduleId: string }): Promise<void> {
-  const { root: root, catalog: packView, resolveImage, isCurrent, moduleId } = context;
+  const { store: studyStore, root: root, catalog: packView, resolveImage, isCurrent, moduleId } = context;
   const { home: navigateHome, review: navigateReview } = context.navigation;
 
   if (!isCurrent()) return;
@@ -243,7 +243,7 @@ export async function renderModuleScreen(context: ScreenContext & { moduleId: st
           rerender();
         }
       },
-      { isCurrent, resolveImageAsset: resolveImage }
+      { store: studyStore, isCurrent, resolveImageAsset: resolveImage }
     );
   }
 

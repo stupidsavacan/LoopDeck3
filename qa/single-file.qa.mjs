@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
+import JSZip from 'jszip';
 import { fixture, seed } from './fixtures.mjs';
 
 const artifact = resolve(process.env.QA_ARTIFACT || 'LoopDeck3.html');
@@ -72,6 +73,28 @@ for (const [width, height] of sizes) test(`matrix ${width}x${height}`, async ({ 
   }
 });
 
+test('concurrent answers from two tabs preserve both review updates', async ({ page }) => {
+  await go(page, 'home'); await seed(page, false);
+  const other = await page.context().newPage();
+  try {
+    await go(page, 'module/qa-module-0'); await go(other, 'module/qa-module-0');
+    await start(page); await start(other);
+    await page.getByPlaceholder('答えを入力').fill('answer');
+    await other.getByPlaceholder('答えを入力').fill('answer');
+    await Promise.all([page.getByRole('button', { name: '回答する', exact: true }).click(), other.getByRole('button', { name: '回答する', exact: true }).click()]);
+    await expect(page.getByRole('button', { name: '次へ', exact: true })).toBeEnabled();
+    await expect(other.getByRole('button', { name: '次へ', exact: true })).toBeEnabled();
+    const card = await page.evaluate(questionId => new Promise((resolve, reject) => {
+      const open = indexedDB.open('loopdeck3-learning'); open.onerror = () => reject(open.error);
+      open.onsuccess = () => {
+        const database = open.result; const request = database.transaction('reviewCards').objectStore('reviewCards').get(questionId);
+        request.onsuccess = () => { resolve(request.result); database.close(); }; request.onerror = () => reject(request.error);
+      };
+    }), fixture().packs[0].questions[0].id);
+    expect(card.totalReviews).toBe(2);
+  } finally { await other.close(); }
+});
+
 test('images, all question types, resize, session persistence and double submit', async ({ page }, info) => {
   await go(page, 'home'); await seed(page, false); await go(page, 'module/qa-module-0'); await start(page);
   for (let i = 0; i < 12; i++) {
@@ -104,6 +127,20 @@ test('shared built-in assets decode and occur once in artifact', async ({ page }
     expect(html.split(value).length - 1).toBe(1);
     expect(await page.evaluate(src => new Promise(resolve => { const img = new Image(); img.onload = () => resolve(img.naturalWidth > 0); img.onerror = () => resolve(false); img.src = src; }), value)).toBe(true);
   }
+});
+
+test('built-in pack ZIP downloads contain the referenced embedded image bytes', async ({ page }, info) => {
+  if (process.env.QA_BASE_URL) return;
+  await go(page, 'import');
+  const assets = await page.evaluate(() => globalThis.__LOOPDECK_EMBEDDED_ASSETS__);
+  const download = page.waitForEvent('download');
+  await page.locator('.pack-row').filter({ hasText: '/ built-in' }).first().getByRole('button', { name: 'ZIP', exact: true }).click();
+  const file = await download; const path = info.outputPath('builtin-pack.zip'); await file.saveAs(path);
+  const zip = await JSZip.loadAsync(await readFile(path));
+  const questions = JSON.parse(await zip.file('questions.json').async('string'));
+  const references = [...new Set(questions.map(question => question.imageAsset).filter(path => path && assets[path]))];
+  expect(references.length).toBeGreaterThan(0);
+  for (const path of references) expect(await zip.file(path).async('base64')).toBe(assets[path].split(',')[1]);
 });
 
 test('import error recovery, merge preview, JSON/ZIP/backup and PDF downloads', async ({ page }, info) => {

@@ -2,7 +2,7 @@ import { version } from '../../package.json';
 import { loadBuiltinPacks } from '../packs/builtinLoader';
 import { resolveActivePacks, type ResolvedPackView } from '../packs/packResolver';
 import { createQuestionImageAssetResolver } from '../packs/packAssetResolver';
-import { studyStore } from '../storage/studyRepository';
+import { studyStore, type StudyRepository } from '../storage/studyRepository';
 import { renderHomeScreen } from '../screens/homeScreen';
 import { renderModuleScreen } from '../screens/moduleScreen';
 import { renderReviewCenter } from '../screens/reviewCenter';
@@ -19,9 +19,10 @@ import { navigationFor, parseRoute, routeHash, type AppRoute, type ScreenContext
 import { renderStartupError } from './errorView';
 
 type CatalogLoader = () => Promise<ResolvedPackView>;
+interface ApplicationDependencies { store?: StudyRepository; loadCatalog?: CatalogLoader; }
 
-async function loadCatalog(): Promise<ResolvedPackView> {
-  return resolveActivePacks([...loadBuiltinPacks(), ...(await studyStore.getImportedPacks())]);
+async function loadCatalog(store: StudyRepository): Promise<ResolvedPackView> {
+  return resolveActivePacks([...loadBuiltinPacks(), ...(await store.getImportedPacks())]);
 }
 
 /** Owns one mounted application; route leases prevent late work from publishing. */
@@ -33,7 +34,12 @@ export class StudyApplication {
   private active = false;
   private currentHash = '';
 
-  constructor(private readonly root: HTMLElement, private readonly catalogLoader: CatalogLoader = loadCatalog) {}
+  private readonly catalogLoader: CatalogLoader;
+  private readonly store: StudyRepository;
+  constructor(private readonly root: HTMLElement, dependencies: ApplicationDependencies = {}) {
+    this.store = dependencies.store ?? studyStore;
+    this.catalogLoader = dependencies.loadCatalog ?? (() => loadCatalog(this.store));
+  }
 
   start(): void {
     if (this.active) return;
@@ -83,9 +89,10 @@ export class StudyApplication {
   private context(lease: RouteRenderLease): ScreenContext {
     return {
       root: this.root,
+      store: this.store,
       catalog: this.catalog,
       navigation: navigationFor(route => { if (this.active && lease.isCurrent()) this.navigate(route); }),
-      resolveImage: createQuestionImageAssetResolver(this.catalog),
+      resolveImage: createQuestionImageAssetResolver(this.catalog, this.store),
       isCurrent: () => this.active && lease.isCurrent(),
       refreshCatalog: async () => {
         if (!this.active || !lease.isCurrent()) return;

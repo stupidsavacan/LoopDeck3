@@ -55,10 +55,10 @@ describe('real image asset regression flows', () => {
 
     const storedPack = (await studyStore.getImportedPacks()).find((item) => item.packId === value.packId)!;
     const view = resolveActivePacks([storedPack]);
-    const resolver = createQuestionImageAssetResolver(view);
+    const resolver = createQuestionImageAssetResolver(view, studyStore);
     expect(await resolver(view.questionById.get('q-round-trip')!)).toBe(`data:image/png;base64,${PNG_BASE64}`);
 
-    const exported = await createLoopDeckZipBlob(storedPack);
+    const exported = await createLoopDeckZipBlob(storedPack, await studyStore.getImportedPackAssets());
     const exportedZip = await JSZip.loadAsync(await exported.arrayBuffer());
     expect(await exportedZip.file('images/pixel.png')!.async('base64')).toBe(PNG_BASE64);
 
@@ -81,7 +81,7 @@ describe('real image asset regression flows', () => {
 
     expect(await studyStore.getPackAsset(target.packId, 'images/existing.png')).toBeDefined();
     expect((await studyStore.getPackAsset(target.packId, 'images/addon.png'))?.dataUrl).toBe(`data:image/png;base64,${PNG_BASE64}`);
-    const resolver = createQuestionImageAssetResolver(resolveActivePacks([merged]));
+    const resolver = createQuestionImageAssetResolver(resolveActivePacks([merged]), studyStore);
     expect(await resolver(merged.questions.find((question) => question.id === 'q-addon')!)).toBe(`data:image/png;base64,${PNG_BASE64}`);
     await studyStore.deleteImportedPack(target.packId);
   });

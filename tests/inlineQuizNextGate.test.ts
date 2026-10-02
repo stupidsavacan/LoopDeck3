@@ -34,7 +34,7 @@ const choiceQuestion: Question = {
 function stubPersistence(): void {
   vi.spyOn(studyStore, 'hasBookmark').mockResolvedValue(false);
   vi.spyOn(studyStore, 'getReviewCard').mockResolvedValue(undefined);
-  vi.spyOn(studyStore, 'saveAttemptWithReview').mockResolvedValue();
+  vi.spyOn(studyStore, 'recordAnswer').mockResolvedValue();
 }
 
 describe('inline quiz Next gating', () => {
@@ -45,7 +45,7 @@ describe('inline quiz Next gating', () => {
 
   it('cannot advance an input question before answering, then advances only after persistence succeeds', async () => {
     let finishSave: () => void = () => {};
-    vi.spyOn(studyStore, 'saveAttemptWithReview').mockReturnValue(
+    vi.spyOn(studyStore, 'recordAnswer').mockReturnValue(
       new Promise<void>((resolve) => {
         finishSave = resolve;
       })
@@ -60,7 +60,7 @@ describe('inline quiz Next gating', () => {
       answerFormat: 'input'
     });
 
-    renderInlineQuiz(container, session, { onSessionChange, onSessionCheckpoint, onComplete() {} });
+    renderInlineQuiz(container, session, { onSessionChange, onSessionCheckpoint, onComplete() {} }, { store: studyStore });
 
     const next = [...container.querySelectorAll<HTMLButtonElement>('button')].find((button) => button.textContent === '次へ')!;
     const input = container.querySelector<HTMLInputElement>('input.text-input')!;
@@ -104,7 +104,7 @@ describe('inline quiz Next gating', () => {
       answerFormat: 'input'
     });
 
-    renderInlineQuiz(container, session, { onSessionChange() {}, onComplete() {} });
+    renderInlineQuiz(container, session, { onSessionChange() {}, onComplete() {} }, { store: studyStore });
 
     const next = [...container.querySelectorAll<HTMLButtonElement>('button')].find((button) => button.textContent === '次へ')!;
     const reveal = [...container.querySelectorAll<HTMLButtonElement>('button')].find((button) => button.textContent === '答えを見る')!;
@@ -124,7 +124,7 @@ describe('inline quiz Next gating', () => {
       answerFormat: 'auto'
     });
 
-    renderInlineQuiz(container, session, { onSessionChange() {}, onComplete() {} });
+    renderInlineQuiz(container, session, { onSessionChange() {}, onComplete() {} }, { store: studyStore });
 
     const next = [...container.querySelectorAll<HTMLButtonElement>('button')].find((button) => button.textContent === '次へ')!;
     const choiceB = [...container.querySelectorAll<HTMLButtonElement>('.choice-btn')].find((button) => button.textContent === 'B')!;
@@ -136,7 +136,7 @@ describe('inline quiz Next gating', () => {
   });
 
   it('surfaces a failed save, keeps Next gated, and retries the same attempt', async () => {
-    const save = vi.spyOn(studyStore, 'saveAttemptWithReview').mockRejectedValueOnce(new Error('disk full')).mockResolvedValueOnce();
+    const save = vi.spyOn(studyStore, 'recordAnswer').mockRejectedValueOnce(new Error('disk full')).mockResolvedValueOnce();
     const container = document.createElement('div');
     document.body.append(container);
     const onSessionChange = vi.fn();
@@ -147,7 +147,7 @@ describe('inline quiz Next gating', () => {
       answerFormat: 'input'
     });
 
-    renderInlineQuiz(container, session, { onSessionChange, onComplete() {} });
+    renderInlineQuiz(container, session, { onSessionChange, onComplete() {} }, { store: studyStore });
     const input = container.querySelector<HTMLInputElement>('input.text-input')!;
     const submit = [...container.querySelectorAll<HTMLButtonElement>('button')].find((button) => button.textContent === '回答する')!;
     const next = [...container.querySelectorAll<HTMLButtonElement>('button')].find((button) => button.textContent === '次へ')!;

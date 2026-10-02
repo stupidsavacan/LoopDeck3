@@ -80,14 +80,14 @@ function render(
   const attempts: Attempt[] = [];
   vi.spyOn(studyStore, 'hasBookmark').mockResolvedValue(false);
   vi.spyOn(studyStore, 'getReviewCard').mockResolvedValue(undefined);
-  vi.spyOn(studyStore, 'saveAttemptWithReview').mockImplementation(async (attempt) => {
+  vi.spyOn(studyStore, 'recordAnswer').mockImplementation(async (attempt) => {
     attempts.push(attempt);
   });
   const onSessionChange = vi.fn();
   renderInlineQuiz(container, createSession(moduleInfo, [question], settings(overrides)), {
     onSessionChange,
     onComplete() {}
-  });
+  }, { store: studyStore });
   return { container, attempts, onSessionChange };
 }
 
@@ -259,7 +259,7 @@ describe('inline quiz idle auto reveal', () => {
   it('cleans up stale renders and cannot double-record after a manual answer', async () => {
     const { container, attempts } = render(inputQuestion);
     const secondSession = createSession(moduleInfo, [secondQuestion], settings());
-    renderInlineQuiz(container, secondSession, { onSessionChange() {}, onComplete() {} });
+    renderInlineQuiz(container, secondSession, { onSessionChange() {}, onComplete() {} }, { store: studyStore });
 
     await vi.advanceTimersByTimeAsync(5_000);
     const reveal = [...container.querySelectorAll<HTMLButtonElement>('button')].find((item) => item.textContent === '答えを見る')!;

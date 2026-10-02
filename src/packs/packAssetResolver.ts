@@ -1,5 +1,4 @@
 import type { Question } from '../core/models';
-import { studyStore } from '../storage/studyRepository';
 import type { StoredPackAsset } from '../storage/storageTypes';
 import { isSafeImageAssetRef, isSafeImageDataUrl } from './assetSafety';
 import { getQuestionPackId, type ResolvedPackView } from './packResolver';
@@ -22,7 +21,7 @@ function resolveEmbeddedAsset(path: string): string | undefined {
 
 export function createQuestionImageAssetResolver(
   packView: ResolvedPackView,
-  assetReader: PackAssetReader = studyStore
+  assetReader: PackAssetReader
 ): QuestionImageAssetResolver {
   return async (question) => {
     const path = question.imageAsset;

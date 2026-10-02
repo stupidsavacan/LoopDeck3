@@ -1,8 +1,11 @@
 // @vitest-environment jsdom
+import 'fake-indexeddb/auto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { StudyApplication } from '../src/app/application';
 import { parseRoute, routeHash } from '../src/app/context';
 import { resolveActivePacks } from '../src/packs/packResolver';
+import { LocalDatabase } from '../src/storage/indexedDb';
+import { StudyRepository, studyStore } from '../src/storage/studyRepository';
 
 const mounted: StudyApplication[] = [];
 beforeEach(() => { history.replaceState(null, '', '#home'); localStorage.clear(); });
@@ -15,6 +18,30 @@ function deferred<T>() {
 }
 
 describe('application ownership', () => {
+  it('loads and studies through the injected repository without writing the default database', async () => {
+    const database = new LocalDatabase(`injected-app-${crypto.randomUUID()}`);
+    const store = new StudyRepository(database);
+    const before = await studyStore.getAttempts();
+    const root = document.createElement('div');
+    const app = new StudyApplication(root, { store });
+    mounted.push(app);
+    try {
+      await store.saveImportedPack({ packVersion: 1, packId: 'injected', title: 'Injected', folders: [{ id: 'f', title: 'Injected folder' }],
+        modules: [{ id: 'injected-module', title: 'Injected module', folderId: 'f', subject: 'Test', questionIds: ['injected-q'] }],
+        questions: [{ id: 'injected-q', moduleId: 'injected-module', type: 'input', prompt: 'Injected question', answer: 'dog' }] });
+      app.start();
+      await vi.waitFor(() => expect(root.textContent).toContain('Injected module'));
+      app.navigate({ name: 'module', moduleId: 'injected-module' });
+      await vi.waitFor(() => expect(root.querySelector('.module-screen')).toBeTruthy());
+      [...root.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === '学習を始める')?.click();
+      const input = root.querySelector<HTMLInputElement>('input.text-input');
+      expect(input).toBeTruthy(); if (input) input.value = 'dog';
+      [...root.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === '回答する')?.click();
+      await vi.waitFor(async () => expect(await store.getAttempts()).toHaveLength(1));
+      expect(await store.getReviewCard('injected-q')).toMatchObject({ totalCorrect: 1 });
+      expect(await studyStore.getAttempts()).toEqual(before);
+    } finally { app.dispose(); database.close(); }
+  });
   it('round-trips encoded module identities and refuses prototype/invalid routes', () => {
     const route = { name: 'module' as const, moduleId: 'part/a:日本語%' };
     expect(parseRoute(routeHash(route))).toEqual(route);
@@ -23,7 +50,7 @@ describe('application ownership', () => {
   it('cannot publish a catalog that finishes after navigating to diagnostics', async () => {
     const catalog = deferred<ReturnType<typeof resolveActivePacks>>();
     const root = document.createElement('div');
-    const app = new StudyApplication(root, () => catalog.promise);
+    const app = new StudyApplication(root, { loadCatalog: () => catalog.promise });
     mounted.push(app);
     app.start();
     app.navigate({ name: 'debugLog' });
@@ -35,7 +62,7 @@ describe('application ownership', () => {
   it('releases DOM, timers and URL listeners when disposed during a load', async () => {
     const catalog = deferred<ReturnType<typeof resolveActivePacks>>();
     const root = document.createElement('div');
-    const app = new StudyApplication(root, () => catalog.promise);
+    const app = new StudyApplication(root, { loadCatalog: () => catalog.promise });
     mounted.push(app);
     app.start();
     app.dispose();
@@ -50,7 +77,7 @@ describe('application ownership', () => {
   });
   it('ignores controls retained from an obsolete route', async () => {
     const root = document.createElement('div');
-    const app = new StudyApplication(root, async () => resolveActivePacks([]));
+    const app = new StudyApplication(root, { loadCatalog: async () => resolveActivePacks([]) });
     mounted.push(app);
     app.start();
     await vi.waitFor(() => expect(root.querySelector('.home-screen')).toBeTruthy());
@@ -63,7 +90,7 @@ describe('application ownership', () => {
   });
   it('normalizes an invalid history URL without pushing another entry', async () => {
     const root = document.createElement('div');
-    const app = new StudyApplication(root, async () => resolveActivePacks([]));
+    const app = new StudyApplication(root, { loadCatalog: async () => resolveActivePacks([]) });
     mounted.push(app);
     app.start();
     await vi.waitFor(() => expect(root.querySelector('.home-screen')).toBeTruthy());

@@ -1,15 +1,15 @@
 import { writeDebugLog } from '../debug/debugLog';
-import { isNearMissAnswer, judgeInputAnswer, judgeQuestion, normalizeAnswerForQuestion } from '../core/answerJudge';
+import { judgeInputAnswer, normalizeAnswerForQuestion } from '../core/answerJudge';
 import { buildGeneratedChoiceOptions, type GeneratedChoiceOption } from '../core/choiceGenerator';
-import type { Attempt, ChoiceQuestion, InputQuestion, Question } from '../core/models';
+import type { Attempt, Question } from '../core/models';
 import { createIdleRevealController, type IdleRevealController } from '../core/idleRevealController';
-import { buildQuizAttempt, resolveQuizAnswerMode } from '../core/quizAnswer';
+import { resolveQuizAnswerMode } from '../core/quizAnswer';
 import { createQuizBookmarkButton } from '../ui/quizBookmark';
-import { advanceSession, currentQuestion, elapsedForCurrent, isSessionComplete, type QuizSession } from '../core/sessionEngine';
+import { currentQuestion, isSessionComplete, type QuizSession } from '../core/sessionEngine';
 import { buildWrongAnswerFeedback } from '../core/wrongAnswerExplanation';
 import { type QuestionImageAssetResolver } from '../packs/packAssetResolver';
-import { persistAttemptAndReview } from '../services/quizPersistence';
-import { studyStore } from '../storage/studyRepository';
+import { QuizController, type QuizPhase } from '../core/quizController';
+import type { QuizDataStore } from '../storage/storageTypes';
 import { button, clear, el, toast } from '../ui/dom';
 import { appendIconLabel } from '../ui/icons';
 import { appendQuizResult, renderQuestionImage, renderQuizMeta, renderSessionSummary } from '../ui/inlineQuizView';
@@ -20,6 +20,7 @@ export interface InlineQuizCallbacks {
   onComplete(): void;
 }
 export interface InlineQuizOptions {
+  store: QuizDataStore;
   resolveImageAsset?: QuestionImageAssetResolver;
   isCurrent?: () => boolean;
 }
@@ -32,16 +33,13 @@ export function disposeInlineQuizzes(root: HTMLElement): void {
     renderCleanupByContainer.get(container)?.();
   }
 }
-function canJudgeNearMiss(question: Question): question is InputQuestion | ChoiceQuestion {
-  return question.type === 'input' || question.type === 'choice';
-}
-
 export function renderInlineQuiz(
   container: HTMLElement,
   session: QuizSession,
   callbacks: InlineQuizCallbacks,
-  options: InlineQuizOptions = {}
+  options: InlineQuizOptions
 ): void {
+  const { store: studyStore } = options;
   renderCleanupByContainer.get(container)?.();
   renderCleanupByContainer.delete(container);
   const renderToken = Symbol('inline-quiz-render');
@@ -89,41 +87,26 @@ export function renderInlineQuiz(
   const controls = el('div', 'quiz-controls');
   const resultArea = el('div', 'result-area');
   let selectedAnswer: string | string[] = '';
-  let answered = false;
-  let moved = false;
-  let pendingAttempt: Attempt | undefined;
+  let answerAttempt: Attempt | undefined;
   let nextButton: HTMLButtonElement | undefined;
-  let hiddenStartedAt: number | undefined;
-  let hiddenTimeExcludedMs = 0;
-  let suspendedTimeExcludedMs = 0;
   let composing = false;
   let idleController: IdleRevealController | undefined;
-  let persistenceInFlight = false;
-  let persistenceComplete = false;
-  let autoNextTimer: number | undefined;
 
   function isCurrentRender(): boolean {
     return renderTokenByContainer.get(container) === renderToken && container.contains(card) && (options.isCurrent?.() ?? true);
   }
 
-  function currentRenderExcludedMs(now = Date.now()): number {
-    const activeHiddenMs = hiddenStartedAt === undefined ? 0 : Math.max(0, now - hiddenStartedAt);
-    return hiddenTimeExcludedMs + suspendedTimeExcludedMs + activeHiddenMs;
-  }
-
-  function currentAnswerElapsedMs(now = Date.now()): number {
-    return elapsedForCurrent(session, currentRenderExcludedMs(now));
-  }
-
-  function checkpointCurrentTiming(now = Date.now()): void {
-    if (!isCurrentRender()) return;
-    callbacks.onSessionCheckpoint?.({
-      ...session,
-      currentElapsedMs: currentAnswerElapsedMs(now),
-      currentStartedAt: now,
-      currentHiddenTimeExcludedMs: session.currentHiddenTimeExcludedMs + currentRenderExcludedMs(now)
-    });
-  }
+  const controller = new QuizController({
+    session, question: activeQuestion, answerMode, isCurrent: isCurrentRender,
+    persist: attempt => studyStore.recordAnswer(attempt),
+    onAdvance: next => { cleanup(); callbacks.onSessionChange(next); },
+    onCheckpoint: callbacks.onSessionCheckpoint,
+    onCheckpointError: error => {
+      writeDebugLog({ level: 'warn', area: 'quizPersistence', code: 'SESSION-CHECKPOINT-FAILED', userMessage: '再開位置を保存できませんでした。', detail: String(error) });
+      toast('回答は保存済みですが、再開位置を保存できませんでした。');
+    },
+    onPersistenceChange: handlePersistenceChange
+  });
 
   function stopObserving(): void {
     idleController?.dispose();
@@ -134,7 +117,7 @@ export function renderInlineQuiz(
 
   function cleanup(): void {
     stopObserving();
-    if (autoNextTimer !== undefined) window.clearTimeout(autoNextTimer);
+    controller.dispose();
     if (renderTokenByContainer.get(container) === renderToken) {
       renderTokenByContainer.delete(container);
       renderCleanupByContainer.delete(container);
@@ -146,24 +129,11 @@ export function renderInlineQuiz(
   }
 
   function handleVisibilityChange(): void {
-    if (answered || moved || !isCurrentRender()) return;
-    const now = Date.now();
-    if (document.hidden) {
-      checkpointCurrentTiming(now);
-      if (hiddenStartedAt === undefined) hiddenStartedAt = now;
-      idleController?.setVisible(false);
-      return;
-    }
-    if (hiddenStartedAt !== undefined) {
-      hiddenTimeExcludedMs += Math.max(0, now - hiddenStartedAt);
-      hiddenStartedAt = undefined;
-    }
-    idleController?.setVisible(true);
+    if (!controller.canAnswer) return;
+    controller.setHidden(document.hidden);
+    idleController?.setVisible(!document.hidden);
   }
-
-  function handlePageHide(): void {
-    if (!answered && !moved) checkpointCurrentTiming();
-  }
+  function handlePageHide(): void { controller.checkpoint(); }
 
   function lockAnswerControls(): void {
     answerArea.querySelectorAll<HTMLInputElement | HTMLButtonElement>('input, button').forEach((control) => {
@@ -172,86 +142,36 @@ export function renderInlineQuiz(
     });
   }
 
-  function nextQuestion(): void {
-    if (moved || !persistenceComplete || !isCurrentRender()) return;
-    moved = true;
-    cleanup();
-    callbacks.onSessionChange(advanceSession(session, pendingAttempt));
-  }
-
-  async function persistAttempt(attempt: Attempt): Promise<void> {
-    if (persistenceInFlight || persistenceComplete || !isCurrentRender()) return;
-    persistenceInFlight = true;
-    resultArea.querySelector('.persistence-error')?.remove();
-    try {
-      await persistAttemptAndReview(attempt, studyStore);
-      persistenceComplete = true;
-      if (!isCurrentRender()) return;
-      try {
-        callbacks.onSessionCheckpoint?.(advanceSession(session, attempt));
-      } catch (error) {
-        // IndexedDB has committed. A localStorage checkpoint failure must not
-        // retry the answer transaction and apply the SRS rating twice.
-        writeDebugLog({
-          level: 'warn',
-          area: 'quizPersistence',
-          code: 'SESSION-CHECKPOINT-FAILED',
-          userMessage: '再開位置を保存できませんでした。',
-          detail: String(error)
-        });
-        toast('回答は保存済みですが、再開位置を保存できませんでした。');
-      }
-      if (nextButton) {
-        nextButton.disabled = false;
-        nextButton.hidden = false;
-      }
-      if (attempt.result === 'correct' && session.settings.autoNext) autoNextTimer = window.setTimeout(nextQuestion, 650);
-    } catch (error) {
-      if (!isCurrentRender()) return;
-      const detail = error instanceof Error ? error.message : String(error);
-      console.error('Failed to persist answer/SRS state', error);
-      writeDebugLog({
-        level: 'error',
-        area: 'quizPersistence',
-        code: 'ANSWER-PERSIST-FAILED',
-        userMessage: '回答の保存に失敗しました。',
-        detail,
-        stack: error instanceof Error ? error.stack : undefined,
-        context: { attemptId: attempt.attemptId, questionId: attempt.questionId, moduleId: attempt.moduleId, result: attempt.result }
-      });
-      toast('回答の保存に失敗しました。再試行してください。');
-      const errorBox = el('div', 'issue error persistence-error');
-      errorBox.append(el('p', '', '回答を保存できませんでした。次へ進む前に再試行してください。'));
-      const retry = button('保存を再試行', 'btn primary');
-      retry.onclick = () => void persistAttempt(attempt);
-      errorBox.append(retry);
-      resultArea.append(errorBox);
-    } finally {
-      persistenceInFlight = false;
+  function nextQuestion(): void { controller.advance(); }
+  function handlePersistenceChange(phase: Extract<QuizPhase, 'saving' | 'saved' | 'failed'>, error?: unknown): void {
+    if (phase === 'saving') { resultArea.querySelector('.persistence-error')?.remove(); return; }
+    if (phase === 'saved') {
+      if (nextButton) { nextButton.disabled = false; nextButton.hidden = false; }
+      return;
     }
+    console.error('Failed to persist answer/SRS state', error);
+    const attempt = answerAttempt;
+    writeDebugLog({
+      level: 'error', area: 'quizPersistence', code: 'ANSWER-PERSIST-FAILED', userMessage: '回答の保存に失敗しました。',
+      detail: error instanceof Error ? error.message : String(error), stack: error instanceof Error ? error.stack : undefined,
+      context: attempt ? { attemptId: attempt.attemptId, questionId: attempt.questionId, moduleId: attempt.moduleId, result: attempt.result } : undefined
+    });
+    toast('回答の保存に失敗しました。再試行してください。');
+    const errorBox = el('div', 'issue error persistence-error');
+    errorBox.append(el('p', '', '回答を保存できませんでした。次へ進む前に再試行してください。'));
+    const retry = button('保存を再試行', 'btn primary');
+    retry.onclick = () => void controller.save();
+    errorBox.append(retry);
+    resultArea.append(errorBox);
   }
 
   function record(answer: string | string[], revealed = false, generatedChoice?: GeneratedChoiceOption): void {
-    if (answered || !isCurrentRender()) return;
-    answered = true;
+    const attempt = controller.answer(answer, revealed);
+    if (!attempt) return;
+    answerAttempt = attempt;
     stopObserving();
     lockAnswerControls();
-    const elapsedMs = currentAnswerElapsedMs();
-    const totalHiddenTimeExcludedMs = session.currentHiddenTimeExcludedMs + currentRenderExcludedMs();
-    const nearMiss =
-      !revealed && typeof answer === 'string' && canJudgeNearMiss(activeQuestion) ? isNearMissAnswer(activeQuestion, answer) : false;
-    const result: Attempt['result'] = revealed ? 'revealed' : judgeQuestion(activeQuestion, answer) ? 'correct' : 'wrong';
-    const attempt = buildQuizAttempt(
-      activeQuestion,
-      result,
-      revealed ? '' : answer,
-      elapsedMs,
-      session.mode,
-      answerMode,
-      totalHiddenTimeExcludedMs,
-      nearMiss
-    );
-    pendingAttempt = attempt;
+    const { result, elapsedMs, nearMiss = false } = attempt;
 
     const wrongExplanation =
       !revealed && result === 'wrong' && typeof answer === 'string'
@@ -265,10 +185,10 @@ export function renderInlineQuiz(
           )
         : undefined;
     appendQuizResult(resultArea, activeQuestion, result, elapsedMs, nearMiss, wrongExplanation);
-    void persistAttempt(attempt);
+    void controller.save();
   }
 
-  const bookmark = createQuizBookmarkButton(question.id, isCurrentRender);
+  const bookmark = createQuizBookmarkButton(question.id, isCurrentRender, studyStore);
 
   if (session.settings.showExample && question.example) answerArea.append(el('p', 'example-line', question.example));
   if (answerMode === 'input') {
@@ -391,10 +311,9 @@ export function renderInlineQuiz(
   if (session.settings.autoRevealAfterIdle) {
     idleController = createIdleRevealController({
       timeoutMs: AUTO_REVEAL_IDLE_MS,
-      isEligible: () => !answered && !moved && card.isConnected && isCurrentRender(),
+      isEligible: () => controller.canAnswer && card.isConnected,
       onSuspend: (elapsed) => {
-        suspendedTimeExcludedMs += elapsed;
-        checkpointCurrentTiming();
+        controller.excludeSuspension(elapsed);
       },
       onReveal: () => record(selectedAnswer, true)
     });

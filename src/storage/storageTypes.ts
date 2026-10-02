@@ -17,3 +17,9 @@ export interface StudyBackup {
 }
 
 export type BackupImportMode = 'merge' | 'replace';
+
+export interface QuizDataStore {
+  recordAnswer(attempt: Attempt): Promise<void>;
+  hasBookmark(questionId: string): Promise<boolean>;
+  setBookmark(questionId: string, enabled: boolean): Promise<void>;
+}

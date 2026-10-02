@@ -4,7 +4,7 @@ import { DEFAULT_REVIEW_LOOKBACK_DAYS } from '../core/reviewEngine';
 import { buildReviewCenterModel, type ReviewScope } from '../core/reviewCenterModel';
 import { createSession, type QuizSession } from '../core/sessionEngine';
 import { getActiveQuestions } from '../packs/packResolver';
-import { studyStore } from '../storage/studyRepository';
+
 import { button, clear, el, toast } from '../ui/dom';
 import { appendIconLabel } from '../ui/icons';
 import { renderInlineQuiz } from './inlineQuiz';
@@ -53,7 +53,7 @@ function reviewStateLabel(card: ReviewCard): string {
 }
 
 export async function renderReviewCenter(context: ScreenContext): Promise<void> {
-  const { root: root, catalog: packView, resolveImage, isCurrent } = context;
+  const { store: studyStore, root: root, catalog: packView, resolveImage, isCurrent } = context;
   const { home: navigateHome, graphs: navigateGraphs } = context.navigation;
 
   if (!isCurrent()) return;
@@ -135,8 +135,8 @@ export async function renderReviewCenter(context: ScreenContext): Promise<void> 
       showCategory: true
     };
     const session = createSession(reviewModule, items, settings, 'review', questions);
-    const update = (next: QuizSession) => renderInlineQuiz(mount, next, { onSessionChange: update, onComplete: rerender }, { isCurrent, resolveImageAsset: resolveImage });
-    renderInlineQuiz(mount, session, { onSessionChange: update, onComplete: rerender }, { isCurrent, resolveImageAsset: resolveImage });
+    const update = (next: QuizSession) => renderInlineQuiz(mount, next, { onSessionChange: update, onComplete: rerender }, { store: studyStore, isCurrent, resolveImageAsset: resolveImage });
+    renderInlineQuiz(mount, session, { onSessionChange: update, onComplete: rerender }, { store: studyStore, isCurrent, resolveImageAsset: resolveImage });
   }
 
   const srsCard = el('section', 'card action-card');

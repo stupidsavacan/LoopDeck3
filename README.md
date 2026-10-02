@@ -24,7 +24,7 @@ npm run code:map
 
 `npm run build:single` が `LoopDeck3.html` を生成します。Androidの `preBuild` はこのファイルだけを `assets/loopdeck/index.html` にコピーします。APKとHTMLで学習ロジックを二重実装しません。
 
-配布・内部API・画面構成は独立して設計します。LoopDeck2の内部API互換性は保証しません。最初の基準版は、LoopDeck2 [PR #115](https://github.com/stupidsavacan/LoopDeck2/pull/115) の `656ed528419a8e6f35294f258b7604fe2bb59d42` から派生しました。0.2.1ではアプリの起動・画面の寿命・ナビゲーション・保存形式を再設計しました。画面は共通コンテキストを受け取り、古い非同期処理が新しい画面を上書きできない構成です。学習・復習・PDFの検証済みアルゴリズムと教材は利用しています。
+配布・内部API・画面構成は独立して設計します。LoopDeck2の内部API互換性は保証しません。最初の基準版は、LoopDeck2 [PR #115](https://github.com/stupidsavacan/LoopDeck2/pull/115) の `656ed528419a8e6f35294f258b7604fe2bb59d42` から派生しました。0.2.1ではアプリの起動・画面の寿命・ナビゲーション・保存形式を再設計しました。画面は共通コンテキストを受け取り、古い非同期処理が新しい画面を上書きできない構成です。0.3.0では学習中の状態管理と回答保存を再設計し、画面から保存先の暗黙の参照を取り除きました。学習・復習・PDFの検証済みアルゴリズムと教材は利用しています。
 
 現在の設計は [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。旧版から引き継いだ他の設計メモやIssue番号は参考資料です。LoopDeck2の未解決問題がすべて解消されたことは意味しません。
 

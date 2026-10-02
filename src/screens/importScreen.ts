@@ -10,7 +10,8 @@ import { getActiveModules, getActivePacks, getActiveQuestions } from '../packs/p
 import { createLoopDeckZipBlob, makePackFileStem, stringifyLoopDeckJson } from '../packs/zipExporter';
 import { saveBlob } from '../platform/fileSave';
 import { readImportFile } from '../services/importFileService';
-import { studyStore } from '../storage/studyRepository';
+import { collectPackExportAssets } from '../services/packExport';
+import type { StudyRepository } from '../storage/studyRepository';
 import type { BackupImportMode, StudyBackup } from '../storage/storageTypes';
 import { button, clear, el, toast } from '../ui/dom';
 import { appendIconLabel, createUiIcon } from '../ui/icons';
@@ -25,9 +26,9 @@ async function exportPackJson(pack: LoopDeckPack): Promise<void> {
   }
 }
 
-async function exportPackZip(pack: LoopDeckPack): Promise<void> {
+async function exportPackZip(pack: LoopDeckPack, studyStore: StudyRepository): Promise<void> {
   try {
-    const blob = await createLoopDeckZipBlob(pack);
+    const blob = await createLoopDeckZipBlob(pack, await collectPackExportAssets(pack, studyStore));
     await saveBlob(blob, `${makePackFileStem(pack)}.loopdeck.zip`);
     toast('ZIPを書き出しました。');
   } catch (error) {
@@ -35,7 +36,7 @@ async function exportPackZip(pack: LoopDeckPack): Promise<void> {
   }
 }
 
-async function exportBackup(): Promise<void> {
+async function exportBackup(studyStore: StudyRepository): Promise<void> {
   const backup = await studyStore.exportSnapshot();
   const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
   await saveBlob(blob, `loopdeck-backup-${backup.exportedAt.slice(0, 10)}.json`);
@@ -79,7 +80,7 @@ function appendMergeReport(container: HTMLElement, report: MergePackReport): voi
 }
 
 export async function renderImportScreen(context: ScreenContext): Promise<void> {
-  const { root: root, catalog: packView, isCurrent, refreshCatalog: onImported } = context;
+  const { store: studyStore, root: root, catalog: packView, isCurrent, refreshCatalog: onImported } = context;
   const { home: navigateHome } = context.navigation;
 
   if (!isCurrent()) return;
@@ -399,7 +400,7 @@ export async function renderImportScreen(context: ScreenContext): Promise<void> 
     const json = button('JSON', 'btn');
     json.onclick = () => void exportPackJson(pack);
     const zip = button('ZIP', 'btn primary');
-    zip.onclick = () => void exportPackZip(pack);
+    zip.onclick = () => void exportPackZip(pack, studyStore);
     actions.append(json, zip);
     if (importedIds.has(pack.packId)) {
       const remove = button('削除', 'btn ghost danger');
@@ -421,7 +422,7 @@ export async function renderImportScreen(context: ScreenContext): Promise<void> 
   dataCard.append(el('h2', '', '学習データ管理'));
   const dataActions = el('div', 'data-actions');
   const backup = button('履歴バックアップを書き出し', 'btn primary');
-  backup.onclick = () => void exportBackup();
+  backup.onclick = () => void exportBackup(studyStore);
   const clearHistory = button('回答履歴を全削除', 'btn ghost danger');
   clearHistory.onclick = async () => {
     if (!window.confirm('回答履歴をすべて削除します。ブックマークと教材パックは残ります。')) return;

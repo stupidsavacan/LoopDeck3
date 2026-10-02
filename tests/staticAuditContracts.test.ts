@@ -58,14 +58,14 @@ function quiz(autoNext = false, question = q) {
   const callbacks = { onSessionChange: vi.fn(), onSessionCheckpoint: vi.fn(), onComplete: vi.fn() };
   const data = pack(question);
   const session = createSession(data.modules[0], [question], { ...settings, autoNext });
-  renderInlineQuiz(container, session, callbacks);
+  renderInlineQuiz(container, session, callbacks, { store: studyStore });
   return { container, callbacks };
 }
 beforeEach(() => {
   localStorage.clear();
   vi.spyOn(studyStore, 'hasBookmark').mockResolvedValue(false);
   vi.spyOn(studyStore, 'getReviewCard').mockResolvedValue(undefined);
-  vi.spyOn(studyStore, 'saveAttemptWithReview').mockResolvedValue();
+  vi.spyOn(studyStore, 'recordAnswer').mockResolvedValue();
 });
 afterEach(() => {
   disposeInlineQuizzes(document.body);
@@ -220,7 +220,7 @@ describe('quiz asynchronous ownership', () => {
     const module = { ...pack().modules[0], id: moduleId, questionIds: questions.map((question) => question.id) };
     const session = createSession(module, questions, { ...settings, answerFormat: 'auto' });
     const container = document.createElement('div');
-    renderInlineQuiz(container, session, { onSessionChange() {}, onComplete() {} });
+    renderInlineQuiz(container, session, { onSessionChange() {}, onComplete() {} }, { store: studyStore });
     expect(container.querySelector('input.text-input')).not.toBeNull();
     expect(container.querySelectorAll('.choice-btn')).toHaveLength(0);
     disposeInlineQuizzes(container);
@@ -231,7 +231,7 @@ describe('quiz asynchronous ownership', () => {
       ...settings,
       answerFormat: 'choice'
     });
-    renderInlineQuiz(container, session, { onSessionChange() {}, onComplete() {} });
+    renderInlineQuiz(container, session, { onSessionChange() {}, onComplete() {} }, { store: studyStore });
     expect(container.querySelector('input.text-input')).not.toBeNull();
     expect(container.querySelector('.notice')?.textContent).toContain('選択肢が不足');
     disposeInlineQuizzes(container);
@@ -243,7 +243,7 @@ describe('quiz asynchronous ownership', () => {
     renderInlineQuiz(container, createSession(pack().modules[0], [{ ...q, id: 'new' }], settings), {
       onSessionChange() {},
       onComplete() {}
-    });
+    }, { store: studyStore });
     await vi.waitFor(() => expect(container.querySelector<HTMLButtonElement>('.bookmark-btn')!.disabled).toBe(false));
     read.resolve(true);
     await read.promise;
@@ -279,11 +279,11 @@ describe('quiz asynchronous ownership', () => {
   });
   it('does not let an old save completion checkpoint or advance a disposed quiz', async () => {
     const save = deferred<void>();
-    vi.spyOn(studyStore, 'saveAttemptWithReview').mockReturnValue(save.promise);
+    vi.spyOn(studyStore, 'recordAnswer').mockReturnValue(save.promise);
     const { container, callbacks } = quiz(true);
     container.querySelector<HTMLInputElement>('input')!.value = 'dog';
     [...container.querySelectorAll('button')].find((b) => b.textContent === '回答する')!.click();
-    await vi.waitFor(() => expect(studyStore.saveAttemptWithReview).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(studyStore.recordAnswer).toHaveBeenCalledTimes(1));
     disposeInlineQuizzes(container);
     save.resolve();
     await new Promise((resolve) => setTimeout(resolve, 750));

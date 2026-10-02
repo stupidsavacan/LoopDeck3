@@ -43,9 +43,9 @@ describe('renderInlineQuiz image assets', () => {
       container,
       session(),
       { onSessionChange() {}, onComplete() {} },
-      {
+      { store: studyStore, ...({
         resolveImageAsset: async () => 'data:image/png;base64,iVBORw0KGgo='
-      }
+      }) }
     );
 
     await settleImageResolution();
@@ -62,9 +62,9 @@ describe('renderInlineQuiz image assets', () => {
       container,
       session(),
       { onSessionChange() {}, onComplete() {} },
-      {
+      { store: studyStore, ...({
         resolveImageAsset: async () => 'images/map.png'
-      }
+      }) }
     );
 
     await settleImageResolution();
@@ -97,10 +97,10 @@ describe('renderInlineQuiz image assets', () => {
       ],
       'replace'
     );
-    const resolveImageAsset = createQuestionImageAssetResolver(resolveActivePacks([pack]));
+    const resolveImageAsset = createQuestionImageAssetResolver(resolveActivePacks([pack]), studyStore);
 
     const container = document.createElement('div');
-    renderInlineQuiz(container, session(), { onSessionChange() {}, onComplete() {} }, { resolveImageAsset });
+    renderInlineQuiz(container, session(), { onSessionChange() {}, onComplete() {} }, { store: studyStore, ...({ resolveImageAsset }) });
     await settleImageResolution();
 
     expect(container.querySelector<HTMLImageElement>('img.question-image')?.src).toBe('data:image/png;base64,iVBORw0KGgo=');
@@ -114,9 +114,9 @@ describe('renderInlineQuiz image assets', () => {
       container,
       session(),
       { onSessionChange() {}, onComplete() {} },
-      {
+      { store: studyStore, ...({
         resolveImageAsset: async () => undefined
-      }
+      }) }
     );
 
     await settleImageResolution();

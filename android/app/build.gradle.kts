@@ -27,8 +27,8 @@ android {
         applicationId = "com.loopdeck3.app"
         minSdk = 23
         targetSdk = 35
-        versionCode = providers.gradleProperty("appVersionCode").orElse("2001").get().toInt()
-        versionName = providers.gradleProperty("appVersionName").orElse("0.2.1").get()
+        versionCode = providers.gradleProperty("appVersionCode").orElse("3000").get().toInt()
+        versionName = providers.gradleProperty("appVersionName").orElse("0.3.0").get()
     }
 
     buildFeatures {

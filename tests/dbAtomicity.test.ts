@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { Attempt, ReviewCard, ReviewLog } from '../src/core/models';
+import type { Attempt, ReviewLog } from '../src/core/models';
 import { studyStore } from '../src/storage/studyRepository';
 import type { StudyBackup } from '../src/storage/storageTypes';
 
@@ -15,29 +15,6 @@ function attempt(id: string): Attempt {
     answer: 'a',
     elapsedMs: 1000,
     mode: 'normal'
-  };
-}
-
-function card(id: string): ReviewCard {
-  return {
-    questionId: `q-${id}`,
-    moduleId: 'atomic-module',
-    state: 'relearning',
-    dueAt: '2026-09-28T00:00:00.000Z',
-    lastReviewedAt: '2026-09-27T00:00:00.000Z',
-    firstReviewedAt: '2026-09-27T00:00:00.000Z',
-    intervalDays: 1,
-    ease: 2.5,
-    totalReviews: 1,
-    totalCorrect: 1,
-    totalWrong: 0,
-    correctStreak: 1,
-    wrongStreak: 0,
-    lapseCount: 0,
-    leechLevel: 0,
-    suspended: false,
-    createdAt: '2026-09-27T00:00:00.000Z',
-    updatedAt: '2026-09-27T00:00:00.000Z'
   };
 }
 
@@ -82,9 +59,12 @@ afterEach(async () => {
 
 describe('IndexedDB atomic persistence', () => {
   it('rolls back attempt/card/log together when one write cannot be cloned', async () => {
-    const badCard = { ...card('atomic-fail'), nonCloneable: () => undefined } as unknown as ReviewCard;
-
-    await expect(studyStore.saveAttemptWithReview(attempt('atomic-fail'), badCard, log('atomic-fail'))).rejects.toBeTruthy();
+    const put = IDBObjectStore.prototype.add;
+    vi.spyOn(IDBObjectStore.prototype, 'add').mockImplementation(function (this: IDBObjectStore, value, key) {
+      if (this.name === 'reviewLogs') throw new DOMException('Cannot clone', 'DataCloneError');
+      return put.call(this, value, key);
+    });
+    await expect(studyStore.recordAnswer(attempt('atomic-fail'))).rejects.toMatchObject({ name: 'DataCloneError' });
 
     expect((await studyStore.getAttempts()).some((row) => row.attemptId === 'atomic-fail')).toBe(false);
     expect(await studyStore.getReviewCard('q-atomic-fail')).toBeUndefined();

@@ -32,7 +32,17 @@ The Android package has its own browser storage and app data. `LocalDatabase` ow
 
 Session checkpoints use `loopdeck3.session` version 1 and exact canonical question content revisions. Changed material cannot resume a checkpoint against an old question with the same ID. Preferences and folder expansion use fresh storage keys. Neither LoopDeck2 nor LoopDeck3 0.1.x user data is read. Built-in material is canonical validated JSON, with no runtime legacy conversion. Imported packs are data, not executable HTML/JavaScript.
 
-Each screen receives a `ScreenContext` containing its catalog, image resolver, navigation and route lease. Navigation and catalog refresh are bound to that lease. Disposing the application invalidates pending renders and removes listeners/timers. Diagnostics are a visible home button. Android file saves use the `LoopDeck3Host` bridge and `loopdeck3-save-result` event.
+Each screen receives a `ScreenContext` containing its repository, catalog, image resolver, navigation and route lease. Navigation and catalog refresh are bound to that lease. Disposing the application invalidates pending renders and removes listeners/timers. Diagnostics are a visible home button. Android file saves use the `LoopDeck3Host` bridge and `loopdeck3-save-result` event.
+
+## Study runtime and persistence ownership
+
+`QuizController` owns the question lifecycle: answering, pending, saving, failed, saved, advanced and disposed. It owns timing, checkpoints, retries and auto-advance, with no DOM or IndexedDB dependency. The inline quiz renderer owns controls, feedback, visibility events and idle-reveal observation. Existing scoring, answer judgment and review rules remain in the core modules.
+
+`StudyRepository.recordAnswer` checks the attempt identity, reads the latest review card and writes the attempt, card and log in one readwrite transaction. Independent browser tabs therefore cannot overwrite each other's review counters. Repeating an already committed attempt is a no-op. Answer log identities derive from attempt identities, not a random value. A synchronous transaction failure preserves its original cause when rolling back.
+
+Each repository owns an explicit `LocalDatabase`; pack/asset operations and snapshot restore use that same database. Only the application composition imports the default repository singleton. Screens, bookmarks, image resolution and ZIP generation receive their dependencies explicitly; the architecture check rejects new global repository imports outside the composition. This enables isolated repository and headless runtime tests without adding a user-facing profile feature.
+
+ZIP creation is a pure archive operation over supplied data. `collectPackExportAssets` resolves resources against the exported pack itself, so inactive packs and built-in embedded images retain their own assets. Shared image references produce one ZIP entry.
 
 ## Release contract
 

@@ -30,7 +30,7 @@ function render(): HTMLElement {
     autoNext: false,
     questionLimit: 'all'
   });
-  renderInlineQuiz(container, session, { onSessionChange() {}, onComplete() {} });
+  renderInlineQuiz(container, session, { onSessionChange() {}, onComplete() {} }, { store: studyStore });
   return container;
 }
 

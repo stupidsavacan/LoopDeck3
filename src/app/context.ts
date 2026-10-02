@@ -1,3 +1,4 @@
+import type { StudyRepository } from '../storage/studyRepository';
 import type { QuestionImageAssetResolver } from '../packs/packAssetResolver';
 import type { ResolvedPackView } from '../packs/packResolver';
 
@@ -16,6 +17,7 @@ export interface Navigation {
 }
 
 export interface ScreenContext {
+  store: StudyRepository;
   root: HTMLElement;
   catalog: ResolvedPackView;
   navigation: Navigation;

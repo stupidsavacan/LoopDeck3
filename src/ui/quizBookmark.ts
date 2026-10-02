@@ -1,8 +1,8 @@
-import { studyStore } from '../storage/studyRepository';
+import type { QuizDataStore } from '../storage/storageTypes';
 import { button, toast } from './dom';
 import { appendIconLabel } from './icons';
 
-export function createQuizBookmarkButton(questionId: string, isCurrentRender: () => boolean): HTMLButtonElement {
+export function createQuizBookmarkButton(questionId: string, isCurrentRender: () => boolean, studyStore: Pick<QuizDataStore, 'hasBookmark' | 'setBookmark'>): HTMLButtonElement {
   const bookmark = button('', 'btn ghost bookmark-btn');
   let bookmarked = false;
   const renderBookmark = () => {
