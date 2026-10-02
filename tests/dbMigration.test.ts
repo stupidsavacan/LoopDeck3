@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto';
 import { describe, expect, it } from 'vitest';
 
-const DB_NAME = 'loopdeck-db';
+const DB_NAME = 'loopdeck3-db';
 
 function openLegacyDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {

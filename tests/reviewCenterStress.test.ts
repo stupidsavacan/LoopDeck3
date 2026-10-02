@@ -73,7 +73,7 @@ function cardFor(question: Question, index: number): ReviewCard {
 
 describe('Review Center large-history layout bounds', () => {
   beforeEach(async () => {
-    sessionStorage.removeItem('loopdeck_review_scope_session_v1');
+    sessionStorage.removeItem('loopdeck3_review_scope_session_v1');
     await db.clearAttempts();
     await db.clearReviewData();
 

@@ -8,7 +8,7 @@ import { button, clear, el, toast } from '../ui/dom';
 import { appendIconLabel } from '../ui/icons';
 import { renderInlineQuiz } from './inlineQuiz';
 
-const REVIEW_SCOPE_KEY = 'loopdeck_review_scope_session_v1';
+const REVIEW_SCOPE_KEY = 'loopdeck3_review_scope_session_v1';
 const percent = (value: number): string => `${Math.round(value * 100)}%`;
 const seconds = (value: number): string => `${Math.round(value / 100) / 10}秒`;
 

@@ -12,7 +12,7 @@ const question: Question = {
 };
 
 function store(settings: StudySettings): void {
-  localStorage.setItem('loopdeck_session_resume-module', JSON.stringify({
+  localStorage.setItem('loopdeck3_session_resume-module', JSON.stringify({
     questionIds: [question.id],
     index: 0,
     mode: 'normal',

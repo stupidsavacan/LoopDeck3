@@ -7,7 +7,7 @@ import { importLoopDeckJson } from '../src/packs/zipImporter';
 import { renderHomeScreen } from '../src/screens/homeScreen';
 import { db } from '../src/storage/db';
 
-const DB_NAME = 'loopdeck-db';
+const DB_NAME = 'loopdeck3-db';
 
 function minimalPack(packId: string) {
   return {

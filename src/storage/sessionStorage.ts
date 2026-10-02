@@ -32,7 +32,7 @@ interface LegacyStoredSession {
 }
 
 function resumeKey(moduleId: string): string {
-  return `loopdeck_session_${moduleId}`;
+  return `loopdeck3_session_${moduleId}`;
 }
 
 function isConcreteStudyQuestionMode(value: unknown): value is ConcreteStudyQuestionMode {

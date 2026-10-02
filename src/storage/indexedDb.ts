@@ -1,4 +1,4 @@
-const DB_NAME = 'loopdeck-db';
+const DB_NAME = 'loopdeck3-db';
 const DB_VERSION = 4;
 export const USER_DATA_STORES = ['attempts', 'bookmarks', 'packs', 'packAssets', 'reviewCards', 'reviewLogs'] as const;
 

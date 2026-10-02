@@ -59,7 +59,7 @@ afterEach(() => vi.useRealTimers());
 describe('stored session v2 resume state', () => {
   it('restores the exact presented direction, attempts, start time, and current timing state', () => {
     localStorage.setItem(
-      `loopdeck_session_${moduleInfo.id}`,
+      `loopdeck3_session_${moduleInfo.id}`,
       JSON.stringify({
         version: 2,
         questions: [{ questionId: reversible.id, questionMode: 'back_to_front' }],
@@ -144,7 +144,7 @@ describe('stored session v2 resume state', () => {
   });
   it('accepts a completed v2 session so its summary can be resumed', () => {
     localStorage.setItem(
-      `loopdeck_session_${moduleInfo.id}`,
+      `loopdeck3_session_${moduleInfo.id}`,
       JSON.stringify({
         version: 2,
         questions: [{ questionId: reversible.id, questionMode: 'front_to_back' }],
@@ -164,7 +164,7 @@ describe('stored session v2 resume state', () => {
 
   it('does not resume legacy mixed sessions because their already-presented direction was never stored', () => {
     localStorage.setItem(
-      `loopdeck_session_${moduleInfo.id}`,
+      `loopdeck3_session_${moduleInfo.id}`,
       JSON.stringify({
         questionIds: [reversible.id],
         index: 0,

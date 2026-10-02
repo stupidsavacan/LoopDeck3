@@ -80,7 +80,7 @@ test('images, all question types, resize, session persistence and double submit'
     if (i === 0) { await page.reload(); await page.getByRole('button', { name: /再開/ }).click(); }
   }
   await expect(page.getByRole('button', { name: '教材詳細に戻る' })).toBeVisible();
-  const count = await page.evaluate(() => new Promise(resolve => { const r = indexedDB.open('loopdeck-db'); r.onsuccess = () => { const db = r.result; const q = db.transaction('attempts').objectStore('attempts').count(); q.onsuccess = () => { resolve(q.result); db.close(); }; }; }));
+  const count = await page.evaluate(() => new Promise(resolve => { const r = indexedDB.open('loopdeck3-db'); r.onsuccess = () => { const db = r.result; const q = db.transaction('attempts').objectStore('attempts').count(); q.onsuccess = () => { resolve(q.result); db.close(); }; }; }));
   expect(count).toBe(12);
 });
 

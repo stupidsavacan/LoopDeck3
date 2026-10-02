@@ -28,7 +28,7 @@ android {
         minSdk = 23
         targetSdk = 35
         versionCode = providers.gradleProperty("appVersionCode").orElse("1").get().toInt()
-        versionName = providers.gradleProperty("appVersionName").orElse("0.1.0").get()
+        versionName = providers.gradleProperty("appVersionName").orElse("0.1.1").get()
     }
 
     buildFeatures {

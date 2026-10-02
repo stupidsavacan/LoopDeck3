@@ -25,7 +25,7 @@ export interface StudyPreferenceSanitizeContext {
 }
 
 export function studyPreferencesKey(packId: string, moduleId: string): string {
-  return `loopdeck_study_prefs_v2_${JSON.stringify([packId, moduleId])}`;
+  return `loopdeck3_study_prefs_v2_${JSON.stringify([packId, moduleId])}`;
 }
 
 export function readStudyPreferences(
@@ -34,7 +34,7 @@ export function readStudyPreferences(
   storage: Pick<Storage, 'getItem'> = localStorage
 ): Partial<StudySettings> | undefined {
   try {
-    const legacyKey = `loopdeck_study_prefs_v1_${packId}:${moduleId}`;
+    const legacyKey = `loopdeck3_study_prefs_v1_${packId}:${moduleId}`;
     const raw =
       storage.getItem(studyPreferencesKey(packId, moduleId)) ??
       (!packId.includes(':') && !moduleId.includes(':') ? storage.getItem(legacyKey) : null);

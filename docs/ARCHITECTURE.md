@@ -26,7 +26,7 @@ The Android WebView loads it from `https://appassets.androidplatform.net/assets/
 
 ## Data boundary
 
-The new Android package has its own browser storage and app data. No automatic LoopDeck2 storage migration is attempted. The inherited validated backup import is the explicit migration path. Imported packs are data, not executable HTML/JavaScript. Compatibility applies to supported data formats, not old internal TypeScript APIs.
+The new Android package has its own browser storage and app data. The web app also uses a separate `loopdeck3-db` database and `loopdeck3_` storage keys, even when two HTML files share a browser origin. No automatic LoopDeck2 storage migration is attempted. The inherited validated backup import is the explicit migration path. Imported packs are data, not executable HTML/JavaScript. Compatibility applies to supported data formats, not old internal TypeScript APIs.
 
 ## Release contract
 

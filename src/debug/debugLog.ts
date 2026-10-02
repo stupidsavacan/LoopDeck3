@@ -14,7 +14,7 @@ export interface DebugLogEntry {
   context?: Record<string, unknown>;
 }
 
-const DEBUG_LOG_KEY = 'loopdeck_debug_logs_v1';
+const DEBUG_LOG_KEY = 'loopdeck3_debug_logs_v1';
 const MAX_DEBUG_LOGS = 200;
 let globalLoggingRegistered = false;
 

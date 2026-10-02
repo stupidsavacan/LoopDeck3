@@ -252,7 +252,7 @@ describe('module screen study preferences', () => {
       .click();
     await settle();
 
-    expect(localStorage.getItem(`loopdeck_session_${moduleInfo.id}`)).toBeNull();
+    expect(localStorage.getItem(`loopdeck3_session_${moduleInfo.id}`)).toBeNull();
     expect(localStorage.getItem(preferenceKey)).not.toBeNull();
     expect(readStudyPreferences(pack.packId, moduleInfo.id)?.answerFormat).toBe('input');
   });

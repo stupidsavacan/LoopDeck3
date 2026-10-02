@@ -191,9 +191,9 @@ describe('settings and aggregation contracts', () => {
   });
   it('migrates unambiguous v1 settings but ignores ambiguous legacy identities', () => {
     const value = JSON.stringify({ version: 1, settings: { selectedCategory: 'A' } });
-    localStorage.setItem('loopdeck_study_prefs_v1_p:m', value);
+    localStorage.setItem('loopdeck3_study_prefs_v1_p:m', value);
     expect(readStudyPreferences('p', 'm')?.selectedCategory).toBe(encodeStudyCategory('A'));
-    localStorage.setItem('loopdeck_study_prefs_v1_a:b:c', value);
+    localStorage.setItem('loopdeck3_study_prefs_v1_a:b:c', value);
     expect(readStudyPreferences('a:b', 'c')).toBeUndefined();
   });
   it.each(['constructor', '__proto__', 'toString'])('counts module %s safely across summaries', (moduleId) => {
