@@ -40,6 +40,16 @@ async function start(page) {
   await expect(page.locator('.question-prompt')).toBeVisible();
 }
 const sizes = [[320,568],[360,800],[390,844],[412,915],[600,960],[744,1133],[768,1024],[810,1080],[820,1180],[834,1194],[1024,768],[1180,820],[1194,834],[1024,600],[1280,720],[1366,768],[1440,900],[1920,1080],[2560,1080], ...[359,361,419,420,421,759,760,761,899,900,901,999,1000,1001].map(w => [w,800])];
+test('invalid hash normalization preserves browser back navigation', async ({ page }) => {
+  await go(page, 'home');
+  const before = await page.evaluate(() => history.length);
+  await page.evaluate(() => { location.hash = '#module/%zz'; });
+  await expect(page).toHaveURL(/#home$/);
+  expect(await page.evaluate(() => history.length)).toBe(before + 1);
+  await page.goBack();
+  await expect(page.locator('.home-screen')).toBeVisible();
+  await expect(page).toHaveURL(/#home$/);
+});
 for (const [width, height] of sizes) test(`matrix ${width}x${height}`, async ({ page }, info) => {
   await page.setViewportSize({ width, height });
   await go(page, 'home');

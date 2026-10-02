@@ -61,4 +61,16 @@ describe('application ownership', () => {
     expect(location.hash).toBe('#debug-log');
     expect(root.querySelector('.debug-log-screen')).toBeTruthy();
   });
+  it('normalizes an invalid history URL without pushing another entry', async () => {
+    const root = document.createElement('div');
+    const app = new StudyApplication(root, async () => resolveActivePacks([]));
+    mounted.push(app);
+    app.start();
+    await vi.waitFor(() => expect(root.querySelector('.home-screen')).toBeTruthy());
+    const push = vi.spyOn(history, 'pushState');
+    history.replaceState(null, '', '#module/%zz');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+    expect(location.hash).toBe('#home');
+    expect(push).not.toHaveBeenCalled();
+  });
 });

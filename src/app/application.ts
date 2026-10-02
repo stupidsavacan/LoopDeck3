@@ -74,7 +74,10 @@ export class StudyApplication {
   }
 
   private readonly locationChanged = (): void => {
-    if (this.active && location.hash !== this.currentHash) this.navigate(parseRoute(location.hash));
+    if (!this.active || location.hash === this.currentHash) return;
+    const route = parseRoute(location.hash);
+    history.replaceState(null, '', routeHash(route));
+    this.navigate(route);
   };
 
   private context(lease: RouteRenderLease): ScreenContext {
