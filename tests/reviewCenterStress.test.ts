@@ -1,10 +1,11 @@
+import { screenContext } from './support/screenContext';
 // @vitest-environment jsdom
 import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { Attempt, LoopDeckPack, Question, ReviewCard } from '../src/core/models';
 import { resolveActivePacks } from '../src/packs/packResolver';
 import { renderReviewCenter } from '../src/screens/reviewCenter';
-import { db } from '../src/storage/db';
+import { studyStore } from '../src/storage/studyRepository';
 
 const QUESTION_COUNT = 120;
 const moduleId = 'stress-module';
@@ -73,20 +74,20 @@ function cardFor(question: Question, index: number): ReviewCard {
 
 describe('Review Center large-history layout bounds', () => {
   beforeEach(async () => {
-    sessionStorage.removeItem('loopdeck3_review_scope_session_v1');
-    await db.clearAttempts();
-    await db.clearReviewData();
+    sessionStorage.removeItem('loopdeck3.review.scope');
+    await studyStore.clearAttempts();
+    await studyStore.clearReviewData();
 
     for (let index = 0; index < questions.length; index += 1) {
       const question = questions[index];
-      await db.addAttempt(attemptFor(question, index));
-      await db.putReviewCard(cardFor(question, index));
+      await studyStore.addAttempt(attemptFor(question, index));
+      await studyStore.putReviewCard(cardFor(question, index));
     }
   });
 
   it('keeps hundreds of synthetic review records behind bounded previews', async () => {
     const root = document.createElement('div');
-    await renderReviewCenter(root, resolveActivePacks([pack]), () => {}, () => {});
+    await renderReviewCenter(screenContext({ root: root, catalog: resolveActivePacks([pack]), navigation: { home: () => {}, graphs: () => {} } }));
 
     const listCards = [...root.querySelectorAll<HTMLElement>('.review-list-grid > .card')];
     expect(listCards).toHaveLength(2);

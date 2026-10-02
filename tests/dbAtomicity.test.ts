@@ -1,7 +1,8 @@
 import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Attempt, ReviewCard, ReviewLog } from '../src/core/models';
-import { db, type LoopDeckBackup } from '../src/storage/db';
+import { studyStore } from '../src/storage/studyRepository';
+import type { StudyBackup } from '../src/storage/storageTypes';
 
 function attempt(id: string): Attempt {
   return {
@@ -21,7 +22,7 @@ function card(id: string): ReviewCard {
   return {
     questionId: `q-${id}`,
     moduleId: 'atomic-module',
-    state: 'learning',
+    state: 'relearning',
     dueAt: '2026-09-28T00:00:00.000Z',
     lastReviewedAt: '2026-09-27T00:00:00.000Z',
     firstReviewedAt: '2026-09-27T00:00:00.000Z',
@@ -49,7 +50,7 @@ function log(id: string): ReviewLog {
     rating: 'good',
     result: 'correct',
     previousState: 'new',
-    nextState: 'learning',
+    nextState: 'relearning',
     previousDueAt: null,
     nextDueAt: '2026-09-28T00:00:00.000Z',
     previousIntervalDays: 0,
@@ -61,9 +62,9 @@ function log(id: string): ReviewLog {
   };
 }
 
-function emptyBackup(): LoopDeckBackup {
+function emptyBackup(): StudyBackup {
   return {
-    loopDeckBackupVersion: 1,
+    format: 'loopdeck3.backup', schema: 1,
     exportedAt: '2026-09-27T00:00:00.000Z',
     attempts: [],
     bookmarks: [],
@@ -76,23 +77,23 @@ function emptyBackup(): LoopDeckBackup {
 
 afterEach(async () => {
   vi.restoreAllMocks();
-  await db.importUserData(emptyBackup(), 'replace');
+  await studyStore.restoreSnapshot(emptyBackup(), 'replace');
 });
 
 describe('IndexedDB atomic persistence', () => {
   it('rolls back attempt/card/log together when one write cannot be cloned', async () => {
     const badCard = { ...card('atomic-fail'), nonCloneable: () => undefined } as unknown as ReviewCard;
 
-    await expect(db.saveAttemptWithReview(attempt('atomic-fail'), badCard, log('atomic-fail'))).rejects.toBeTruthy();
+    await expect(studyStore.saveAttemptWithReview(attempt('atomic-fail'), badCard, log('atomic-fail'))).rejects.toBeTruthy();
 
-    expect((await db.getAttempts()).some((row) => row.attemptId === 'atomic-fail')).toBe(false);
-    expect(await db.getReviewCard('q-atomic-fail')).toBeUndefined();
-    expect(await db.getReviewLogsForQuestion('q-atomic-fail')).toEqual([]);
+    expect((await studyStore.getAttempts()).some((row) => row.attemptId === 'atomic-fail')).toBe(false);
+    expect(await studyStore.getReviewCard('q-atomic-fail')).toBeUndefined();
+    expect(await studyStore.getReviewLogsForQuestion('q-atomic-fail')).toEqual([]);
   });
 
   it('rolls back a replace restore completely when a later backup row fails', async () => {
-    await db.addAttempt(attempt('existing'));
-    await db.setBookmark('existing-bookmark', true);
+    await studyStore.addAttempt(attempt('existing'));
+    await studyStore.setBookmark('existing-bookmark', true);
     const backup = emptyBackup();
     backup.attempts = [attempt('incoming')];
     backup.reviewLogs = [log('incoming')];
@@ -102,26 +103,26 @@ describe('IndexedDB atomic persistence', () => {
       return originalPut.call(this, value, key);
     });
 
-    await expect(db.importUserData(backup, 'replace')).rejects.toBeTruthy();
+    await expect(studyStore.restoreSnapshot(backup, 'replace')).rejects.toBeTruthy();
 
-    expect((await db.getAttempts()).map((row) => row.attemptId)).toContain('existing');
-    expect((await db.getAttempts()).map((row) => row.attemptId)).not.toContain('incoming');
-    expect(await db.getBookmarks()).toContain('existing-bookmark');
+    expect((await studyStore.getAttempts()).map((row) => row.attemptId)).toContain('existing');
+    expect((await studyStore.getAttempts()).map((row) => row.attemptId)).not.toContain('incoming');
+    expect(await studyStore.getBookmarks()).toContain('existing-bookmark');
   });
 
   it('keeps unrelated current rows in merge mode and removes them in replace mode', async () => {
-    await db.addAttempt(attempt('current'));
-    await db.setBookmark('current-bookmark', true);
+    await studyStore.addAttempt(attempt('current'));
+    await studyStore.setBookmark('current-bookmark', true);
     const backup = emptyBackup();
     backup.attempts = [attempt('backup')];
     backup.bookmarks = ['backup-bookmark'];
 
-    await db.importUserData(backup, 'merge');
-    expect(new Set((await db.getAttempts()).map((row) => row.attemptId))).toEqual(new Set(['current', 'backup']));
-    expect(new Set(await db.getBookmarks())).toEqual(new Set(['current-bookmark', 'backup-bookmark']));
+    await studyStore.restoreSnapshot(backup, 'merge');
+    expect(new Set((await studyStore.getAttempts()).map((row) => row.attemptId))).toEqual(new Set(['current', 'backup']));
+    expect(new Set(await studyStore.getBookmarks())).toEqual(new Set(['current-bookmark', 'backup-bookmark']));
 
-    await db.importUserData(backup, 'replace');
-    expect((await db.getAttempts()).map((row) => row.attemptId)).toEqual(['backup']);
-    expect(await db.getBookmarks()).toEqual(['backup-bookmark']);
+    await studyStore.restoreSnapshot(backup, 'replace');
+    expect((await studyStore.getAttempts()).map((row) => row.attemptId)).toEqual(['backup']);
+    expect(await studyStore.getBookmarks()).toEqual(['backup-bookmark']);
   });
 });

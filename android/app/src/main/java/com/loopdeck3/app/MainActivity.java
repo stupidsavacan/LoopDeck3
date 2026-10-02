@@ -251,7 +251,7 @@ public class MainActivity extends Activity {
             settings.setSafeBrowsingEnabled(true);
         }
 
-        webView.addJavascriptInterface(new LoopDeckBridge(), "LoopDeckAndroid");
+        webView.addJavascriptInterface(new LoopDeckBridge(), "LoopDeck3Host");
         final WebViewAssetLoader assetLoader = new WebViewAssetLoader.Builder()
                 .addPathHandler("/assets/", new WebViewAssetLoader.AssetsPathHandler(this))
                 .build();
@@ -392,7 +392,7 @@ public class MainActivity extends Activity {
             detail.put("code", code);
             detail.put("message", message);
             detail.put("bytes", bytes);
-            String script = "window.dispatchEvent(new CustomEvent('loopdeck-native-save-result',{detail:" + detail.toString() + "}))";
+            String script = "window.dispatchEvent(new CustomEvent('loopdeck3-save-result',{detail:" + detail.toString() + "}))";
             webView.post(() -> webView.evaluateJavascript(script, null));
         } catch (Exception ignored) {
             // Best effort only.
@@ -542,7 +542,7 @@ public class MainActivity extends Activity {
         if (saveToDelete != null) cleanupFile(saveToDelete.tempFile);
 
         if (webView != null) {
-            webView.removeJavascriptInterface("LoopDeckAndroid");
+            webView.removeJavascriptInterface("LoopDeck3Host");
             webView.destroy();
             webView = null;
         }

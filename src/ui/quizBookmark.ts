@@ -1,4 +1,4 @@
-import { db } from '../storage/db';
+import { studyStore } from '../storage/studyRepository';
 import { button, toast } from './dom';
 import { appendIconLabel } from './icons';
 
@@ -13,7 +13,7 @@ export function createQuizBookmarkButton(questionId: string, isCurrentRender: ()
   };
   renderBookmark();
   bookmark.disabled = true;
-  void db
+  void studyStore
     .hasBookmark(questionId)
     .then((enabled) => {
       if (!isCurrentRender()) return;
@@ -31,7 +31,7 @@ export function createQuizBookmarkButton(questionId: string, isCurrentRender: ()
     renderBookmark();
     bookmark.disabled = true;
     try {
-      await db.setBookmark(questionId, bookmarked);
+      await studyStore.setBookmark(questionId, bookmarked);
     } catch {
       if (!isCurrentRender()) return;
       bookmarked = previous;

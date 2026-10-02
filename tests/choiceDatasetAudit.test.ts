@@ -1,12 +1,11 @@
+import { loadBuiltinPacks } from '../src/packs/builtinLoader';
 import { describe, expect, it } from 'vitest';
-import builtinPackData from '../data/builtin/loopdeck_builtin.loopdeck.json';
 import { normalizeAnswer } from '../src/core/answerJudge';
 import { buildGeneratedChoices } from '../src/core/choiceGenerator';
 import { createSession } from '../src/core/sessionEngine';
-import { normalizeBuiltinPack } from '../src/packs/builtinNormalizer';
 
 describe('built-in choice dataset audit', () => {
-  const pack = normalizeBuiltinPack(builtinPackData);
+  const pack = loadBuiltinPacks()[0];
 
   it('can generate safe four-choice options for every input question in every non-empty module', () => {
     const failures: string[] = [];

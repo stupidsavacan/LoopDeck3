@@ -1,7 +1,9 @@
+import { questionRevision } from '../src/core/questionRevision';
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { Question, StudySettings } from '../src/core/models';
-import { readStoredSession, runtimeSettings } from '../src/screens/moduleScreen';
+import { readStoredSession } from '../src/storage/sessionStorage';
+import { runtimeSettings } from '../src/core/studySettings';
 
 const question: Question = {
   id: 'resume-question',
@@ -12,8 +14,10 @@ const question: Question = {
 };
 
 function store(settings: StudySettings): void {
-  localStorage.setItem('loopdeck3_session_resume-module', JSON.stringify({
-    questionIds: [question.id],
+  localStorage.setItem('loopdeck3.session.resume-module', JSON.stringify({
+    format: 'loopdeck3.session', version: 1,
+    questions: [{ questionId: question.id, revision: questionRevision(question), questionMode: 'as_stored' }],
+    startedAt: 0, currentElapsedMs: 0, currentHiddenTimeExcludedMs: 0, attempts: [],
     index: 0,
     mode: 'normal',
     settings,
@@ -23,8 +27,8 @@ function store(settings: StudySettings): void {
 
 beforeEach(() => localStorage.clear());
 
-describe('module session idle reveal compatibility', () => {
-  it('keeps older stored sessions with no auto-reveal setting disabled', () => {
+describe('session idle reveal settings', () => {
+  it('keeps an omitted optional idle reveal setting disabled', () => {
     store({ shuffle: false, autoNext: false, questionLimit: 'all' });
     const restored = readStoredSession(question.moduleId, new Map([[question.id, question]]));
 

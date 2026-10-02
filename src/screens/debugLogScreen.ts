@@ -1,3 +1,4 @@
+import type { ScreenContext } from '../app/context';
 import { clearDebugLogs, formatDebugLogsForCopy, readDebugLogs, writeDebugLog, type DebugLogEntry } from '../debug/debugLog';
 import { button, clear, el, toast } from '../ui/dom';
 import { appendIconLabel } from '../ui/icons';
@@ -34,7 +35,10 @@ function renderLogCard(log: DebugLogEntry): HTMLElement {
   return card;
 }
 
-export function renderDebugLogScreen(root: HTMLElement, navigateHome: () => void): void {
+export function renderDebugLogScreen(context: ScreenContext): void {
+  const { root: root } = context;
+  const { home: navigateHome } = context.navigation;
+
   clear(root);
   const logs = readDebugLogs();
   const screen = el('main', 'screen debug-log-screen');
@@ -80,7 +84,7 @@ export function renderDebugLogScreen(root: HTMLElement, navigateHome: () => void
     if (!window.confirm('ログをすべて消去しますか？')) return;
     clearDebugLogs();
     toast('デバッグログを消去しました。');
-    renderDebugLogScreen(root, navigateHome);
+    renderDebugLogScreen(context);
   };
   actions.append(copy, clearButton);
 

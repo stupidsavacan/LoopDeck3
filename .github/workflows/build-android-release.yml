@@ -90,7 +90,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          gh release create '${{ steps.version.outputs.tag }}' LoopDeck3.apk LoopDeck3.html SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title 'LoopDeck3 ${{ steps.version.outputs.name }}' --notes "HTML-first bootstrap based on LoopDeck2 #115. APK embeds the exact HTML attached to this release. Source: $GITHUB_SHA. Independent Android app ID: com.loopdeck3.app." --draft
+          gh release create '${{ steps.version.outputs.tag }}' LoopDeck3.apk LoopDeck3.html SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title 'LoopDeck3 ${{ steps.version.outputs.name }}' --notes "Offline HTML application with a WebView host. APK embeds the exact HTML attached to this release. No old user-data or internal API compatibility is provided. Source: $GITHUB_SHA. Independent Android app ID: com.loopdeck3.app." --draft
           gh release edit '${{ steps.version.outputs.tag }}' --repo "$GITHUB_REPOSITORY" --draft=false --latest
       - uses: actions/upload-artifact@v7
         if: always()

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from 'vitest';
 import 'fake-indexeddb/auto';
-import { db } from '../src/storage/db';
+import { studyStore } from '../src/storage/studyRepository';
 import { readStoredSession } from '../src/storage/sessionStorage';
 import { readStudyPreferences, writeStudyPreferences } from '../src/storage/studyPreferences';
 import { defaultStudySettings } from '../src/core/studySettings';
@@ -23,9 +23,9 @@ describe('LoopDeck2 and LoopDeck3 in the same browser origin', () => {
         transaction.oncomplete = () => resolve();
         transaction.onerror = () => reject(transaction.error);
       });
-      expect(await db.hasBookmark('old-question')).toBe(false);
-      await db.setBookmark('new-question', true);
-      expect(await db.getBookmarks()).toEqual(['new-question']);
+      expect(await studyStore.hasBookmark('old-question')).toBe(false);
+      await studyStore.setBookmark('new-question', true);
+      expect(await studyStore.getBookmarks()).toEqual(['new-question']);
       const oldBookmarks = await new Promise<unknown[]>((resolve, reject) => {
         const request = old.transaction('bookmarks').objectStore('bookmarks').getAll();
         request.onsuccess = () => resolve(request.result);
@@ -45,8 +45,8 @@ describe('LoopDeck2 and LoopDeck3 in the same browser origin', () => {
     localStorage.setItem('loopdeck_session_module', legacySession);
     expect(readStudyPreferences('pack', 'module')).toBeUndefined();
     expect(readStoredSession('module', new Map())).toBeUndefined();
-    localStorage.setItem('loopdeck3_session_module', legacySession);
-    expect(readStoredSession('module', new Map())).toEqual(JSON.parse(legacySession));
+    localStorage.setItem('loopdeck3.session.module', legacySession.replace('"version":2', '"format":"loopdeck3.session","version":1'));
+    expect(readStoredSession('module', new Map())).toEqual({ ...JSON.parse(legacySession), format: 'loopdeck3.session', version: 1 });
     writeStudyPreferences('pack', 'module', settings);
     expect(readStudyPreferences('pack', 'module')?.autoNext).toBe(true);
     expect(localStorage.getItem('loopdeck_study_prefs_v2_["pack","module"]')).toBe(legacyPreferences);

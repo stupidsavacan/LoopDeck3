@@ -1,15 +1,14 @@
-import builtinQuestionPack from '../../data/builtin/loopdeck_builtin.loopdeck.json';
+import builtinQuestionPack from '../../data/builtin/catalog.json';
 import type { LoopDeckPack } from '../core/models';
 import { writeDebugLog } from '../debug/debugLog';
 import { validatePack } from './packValidator';
-import { normalizeBuiltinPack } from './builtinNormalizer';
 
 let cachedBuiltinPacks: LoopDeckPack[] | undefined;
 
 export function loadBuiltinPacks(): LoopDeckPack[] {
   if (cachedBuiltinPacks) return cachedBuiltinPacks;
 
-  const normalizedPack = normalizeBuiltinPack(builtinQuestionPack);
+  const normalizedPack = builtinQuestionPack;
   const result = validatePack(normalizedPack);
   if (!result.ok || !result.pack) {
     console.error(result.issues);

@@ -25,7 +25,7 @@ export async function seed(page, volume = true) {
   await page.evaluate(async ({ data, longText }) => {
     const database = await new Promise((resolve, reject) => {
       // Open the database at its existing version so QA follows production schema upgrades.
-      const r = indexedDB.open('loopdeck3-db'); r.onsuccess = () => resolve(r.result); r.onerror = () => reject(r.error);
+      const r = indexedDB.open('loopdeck3-learning'); r.onsuccess = () => resolve(r.result); r.onerror = () => reject(r.error);
     });
     const assets = [];
     const dimensions = [[2400, 120], [120, 2400], [512, 512], [4096, 4096], [8, 8], [1000, 700]];
@@ -43,6 +43,6 @@ export async function seed(page, volume = true) {
       tx.oncomplete = resolve; tx.onerror = () => reject(tx.error);
     });
     database.close();
-    localStorage.setItem('loopdeck3_debug_logs_v1', JSON.stringify(Array.from({ length: 200 }, (_, i) => ({ id: `qa-${i}`, timestamp: new Date().toISOString(), level: 'info', area: 'qa-fixture', detail: longText.repeat(2) }))));
+    localStorage.setItem('loopdeck3.diagnostics', JSON.stringify(Array.from({ length: 200 }, (_, i) => ({ id: `qa-${i}`, timestamp: new Date().toISOString(), level: 'info', area: 'qa-fixture', detail: longText.repeat(2) }))));
   }, { data, longText });
 }

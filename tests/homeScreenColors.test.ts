@@ -1,3 +1,4 @@
+import { screenContext } from './support/screenContext';
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
 import type { LoopDeckPack, ModuleInfo } from '../src/core/models';
@@ -29,13 +30,7 @@ function pack(module: ModuleInfo): LoopDeckPack {
 
 function renderSingleCard(module: ModuleInfo): { card: HTMLElement; icon: HTMLElement } {
   const root = document.createElement('div');
-  renderHomeScreen(
-    root,
-    resolveActivePacks([pack(module)]),
-    () => {},
-    () => {},
-    () => {},
-    () => {}
+  renderHomeScreen(screenContext({ root: root, catalog: resolveActivePacks([pack(module)]), navigation: { module: () => {} } })
   );
 
   const card = root.querySelector<HTMLElement>('.module-card');

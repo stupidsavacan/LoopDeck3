@@ -1,13 +1,14 @@
+import type { ScreenContext } from '../app/context';
 import type { ModuleInfo } from '../core/models';
-import { getActiveModules, type ResolvedPackView } from '../packs/packResolver';
+import { getActiveModules } from '../packs/packResolver';
 import { button, clear, el } from '../ui/dom';
 import { createUiIcon, iconNameForModule } from '../ui/icons';
 import { moduleMeta } from '../ui/modulePresentation';
 import { buildHomeFolders, homeModuleMatches, type HomeFolder } from './homeFolders';
 
-const HOME_LAST_MODULE_KEY = 'loopdeck3_last_module_v1';
-const HOME_IN_PLAYER_KEY = 'loopdeck3_in_player_v1';
-const FOLDER_STATE_PREFIX = 'loopdeck3_folder_open_v2_';
+const HOME_LAST_MODULE_KEY = 'loopdeck3.library.last-module';
+const HOME_IN_PLAYER_KEY = 'loopdeck3.library.in-player';
+const FOLDER_STATE_PREFIX = 'loopdeck3.library.folders.';
 
 function hexToRgba(hexColor: string, alpha: number): string {
   const red = Number.parseInt(hexColor.slice(1, 3), 16);
@@ -42,9 +43,7 @@ function folderStateKey(folder: HomeFolder): string {
 
 function folderOpen(folder: HomeFolder): boolean {
   const stored = safeGetStorage(folderStateKey(folder));
-  // Legacy 'other' was ambiguous between authored and synthesized folders.
-  const legacy = folder.id === 'other' ? null : safeGetStorage('loopdeck3_folder_open_v1_' + folder.id);
-  return (stored ?? legacy) !== '0';
+  return stored !== '0';
 }
 
 function setFolderOpen(folder: HomeFolder, open: boolean): void {
@@ -56,14 +55,10 @@ function displayTags(module: ModuleInfo): string[] {
   return [...meta.tags, `${module.questionIds.length}問`].slice(0, 5);
 }
 
-export function renderHomeScreen(
-  root: HTMLElement,
-  packView: ResolvedPackView,
-  onOpenModule: (moduleId: string) => void,
-  _onOpenReview: () => void,
-  _onOpenImport: () => void,
-  _onOpenGraphs: () => void
-): void {
+export function renderHomeScreen(context: ScreenContext): void {
+  const { root: root, catalog: packView } = context;
+  const { module: onOpenModule } = context.navigation;
+
   clear(root);
   safeSetStorage(HOME_IN_PLAYER_KEY, '0');
   let query = '';

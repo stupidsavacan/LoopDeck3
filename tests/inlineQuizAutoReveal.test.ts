@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Attempt, ModuleInfo, Question, StudySettings } from '../src/core/models';
 import { createSession } from '../src/core/sessionEngine';
 import { renderInlineQuiz } from '../src/screens/inlineQuiz';
-import { db } from '../src/storage/db';
+import { studyStore } from '../src/storage/studyRepository';
 
 const moduleInfo: ModuleInfo = {
   id: 'auto-reveal-module',
@@ -78,9 +78,9 @@ function render(
   const container = document.createElement('div');
   document.body.append(container);
   const attempts: Attempt[] = [];
-  vi.spyOn(db, 'hasBookmark').mockResolvedValue(false);
-  vi.spyOn(db, 'getReviewCard').mockResolvedValue(undefined);
-  vi.spyOn(db, 'saveAttemptWithReview').mockImplementation(async (attempt) => {
+  vi.spyOn(studyStore, 'hasBookmark').mockResolvedValue(false);
+  vi.spyOn(studyStore, 'getReviewCard').mockResolvedValue(undefined);
+  vi.spyOn(studyStore, 'saveAttemptWithReview').mockImplementation(async (attempt) => {
     attempts.push(attempt);
   });
   const onSessionChange = vi.fn();

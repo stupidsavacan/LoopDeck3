@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import type { LoopDeckPack } from '../src/core/models';
 import type { ImportedPackAsset } from '../src/packs/packTypes';
 import { createLoopDeckZipBlob, createLoopDeckZipBytes, makePackFileStem, stringifyLoopDeckJson } from '../src/packs/zipExporter';
-import { db } from '../src/storage/db';
+import { studyStore } from '../src/storage/studyRepository';
 
 const samplePack: LoopDeckPack = {
   packVersion: 1,
@@ -85,8 +85,8 @@ describe('zipExporter', () => {
 
   it('includes persisted assets in the ZIP export used by the UI', async () => {
     const storedPack = withImage({ ...samplePack, packId: 'stored-export-pack' });
-    await db.deleteImportedPack(storedPack.packId);
-    await db.saveImportedPackWithAssets(
+    await studyStore.deleteImportedPack(storedPack.packId);
+    await studyStore.saveImportedPackWithAssets(
       storedPack,
       [asset('images/map.png', 'data:image/png;base64,c3RvcmVk', storedPack.packId)],
       'replace'
@@ -96,7 +96,7 @@ describe('zipExporter', () => {
     const zip = await JSZip.loadAsync(await blob.arrayBuffer());
 
     expect(await zip.file('images/map.png')!.async('base64')).toBe('c3RvcmVk');
-    await db.deleteImportedPack(storedPack.packId);
+    await studyStore.deleteImportedPack(storedPack.packId);
   });
 
   it('does not export unsafe or active asset references', async () => {

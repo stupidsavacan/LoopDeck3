@@ -1,17 +1,21 @@
+import { questionRevision } from '../core/questionRevision';
+import { parseAttempt } from './backupValidator';
 import { buildChoiceCandidateIndex } from '../core/choiceGenerator';
 import { buildWrongAnswerLookupIndexForStudyMode } from '../core/wrongAnswerExplanation';
 import type { Attempt, ConcreteStudyQuestionMode, ModuleInfo, Question, StudySettings } from '../core/models';
-import { presentQuestionForStudy, resolveConcreteStudyQuestionMode } from '../core/questionPresentation';
+import { presentQuestionForStudy } from '../core/questionPresentation';
 import type { QuizSession } from '../core/sessionEngine';
 import { runtimeSettings } from '../core/studySettings';
 
 export interface StoredSessionQuestion {
   questionId: string;
+  revision: string;
   questionMode: ConcreteStudyQuestionMode;
 }
 
 export interface StoredSession {
-  version: 2;
+  format: 'loopdeck3.session';
+  version: 1;
   questions: StoredSessionQuestion[];
   index: number;
   mode: 'normal' | 'review';
@@ -23,63 +27,29 @@ export interface StoredSession {
   savedAt: string;
 }
 
-interface LegacyStoredSession {
-  questionIds: string[];
-  index: number;
-  mode: 'normal' | 'review';
-  settings: StudySettings;
-  savedAt: string;
-}
-
 function resumeKey(moduleId: string): string {
-  return `loopdeck3_session_${moduleId}`;
+  return `loopdeck3.session.${moduleId}`;
 }
 
 function isConcreteStudyQuestionMode(value: unknown): value is ConcreteStudyQuestionMode {
   return value === 'as_stored' || value === 'front_to_back' || value === 'back_to_front';
 }
 
-function normalizeLegacyStoredSession(parsed: LegacyStoredSession, byId: Map<string, Question>): StoredSession | undefined {
-  if (!Array.isArray(parsed.questionIds) || parsed.index < 0 || parsed.index >= parsed.questionIds.length) return undefined;
-  if (!parsed.questionIds.every((id) => typeof id === 'string' && byId.has(id))) return undefined;
-  if (!parsed.settings || typeof parsed.settings !== 'object') return undefined;
-  if (parsed.settings.questionMode === 'mixed') return undefined;
-  const requestedMode = parsed.settings.questionMode ?? 'as_stored';
-  const questions = parsed.questionIds.map((questionId) => {
-    const question = byId.get(questionId);
-    if (!question) throw new Error('Stored question is unavailable.');
-    return { questionId, questionMode: resolveConcreteStudyQuestionMode(question, requestedMode) };
-  });
-  const parsedSavedAt = Date.parse(parsed.savedAt);
-  return {
-    version: 2,
-    questions,
-    index: parsed.index,
-    mode: parsed.mode,
-    settings: parsed.settings,
-    startedAt: Number.isFinite(parsedSavedAt) ? parsedSavedAt : Date.now(),
-    currentElapsedMs: 0,
-    currentHiddenTimeExcludedMs: 0,
-    attempts: [],
-    savedAt: parsed.savedAt
-  };
-}
-
 export function readStoredSession(moduleId: string, byId: Map<string, Question>): StoredSession | undefined {
   try {
     const raw = localStorage.getItem(resumeKey(moduleId));
     if (!raw) return undefined;
-    const parsed = JSON.parse(raw) as Partial<StoredSession> & Partial<LegacyStoredSession>;
-    if (parsed.version !== 2) return normalizeLegacyStoredSession(parsed as LegacyStoredSession, byId);
-    if (!Array.isArray(parsed.questions) || typeof parsed.index !== 'number' || parsed.index < 0 || parsed.index > parsed.questions.length)
+    const parsed = JSON.parse(raw) as Partial<StoredSession>;
+    if (parsed.format !== 'loopdeck3.session' || parsed.version !== 1) return undefined;
+    if (!Array.isArray(parsed.questions) || !Number.isSafeInteger(parsed.index) || parsed.index === undefined || parsed.index < 0 || parsed.index > parsed.questions.length)
       return undefined;
     if (
       !parsed.questions.every(
-        (item) => item && typeof item.questionId === 'string' && byId.has(item.questionId) && isConcreteStudyQuestionMode(item.questionMode)
+        (item) => item && typeof item.questionId === 'string' && byId.has(item.questionId) && isConcreteStudyQuestionMode(item.questionMode) && item.revision === questionRevision(byId.get(item.questionId) as Question)
       )
     )
       return undefined;
-    if (!parsed.settings || typeof parsed.settings !== 'object') return undefined;
+    if (!parsed.settings || typeof parsed.settings !== 'object' || Array.isArray(parsed.settings) || typeof parsed.settings.shuffle !== 'boolean' || typeof parsed.settings.autoNext !== 'boolean') return undefined;
     if (parsed.mode !== 'normal' && parsed.mode !== 'review') return undefined;
     if (typeof parsed.startedAt !== 'number' || !Number.isFinite(parsed.startedAt)) return undefined;
     if (typeof parsed.currentElapsedMs !== 'number' || !Number.isFinite(parsed.currentElapsedMs) || parsed.currentElapsedMs < 0)
@@ -91,7 +61,9 @@ export function readStoredSession(moduleId: string, byId: Map<string, Question>)
     )
       return undefined;
     if (!Array.isArray(parsed.attempts)) return undefined;
-    if (typeof parsed.savedAt !== 'string') return undefined;
+    if (typeof parsed.savedAt !== 'string' || !Number.isFinite(Date.parse(parsed.savedAt))) return undefined;
+    parsed.attempts = parsed.attempts.map(parseAttempt);
+    if (parsed.attempts.some(attempt => !parsed.questions?.some(question => question.questionId === attempt.questionId))) return undefined;
     return parsed as StoredSession;
   } catch {
     return undefined;
@@ -107,7 +79,7 @@ export function restoreStoredSession(
   const queue: Question[] = [];
   for (const item of stored.questions) {
     const question = byId.get(item.questionId);
-    if (!question) return undefined;
+    if (!question || item.revision !== questionRevision(question)) return undefined;
     queue.push(presentQuestionForStudy(question, item.questionMode));
   }
   return {
@@ -132,9 +104,10 @@ export function restoreStoredSession(
 
 export function saveStoredSession(moduleId: string, session: QuizSession): void {
   const stored: StoredSession = {
-    version: 2,
+    format: 'loopdeck3.session', version: 1,
     questions: session.queue.map((question) => ({
       questionId: question.id,
+      revision: questionRevision(session.choicePool.find(source => source.id === question.id) ?? question),
       questionMode: question.activeStudyMode ?? 'as_stored'
     })),
     index: session.index,
@@ -152,4 +125,3 @@ export function saveStoredSession(moduleId: string, session: QuizSession): void 
 export function clearStoredSession(moduleId: string): void {
   localStorage.removeItem(resumeKey(moduleId));
 }
-

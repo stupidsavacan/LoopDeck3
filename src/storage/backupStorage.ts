@@ -1,12 +1,12 @@
 import { validateBackupPayload } from './backupValidator';
-import { runTransaction, USER_DATA_STORES } from './indexedDb';
+import { database, USER_DATA_STORES } from './indexedDb';
 import { putPacksInInstallOrder } from './packStorage';
 import type { BackupImportMode } from './storageTypes';
 
 export async function importBackup(rawBackup: unknown, mode: BackupImportMode): Promise<void> {
   if (mode !== 'merge' && mode !== 'replace') throw new Error('Explicit backup import mode is required.');
   const backup = validateBackupPayload(rawBackup);
-  await runTransaction([...USER_DATA_STORES], 'readwrite', (tx) => {
+  await database.transact([...USER_DATA_STORES], 'readwrite', (tx) => {
     if (mode === 'replace') {
       for (const storeName of USER_DATA_STORES) tx.objectStore(storeName).clear();
     }
@@ -31,4 +31,3 @@ export async function importBackup(rawBackup: unknown, mode: BackupImportMode): 
     for (const log of backup.reviewLogs ?? []) reviewLogs.put(log);
   });
 }
-

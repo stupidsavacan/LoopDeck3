@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ModuleInfo, Question } from '../src/core/models';
 import { createSession } from '../src/core/sessionEngine';
 import { renderInlineQuiz } from '../src/screens/inlineQuiz';
-import { db } from '../src/storage/db';
+import { studyStore } from '../src/storage/studyRepository';
 
 const moduleInfo: ModuleInfo = {
   id: 'next-gate-module',
@@ -32,9 +32,9 @@ const choiceQuestion: Question = {
 };
 
 function stubPersistence(): void {
-  vi.spyOn(db, 'hasBookmark').mockResolvedValue(false);
-  vi.spyOn(db, 'getReviewCard').mockResolvedValue(undefined);
-  vi.spyOn(db, 'saveAttemptWithReview').mockResolvedValue();
+  vi.spyOn(studyStore, 'hasBookmark').mockResolvedValue(false);
+  vi.spyOn(studyStore, 'getReviewCard').mockResolvedValue(undefined);
+  vi.spyOn(studyStore, 'saveAttemptWithReview').mockResolvedValue();
 }
 
 describe('inline quiz Next gating', () => {
@@ -45,7 +45,7 @@ describe('inline quiz Next gating', () => {
 
   it('cannot advance an input question before answering, then advances only after persistence succeeds', async () => {
     let finishSave: () => void = () => {};
-    vi.spyOn(db, 'saveAttemptWithReview').mockReturnValue(
+    vi.spyOn(studyStore, 'saveAttemptWithReview').mockReturnValue(
       new Promise<void>((resolve) => {
         finishSave = resolve;
       })
@@ -136,7 +136,7 @@ describe('inline quiz Next gating', () => {
   });
 
   it('surfaces a failed save, keeps Next gated, and retries the same attempt', async () => {
-    const save = vi.spyOn(db, 'saveAttemptWithReview').mockRejectedValueOnce(new Error('disk full')).mockResolvedValueOnce();
+    const save = vi.spyOn(studyStore, 'saveAttemptWithReview').mockRejectedValueOnce(new Error('disk full')).mockResolvedValueOnce();
     const container = document.createElement('div');
     document.body.append(container);
     const onSessionChange = vi.fn();

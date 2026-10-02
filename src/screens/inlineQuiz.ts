@@ -7,9 +7,9 @@ import { buildQuizAttempt, resolveQuizAnswerMode } from '../core/quizAnswer';
 import { createQuizBookmarkButton } from '../ui/quizBookmark';
 import { advanceSession, currentQuestion, elapsedForCurrent, isSessionComplete, type QuizSession } from '../core/sessionEngine';
 import { buildWrongAnswerFeedback } from '../core/wrongAnswerExplanation';
-import { resolveActiveQuestionImageAsset, type QuestionImageAssetResolver } from '../packs/packAssetResolver';
+import { type QuestionImageAssetResolver } from '../packs/packAssetResolver';
 import { persistAttemptAndReview } from '../services/quizPersistence';
-import { db } from '../storage/db';
+import { studyStore } from '../storage/studyRepository';
 import { button, clear, el, toast } from '../ui/dom';
 import { appendIconLabel } from '../ui/icons';
 import { appendQuizResult, renderQuestionImage, renderQuizMeta, renderSessionSummary } from '../ui/inlineQuizView';
@@ -184,7 +184,7 @@ export function renderInlineQuiz(
     persistenceInFlight = true;
     resultArea.querySelector('.persistence-error')?.remove();
     try {
-      await persistAttemptAndReview(attempt, db);
+      await persistAttemptAndReview(attempt, studyStore);
       persistenceComplete = true;
       if (!isCurrentRender()) return;
       try {
@@ -377,7 +377,7 @@ export function renderInlineQuiz(
   if (requestedAnswerFormat === 'choice' && answerMode === 'input') {
     card.append(el('p', 'notice', '安全な選択肢が不足しているため、この問題は入力で回答してください。'));
   }
-  const image = renderQuestionImage(question, options.resolveImageAsset ?? resolveActiveQuestionImageAsset);
+  const image = renderQuestionImage(question, options.resolveImageAsset ?? (async () => undefined));
   if (image) card.append(image);
   card.append(answerArea, controls, resultArea);
   container.append(card);

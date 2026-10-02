@@ -1,14 +1,15 @@
+import type { ScreenContext } from '../app/context';
 import type { ModuleInfo, Question, ReviewCard, StudySettings } from '../core/models';
 import { DEFAULT_REVIEW_LOOKBACK_DAYS } from '../core/reviewEngine';
 import { buildReviewCenterModel, type ReviewScope } from '../core/reviewCenterModel';
 import { createSession, type QuizSession } from '../core/sessionEngine';
-import { getActiveQuestions, type ResolvedPackView } from '../packs/packResolver';
-import { db } from '../storage/db';
+import { getActiveQuestions } from '../packs/packResolver';
+import { studyStore } from '../storage/studyRepository';
 import { button, clear, el, toast } from '../ui/dom';
 import { appendIconLabel } from '../ui/icons';
 import { renderInlineQuiz } from './inlineQuiz';
 
-const REVIEW_SCOPE_KEY = 'loopdeck3_review_scope_session_v1';
+const REVIEW_SCOPE_KEY = 'loopdeck3.review.scope';
 const percent = (value: number): string => `${Math.round(value * 100)}%`;
 const seconds = (value: number): string => `${Math.round(value / 100) / 10}秒`;
 
@@ -38,16 +39,12 @@ function writeReviewScope(scope: ReviewScope): void {
 
 function reviewStateLabel(card: ReviewCard): string {
   switch (card.state) {
-    case 'learning':
-      return '再学習';
     case 'relearning':
       return '再学習';
     case 'leech':
       return '重点復習';
     case 'mastered':
       return '習得済み';
-    case 'suspended':
-      return '停止中';
     case 'new':
       return '新規';
     default:
@@ -55,16 +52,13 @@ function reviewStateLabel(card: ReviewCard): string {
   }
 }
 
-export async function renderReviewCenter(
-  root: HTMLElement,
-  packView: ResolvedPackView,
-  navigateHome: () => void,
-  navigateGraphs: () => void,
-  isCurrent: () => boolean = () => true
-): Promise<void> {
+export async function renderReviewCenter(context: ScreenContext): Promise<void> {
+  const { root: root, catalog: packView, resolveImage, isCurrent } = context;
+  const { home: navigateHome, graphs: navigateGraphs } = context.navigation;
+
   if (!isCurrent()) return;
-  const attempts = await db.getAttempts();
-  const reviewCards = await db.getReviewCards();
+  const attempts = await studyStore.getAttempts();
+  const reviewCards = await studyStore.getReviewCards();
   if (!isCurrent()) return;
   const questions = getActiveQuestions(packView);
   const modules = packView.moduleById;
@@ -116,7 +110,7 @@ export async function renderReviewCenter(
   hero.append(stats, scopeActions);
 
   function rerender(): void {
-    void renderReviewCenter(root, packView, navigateHome, navigateGraphs, isCurrent);
+    void renderReviewCenter(context);
   }
 
   function startReviewSession(items: Question[], title: string, moduleId = 'review-all', limit = 20, shuffle = true): void {
@@ -141,8 +135,8 @@ export async function renderReviewCenter(
       showCategory: true
     };
     const session = createSession(reviewModule, items, settings, 'review', questions);
-    const update = (next: QuizSession) => renderInlineQuiz(mount, next, { onSessionChange: update, onComplete: rerender }, { isCurrent });
-    renderInlineQuiz(mount, session, { onSessionChange: update, onComplete: rerender }, { isCurrent });
+    const update = (next: QuizSession) => renderInlineQuiz(mount, next, { onSessionChange: update, onComplete: rerender }, { isCurrent, resolveImageAsset: resolveImage });
+    renderInlineQuiz(mount, session, { onSessionChange: update, onComplete: rerender }, { isCurrent, resolveImageAsset: resolveImage });
   }
 
   const srsCard = el('section', 'card action-card');
@@ -173,7 +167,7 @@ export async function renderReviewCenter(
   const reset = button('SRS予定だけリセット', 'btn ghost danger');
   reset.onclick = async () => {
     if (!window.confirm('SRSの次回予定・状態・ReviewLogだけ削除します。回答履歴は残るため、履歴ベースの弱点候補は残ります。')) return;
-    await db.clearReviewData();
+    await studyStore.clearReviewData();
     toast('SRSの復習予定だけリセットしました。回答履歴は残っています。');
     rerender();
   };
@@ -217,7 +211,7 @@ export async function renderReviewCenter(
       )
     )
       return;
-    await db.clearWrongAttempts();
+    await studyStore.clearWrongAttempts();
     toast('ミス履歴を削除しました。SRSの復習予定は変更していません。');
     rerender();
   };

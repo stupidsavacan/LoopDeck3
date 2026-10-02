@@ -474,10 +474,9 @@ export function validatePackFiles(paths: string[]): PackValidationIssue[] {
   return issues;
 }
 
-export function validatePack(rawPack: unknown, source: 'import' | 'stored' = 'import'): PackValidationResult {
+export function validatePack(rawPack: unknown): PackValidationResult {
   const issues: PackValidationIssue[] = [];
-  // New authoring constraints must not hide already installed legacy content.
-  const contractIssue = (message: string): PackValidationIssue => ({ level: source === 'stored' ? 'warning' : 'error', message });
+  const contractIssue = (message: string): PackValidationIssue => ({ level: 'error', message });
   if (!isObject(rawPack)) return { ok: false, issues: [issue('Pack must be an object.')] };
 
   if (rawPack.packVersion !== 1) issues.push(issue('packVersion must be 1.'));

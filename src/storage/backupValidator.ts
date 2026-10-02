@@ -11,13 +11,13 @@ import type {
 import { isSafeImageDataUrl, isSafeImageAssetRef, extensionOf } from '../packs/assetSafety';
 import { estimateBase64DecodedBytes, MAX_BACKUP_COLLECTION_ITEMS, MAX_IMAGE_ASSET_BYTES } from '../packs/importLimits';
 import { validatePack } from '../packs/packValidator';
-import type { LoopDeckBackup, StoredPackAsset } from './storageTypes';
+import type { StudyBackup, StoredPackAsset } from './storageTypes';
 
 const ANSWER_RESULTS = new Set<AnswerResult>(['correct', 'wrong', 'revealed']);
 const ATTEMPT_MODES = new Set(['normal', 'review']);
 const ANSWER_FORMATS = new Set<AnswerFormat>(['auto', 'choice', 'input']);
 const QUESTION_MODES = new Set<ConcreteStudyQuestionMode>(['as_stored', 'front_to_back', 'back_to_front']);
-const REVIEW_STATES = new Set<ReviewState>(['new', 'learning', 'review', 'relearning', 'leech', 'mastered', 'suspended']);
+const REVIEW_STATES = new Set<ReviewState>(['new', 'review', 'relearning', 'leech', 'mastered']);
 const REVIEW_RATINGS = new Set<ReviewRating>(['again', 'hard', 'good', 'easy']);
 const IMAGE_MIME_TYPES: Record<string, string> = {
   '.png': 'image/png',
@@ -50,7 +50,7 @@ function optionalArray(value: unknown, name: string): unknown[] {
   return requireArray(value, name);
 }
 
-function parseAttempt(value: unknown, index: number): Attempt {
+export function parseAttempt(value: unknown, index: number): Attempt {
   const path = `attempts[${index}]`;
   if (!isObject(value)) fail(`${path} must be an object.`);
   if (!nonEmptyString(value.attemptId)) fail(`${path}.attemptId is required.`);
@@ -196,12 +196,12 @@ function parseStoredAsset(value: unknown, index: number, packIds: Set<string>): 
 }
 
 export function looksLikeLoopDeckBackup(value: unknown): boolean {
-  return isObject(value) && value.loopDeckBackupVersion !== undefined;
+  return isObject(value) && value.format === 'loopdeck3.backup';
 }
 
-export function validateBackupPayload(value: unknown): LoopDeckBackup {
+export function validateBackupPayload(value: unknown): StudyBackup {
   if (!isObject(value)) fail('root must be an object.');
-  if (value.loopDeckBackupVersion !== 1) fail('loopDeckBackupVersion must be 1.');
+  if (value.format !== 'loopdeck3.backup' || value.schema !== 1) fail('Unsupported backup format or schema.');
   if (!validDate(value.exportedAt)) fail('exportedAt must be a valid date.');
 
   const attempts = requireArray(value.attempts, 'attempts').map(parseAttempt);
@@ -211,7 +211,7 @@ export function validateBackupPayload(value: unknown): LoopDeckBackup {
 
   const rawPacks = requireArray(value.importedPacks, 'importedPacks');
   const importedPacks = rawPacks.map((pack, index) => {
-    const result = validatePack(pack, 'stored');
+    const result = validatePack(pack);
     if (!result.ok || !result.pack) {
       const detail = result.issues
         .filter((entry) => entry.level === 'error')
@@ -231,7 +231,7 @@ export function validateBackupPayload(value: unknown): LoopDeckBackup {
   const reviewLogs = optionalArray(value.reviewLogs, 'reviewLogs').map(parseReviewLog);
 
   return {
-    loopDeckBackupVersion: 1,
+    format: 'loopdeck3.backup', schema: 1,
     exportedAt: value.exportedAt,
     attempts,
     bookmarks,

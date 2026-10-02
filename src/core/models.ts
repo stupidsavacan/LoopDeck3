@@ -41,12 +41,7 @@ export interface SideChoiceCandidates {
   back_to_front?: ManualChoiceCandidates;
 }
 
-/**
- * `learning` and state-level `suspended` are retained for persisted-data compatibility.
- * Normal scheduling writes `new`, `review`, `relearning`, `leech`, or `mastered`;
- * suspension is represented by the legacy `suspended` flag.
- */
-export type ReviewState = 'new' | 'learning' | 'review' | 'relearning' | 'leech' | 'mastered' | 'suspended';
+export type ReviewState = 'new' | 'review' | 'relearning' | 'leech' | 'mastered';
 export type ReviewRating = 'again' | 'hard' | 'good' | 'easy';
 
 export interface FolderInfo {

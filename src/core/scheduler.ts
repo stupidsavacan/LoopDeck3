@@ -56,7 +56,7 @@ function dueTime(card: ReviewCard): number | undefined {
 }
 
 function isSuspended(card: ReviewCard): boolean {
-  return card.suspended || card.state === 'suspended';
+  return card.suspended;
 }
 
 export function clampEase(ease: number): number {
@@ -163,8 +163,6 @@ export function applyReviewRating(
     next.state = 'mastered';
   }
 
-  if (next.suspended) next.state = 'suspended';
-
   const log: ReviewLog = {
     reviewLogId: reviewLogId(next.questionId, reviewedAt),
     questionId: next.questionId,
@@ -203,7 +201,7 @@ export function bucketReviewCards(cards: ReviewCard[], now = new Date()): Review
     const due = dueTime(card);
     if (due === undefined || due > todayEnd) continue;
 
-    if (card.state === 'relearning' || card.state === 'learning') buckets.relearning.push(card);
+    if (card.state === 'relearning') buckets.relearning.push(card);
     else if (card.state === 'leech') buckets.leech.push(card);
     else if (card.state === 'mastered') buckets.masteredDue.push(card);
     else if (due < todayStart) buckets.overdue.push(card);
@@ -236,7 +234,7 @@ export function summarizeReviewSchedule(cards: ReviewCard[], now = new Date()): 
     total: active.length,
     dueToday,
     overdue: buckets.overdue.length,
-    relearning: active.filter((card) => card.state === 'relearning' || card.state === 'learning').length,
+    relearning: active.filter((card) => card.state === 'relearning').length,
     leech: active.filter((card) => card.state === 'leech').length,
     mastered: active.filter((card) => card.state === 'mastered').length,
     estimatedMinutes: Math.ceil((dueToday * ESTIMATED_SECONDS_PER_CARD) / 60)

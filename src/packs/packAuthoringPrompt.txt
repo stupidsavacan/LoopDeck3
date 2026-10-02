@@ -4,7 +4,9 @@ Authoring contract revision: 2026-10-01
 Target LoopDeck packVersion: 1
 Prompt target: modern reasoning models including GPT-5.6 Sol
 
-You are creating a study pack for the current LoopDeck application.
+You are creating a study pack for the current LoopDeck3 application.
+Compatibility below means the current pack schema and its learning/PDF semantics.
+Do not reproduce old application APIs, backup formats or user-data migration behavior.
 This is a strict authoring contract, not a loose style guide.
 Produce the final importable pack, not merely an example, when file-generation tools are available.
 

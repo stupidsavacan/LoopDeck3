@@ -3,10 +3,10 @@ import 'fake-indexeddb/auto';
 import { describe, expect, it } from 'vitest';
 import type { LoopDeckPack, ModuleInfo, Question } from '../src/core/models';
 import { createSession } from '../src/core/sessionEngine';
-import { setActivePackAssetView } from '../src/packs/packAssetResolver';
+import { createQuestionImageAssetResolver } from '../src/packs/packAssetResolver';
 import { resolveActivePacks } from '../src/packs/packResolver';
 import { renderInlineQuiz } from '../src/screens/inlineQuiz';
-import { db } from '../src/storage/db';
+import { studyStore } from '../src/storage/studyRepository';
 
 const moduleInfo: ModuleInfo = {
   id: 'image-module',
@@ -84,8 +84,8 @@ describe('renderInlineQuiz image assets', () => {
       modules: [moduleInfo],
       questions: [imageQuestion]
     };
-    await db.deleteImportedPack(pack.packId);
-    await db.saveImportedPackWithAssets(
+    await studyStore.deleteImportedPack(pack.packId);
+    await studyStore.saveImportedPackWithAssets(
       pack,
       [
         {
@@ -97,15 +97,15 @@ describe('renderInlineQuiz image assets', () => {
       ],
       'replace'
     );
-    setActivePackAssetView(resolveActivePacks([pack]));
+    const resolveImageAsset = createQuestionImageAssetResolver(resolveActivePacks([pack]));
 
     const container = document.createElement('div');
-    renderInlineQuiz(container, session(), { onSessionChange() {}, onComplete() {} });
+    renderInlineQuiz(container, session(), { onSessionChange() {}, onComplete() {} }, { resolveImageAsset });
     await settleImageResolution();
 
     expect(container.querySelector<HTMLImageElement>('img.question-image')?.src).toBe('data:image/png;base64,iVBORw0KGgo=');
     expect(container.querySelector('.image-fallback')).toBeNull();
-    await db.deleteImportedPack(pack.packId);
+    await studyStore.deleteImportedPack(pack.packId);
   });
 
   it('shows the missing-image fallback when the resolver returns undefined', async () => {

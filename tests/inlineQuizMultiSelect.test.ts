@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import type { ModuleInfo, Question } from '../src/core/models';
 import { createSession } from '../src/core/sessionEngine';
 import { renderInlineQuiz } from '../src/screens/inlineQuiz';
-import { db } from '../src/storage/db';
+import { studyStore } from '../src/storage/studyRepository';
 
 const moduleInfo: ModuleInfo = {
   id: 'multi-select-toggle-module',
@@ -36,8 +36,8 @@ function render(): HTMLElement {
 
 describe('multi-select interaction state', () => {
   beforeEach(async () => {
-    await db.clearAttempts();
-    await db.clearReviewData();
+    await studyStore.clearAttempts();
+    await studyStore.clearReviewData();
   });
 
   it('toggles off a selected option immediately', () => {
@@ -69,7 +69,7 @@ describe('multi-select interaction state', () => {
     submit.click();
 
     await new Promise((resolve) => window.setTimeout(resolve, 50));
-    const attempts = (await db.getAttempts()).filter((attempt) => attempt.questionId === question.id);
+    const attempts = (await studyStore.getAttempts()).filter((attempt) => attempt.questionId === question.id);
     expect(attempts).toHaveLength(1);
     expect(attempts[0].input).toEqual(['B']);
     expect(attempts[0].result).toBe('wrong');
@@ -96,7 +96,7 @@ describe('multi-select interaction state', () => {
     optionA.click();
     expect(optionA.getAttribute('aria-pressed')).toBe('true');
 
-    const attempts = (await db.getAttempts()).filter((attempt) => attempt.questionId === question.id);
+    const attempts = (await studyStore.getAttempts()).filter((attempt) => attempt.questionId === question.id);
     expect(attempts).toHaveLength(1);
     expect(attempts[0].result).toBe('revealed');
   });

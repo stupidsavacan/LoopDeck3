@@ -1,5 +1,6 @@
 import type { Question } from '../core/models';
-import { db, type StoredPackAsset } from '../storage/db';
+import { studyStore } from '../storage/studyRepository';
+import type { StoredPackAsset } from '../storage/storageTypes';
 import { isSafeImageAssetRef, isSafeImageDataUrl } from './assetSafety';
 import { getQuestionPackId, type ResolvedPackView } from './packResolver';
 
@@ -14,8 +15,6 @@ type EmbeddedAssetGlobal = typeof globalThis & {
   __LOOPDECK_EMBEDDED_ASSETS__?: Record<string, string>;
 };
 
-let activePackView: ResolvedPackView | undefined;
-
 function resolveEmbeddedAsset(path: string): string | undefined {
   const value = (globalThis as EmbeddedAssetGlobal).__LOOPDECK_EMBEDDED_ASSETS__?.[path];
   return value && isSafeImageDataUrl(value) ? value : undefined;
@@ -23,7 +22,7 @@ function resolveEmbeddedAsset(path: string): string | undefined {
 
 export function createQuestionImageAssetResolver(
   packView: ResolvedPackView,
-  assetReader: PackAssetReader = db
+  assetReader: PackAssetReader = studyStore
 ): QuestionImageAssetResolver {
   return async (question) => {
     const path = question.imageAsset;
@@ -44,12 +43,3 @@ export function createQuestionImageAssetResolver(
     return resolveEmbeddedAsset(path) ?? path;
   };
 }
-
-export function setActivePackAssetView(packView: ResolvedPackView): void {
-  activePackView = packView;
-}
-
-export const resolveActiveQuestionImageAsset: QuestionImageAssetResolver = async (question) => {
-  if (!activePackView) return undefined;
-  return createQuestionImageAssetResolver(activePackView)(question);
-};

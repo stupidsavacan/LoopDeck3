@@ -1,7 +1,8 @@
 import 'fake-indexeddb/auto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { LoopDeckPack } from '../src/core/models';
-import { db, type LoopDeckBackup } from '../src/storage/db';
+import { studyStore } from '../src/storage/studyRepository';
+import type { StudyBackup } from '../src/storage/storageTypes';
 import { resolveActivePacks } from '../src/packs/packResolver';
 import { validatePack } from '../src/packs/packValidator';
 
@@ -15,8 +16,8 @@ function pack(packId: string): LoopDeckPack {
     questions: [{ id: packId + '-q', moduleId: 'm', type: 'input', prompt: 'Q', answer: 'A' }]
   };
 }
-const empty: LoopDeckBackup = {
-  loopDeckBackupVersion: 1,
+const empty: StudyBackup = {
+  format: 'loopdeck3.backup', schema: 1,
   exportedAt: '2026-10-02T00:00:00Z',
   attempts: [],
   bookmarks: [],
@@ -26,47 +27,47 @@ const empty: LoopDeckBackup = {
   reviewLogs: []
 };
 beforeEach(async () => {
-  await db.importUserData(empty, 'replace');
+  await studyStore.restoreSnapshot(empty, 'replace');
 });
 afterEach(() => {
   vi.restoreAllMocks();
 });
 async function winner() {
-  return resolveActivePacks(await db.getImportedPacks()).modulePackIdById.get('m');
+  return resolveActivePacks(await studyStore.getImportedPacks()).modulePackIdById.get('m');
 }
 
 describe('pack priority persistence', () => {
   it('assigns transaction-ordered priorities to concurrent imports', async () => {
-    await Promise.all([db.saveImportedPack(pack('z-first')), db.saveImportedPack(pack('a-second'))]);
+    await Promise.all([studyStore.saveImportedPack(pack('z-first')), studyStore.saveImportedPack(pack('a-second'))]);
     expect(await winner()).toBe('a-second');
   });
   it('promotes an updated pack and preserves priority through both asset strategies', async () => {
-    await db.saveImportedPack(pack('a-first'));
-    await db.saveImportedPackWithAssets(pack('z-second'), [], 'replace');
+    await studyStore.saveImportedPack(pack('a-first'));
+    await studyStore.saveImportedPackWithAssets(pack('z-second'), [], 'replace');
     expect(await winner()).toBe('z-second');
-    await db.saveImportedPackWithAssets(pack('a-first'), [], 'upsert');
+    await studyStore.saveImportedPackWithAssets(pack('a-first'), [], 'upsert');
     expect(await winner()).toBe('a-first');
   });
   it.each(['replace', 'merge'] as const)('round trips priority through a %s backup restore', async (mode) => {
-    await db.saveImportedPack(pack('z-first'));
-    await db.saveImportedPack(pack('a-second'));
-    const backup = await db.exportUserData();
+    await studyStore.saveImportedPack(pack('z-first'));
+    await studyStore.saveImportedPack(pack('a-second'));
+    const backup = await studyStore.exportSnapshot();
     expect(backup.importedPacks.map((p) => p.packId)).toEqual(['z-first', 'a-second']);
     expect(backup.importedPacks.every((p) => !('installedOrder' in p))).toBe(true);
-    await db.saveImportedPack(pack('zz-newer'));
-    await db.importUserData(backup, mode);
+    await studyStore.saveImportedPack(pack('zz-newer'));
+    await studyStore.restoreSnapshot(backup, mode);
     expect(await winner()).toBe('a-second');
-    expect((await db.getImportedPacks()).some((p) => p.packId === 'zz-newer')).toBe(mode === 'merge');
+    expect((await studyStore.getImportedPacks()).some((p) => p.packId === 'zz-newer')).toBe(mode === 'merge');
   });
   it('rejects an asynchronous pack write failure and rolls back the asset transaction', async () => {
-    await db.saveImportedPack(pack('old'));
+    await studyStore.saveImportedPack(pack('old'));
     const original = IDBObjectStore.prototype.put;
     vi.spyOn(IDBObjectStore.prototype, 'put').mockImplementation(function (this: IDBObjectStore, value, key) {
       if (this.name === 'packs') throw new DOMException('Disk full', 'QuotaExceededError');
       return original.call(this, value, key);
     });
     await expect(
-      db.saveImportedPackWithAssets(
+      studyStore.saveImportedPackWithAssets(
         pack('incoming'),
         [
           {
@@ -79,17 +80,16 @@ describe('pack priority persistence', () => {
         'upsert'
       )
     ).rejects.toBeTruthy();
-    expect(await db.getPackAsset('incoming', 'images/a.png')).toBeUndefined();
+    expect(await studyStore.getPackAsset('incoming', 'images/a.png')).toBeUndefined();
     expect(await winner()).toBe('old');
   });
-  it('retains legacy installed and backup content while rejecting it as a new authoring import', async () => {
+  it('rejects obsolete fractional ordinals in backups before replacing current data', async () => {
     const legacy = pack('legacy');
     legacy.questions[0].number = 1.5;
     expect(validatePack(legacy).ok).toBe(false);
-    expect(validatePack(legacy, 'stored').ok).toBe(true);
-    await db.importUserData({ ...empty, importedPacks: [legacy] }, 'replace');
-    expect((await db.getImportedPacks())[0].questions[0].number).toBe(1.5);
-    await db.importUserData(await db.exportUserData(), 'replace');
-    expect(await winner()).toBe('legacy');
+
+    const before = await studyStore.getImportedPacks();
+    await expect(studyStore.restoreSnapshot({ ...empty, importedPacks: [legacy] }, 'replace')).rejects.toThrow();
+    expect(await studyStore.getImportedPacks()).toEqual(before);
   });
 });

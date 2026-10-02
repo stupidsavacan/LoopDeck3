@@ -1,3 +1,4 @@
+import { screenContext } from './support/screenContext';
 // @vitest-environment jsdom
 import 'fake-indexeddb/auto';
 import { describe, expect, it } from 'vitest';
@@ -5,9 +6,9 @@ import type { LoopDeckPack } from '../src/core/models';
 import { resolveActivePacks } from '../src/packs/packResolver';
 import { importLoopDeckJson } from '../src/packs/zipImporter';
 import { renderHomeScreen } from '../src/screens/homeScreen';
-import { db } from '../src/storage/db';
+import { studyStore } from '../src/storage/studyRepository';
 
-const DB_NAME = 'loopdeck3-db';
+const DB_NAME = 'loopdeck3-learning';
 
 function minimalPack(packId: string) {
   return {
@@ -38,13 +39,7 @@ function putRawStoredPack(pack: unknown): Promise<void> {
 function expectHomeToRender(pack: LoopDeckPack): void {
   const root = document.createElement('div');
   expect(() =>
-    renderHomeScreen(
-      root,
-      resolveActivePacks([pack]),
-      () => {},
-      () => {},
-      () => {},
-      () => {}
+    renderHomeScreen(screenContext({ root: root, catalog: resolveActivePacks([pack]), navigation: { module: () => {} } })
     )
   ).not.toThrow();
   expect(root.querySelector('.module-card')).toBeTruthy();
@@ -70,26 +65,26 @@ installFileTextForJSDom();
 describe('imported pack startup recovery', () => {
   it('imports, persists, reloads, and renders a module with only documented required fields', async () => {
     const packId = 'minimal-module-contract';
-    await db.deleteImportedPack(packId);
+    await studyStore.deleteImportedPack(packId);
 
     const file = new File([JSON.stringify(minimalPack(packId))], 'minimal.loopdeck.json', { type: 'application/json' });
     const imported = await importLoopDeckJson(file);
     expect(imported.ok).toBe(true);
     expect(imported.pack).toBeTruthy();
 
-    await db.saveImportedPack(imported.pack as LoopDeckPack);
-    const reloaded = (await db.getImportedPacks()).find((pack) => pack.packId === packId);
+    await studyStore.saveImportedPack(imported.pack as LoopDeckPack);
+    const reloaded = (await studyStore.getImportedPacks()).find((pack) => pack.packId === packId);
     expect(reloaded?.modules[0]).toMatchObject({ title: 'm', subject: 'その他', folderId: '' });
     expectHomeToRender(reloaded as LoopDeckPack);
 
-    await db.deleteImportedPack(packId);
+    await studyStore.deleteImportedPack(packId);
   });
 
   it('recovers a previously persisted missing-subject pack without clearing unrelated user data', async () => {
     const packId = 'legacy-missing-subject-recovery';
     const attemptId = 'legacy-missing-subject-attempt';
-    await db.deleteImportedPack(packId);
-    await db.addAttempt({
+    await studyStore.deleteImportedPack(packId);
+    await studyStore.addAttempt({
       attemptId,
       questionId: 'q',
       moduleId: 'm',
@@ -103,12 +98,12 @@ describe('imported pack startup recovery', () => {
 
     await putRawStoredPack(minimalPack(packId));
 
-    const recovered = (await db.getImportedPacks()).find((pack) => pack.packId === packId);
+    const recovered = (await studyStore.getImportedPacks()).find((pack) => pack.packId === packId);
     expect(recovered?.modules[0]).toMatchObject({ title: 'm', subject: 'その他', folderId: '' });
     expectHomeToRender(recovered as LoopDeckPack);
-    expect((await db.getAttempts()).some((attempt) => attempt.attemptId === attemptId)).toBe(true);
+    expect((await studyStore.getAttempts()).some((attempt) => attempt.attemptId === attemptId)).toBe(true);
 
-    await db.deleteImportedPack(packId);
-    await db.clearAttempts();
+    await studyStore.deleteImportedPack(packId);
+    await studyStore.clearAttempts();
   });
 });

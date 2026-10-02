@@ -4,19 +4,19 @@ import { saveBlob, waitForNativeSave } from '../src/platform/nativeFileSave';
 
 afterEach(() => {
   vi.useRealTimers();
-  delete window.LoopDeckAndroid;
+  delete window.LoopDeck3Host;
 });
 
 describe('Android native save result waiting', () => {
   it('resolves only for the matching save id', async () => {
     const waiting = waitForNativeSave('wanted', 1000);
     window.dispatchEvent(
-      new CustomEvent('loopdeck-native-save-result', {
+      new CustomEvent('loopdeck3-save-result', {
         detail: { id: 'other', ok: true, code: 'SAV-OK', message: 'other' }
       })
     );
     window.dispatchEvent(
-      new CustomEvent('loopdeck-native-save-result', {
+      new CustomEvent('loopdeck3-save-result', {
         detail: { id: 'wanted', ok: true, code: 'SAV-OK', message: 'saved', bytes: 42 }
       })
     );
@@ -27,7 +27,7 @@ describe('Android native save result waiting', () => {
   it('rejects native failures with their error code', async () => {
     const waiting = waitForNativeSave('failed', 1000);
     window.dispatchEvent(
-      new CustomEvent('loopdeck-native-save-result', {
+      new CustomEvent('loopdeck3-save-result', {
         detail: { id: 'failed', ok: false, code: 'SAV-A004', message: 'cancelled' }
       })
     );
@@ -46,7 +46,7 @@ describe('Android native save result waiting', () => {
   it('streams Blob chunks through the unified native bridge without legacy saveFile', async () => {
     const appended: Array<{ index: number; base64: string }> = [];
     let saveId = '';
-    window.LoopDeckAndroid = {
+    window.LoopDeck3Host = {
       beginSaveFile(id, _filename, _mimeType, expectedBytes, expectedChunks) {
         saveId = id;
         expect(expectedBytes).toBe(100_000);
@@ -60,7 +60,7 @@ describe('Android native save result waiting', () => {
       finishSaveFile(id) {
         queueMicrotask(() =>
           window.dispatchEvent(
-            new CustomEvent('loopdeck-native-save-result', {
+            new CustomEvent('loopdeck3-save-result', {
               detail: { id, ok: true, code: 'SAV-OK', message: 'saved', bytes: 100_000 }
             })
           )
@@ -82,7 +82,7 @@ describe('Android native save result waiting', () => {
 
   it('cancels a native session when a chunk append is rejected', async () => {
     const cancelled: string[] = [];
-    window.LoopDeckAndroid = {
+    window.LoopDeck3Host = {
       beginSaveFile() {
         return true;
       },

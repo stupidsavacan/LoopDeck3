@@ -1,10 +1,12 @@
+import { screenContext } from './support/screenContext';
 // @vitest-environment jsdom
 import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { LoopDeckPack, ModuleInfo, StudySettings } from '../src/core/models';
 import { resolveActivePacks } from '../src/packs/packResolver';
-import { defaultStudySettings, renderModuleScreen } from '../src/screens/moduleScreen';
-import { db } from '../src/storage/db';
+import { defaultStudySettings } from '../src/core/studySettings';
+import { renderModuleScreen } from '../src/screens/moduleScreen';
+import { studyStore } from '../src/storage/studyRepository';
 import {
   readStudyPreferences,
   sanitizeStudyPreferences,
@@ -74,8 +76,8 @@ async function settle(ms = 80): Promise<void> {
 
 beforeEach(async () => {
   localStorage.clear();
-  await db.clearAttempts();
-  await db.clearBookmarks();
+  await studyStore.clearAttempts();
+  await studyStore.clearBookmarks();
 });
 
 describe('study preference storage', () => {
@@ -162,13 +164,7 @@ describe('module screen study preferences', () => {
     const pack = testPack();
     const view = resolveActivePacks([pack]);
     const root = document.createElement('div');
-    await renderModuleScreen(
-      root,
-      view,
-      moduleInfo.id,
-      () => {},
-      () => {},
-      () => {}
+    await renderModuleScreen(screenContext({ root: root, catalog: view, moduleId: moduleInfo.id, navigation: { home: () => {}, review: () => {}, graphs: () => {} } })
     );
 
     const count = fieldSelect(root, '\u554f\u984c\u6570');
@@ -197,13 +193,7 @@ describe('module screen study preferences', () => {
       shuffle: false
     });
 
-    await renderModuleScreen(
-      root,
-      view,
-      moduleInfo.id,
-      () => {},
-      () => {},
-      () => {}
+    await renderModuleScreen(screenContext({ root: root, catalog: view, moduleId: moduleInfo.id, navigation: { home: () => {}, review: () => {}, graphs: () => {} } })
     );
     expect(fieldSelect(root, '\u554f\u984c\u6570').value).toBe('20');
     expect(fieldSelect(root, '\u7bc4\u56f2').value).toBe('1-25');
@@ -216,13 +206,7 @@ describe('module screen study preferences', () => {
     const pack = testPack(1);
     const view = resolveActivePacks([pack]);
     const root = document.createElement('div');
-    await renderModuleScreen(
-      root,
-      view,
-      moduleInfo.id,
-      () => {},
-      () => {},
-      () => {}
+    await renderModuleScreen(screenContext({ root: root, catalog: view, moduleId: moduleInfo.id, navigation: { home: () => {}, review: () => {}, graphs: () => {} } })
     );
 
     const answerFormat = fieldSelect(root, '\u56de\u7b54\u5f62\u5f0f');
@@ -252,7 +236,7 @@ describe('module screen study preferences', () => {
       .click();
     await settle();
 
-    expect(localStorage.getItem(`loopdeck3_session_${moduleInfo.id}`)).toBeNull();
+    expect(localStorage.getItem(`loopdeck3.session.${moduleInfo.id}`)).toBeNull();
     expect(localStorage.getItem(preferenceKey)).not.toBeNull();
     expect(readStudyPreferences(pack.packId, moduleInfo.id)?.answerFormat).toBe('input');
   });

@@ -14,7 +14,7 @@ export interface NativeSaveProgress {
   bytes?: number;
 }
 
-interface LoopDeckAndroidBridge {
+interface LoopDeck3HostBridge {
   beginSaveFile(saveId: string, filename: string, mimeType: string, expectedBytes: number, expectedChunks: number): boolean;
   appendSaveFileChunk(saveId: string, chunkIndex: number, base64Chunk: string): boolean;
   finishSaveFile(saveId: string): boolean;
@@ -23,7 +23,7 @@ interface LoopDeckAndroidBridge {
 
 declare global {
   interface Window {
-    LoopDeckAndroid?: LoopDeckAndroidBridge;
+    LoopDeck3Host?: LoopDeck3HostBridge;
   }
 }
 
@@ -64,7 +64,7 @@ function createNativeSaveWaiter(
   const cleanup = () => {
     if (!active) return;
     active = false;
-    window.removeEventListener('loopdeck-native-save-result', handler);
+    window.removeEventListener('loopdeck3-save-result', handler);
     window.clearTimeout(timeoutId);
   };
 
@@ -76,7 +76,7 @@ function createNativeSaveWaiter(
       if (detail.ok) resolve(detail);
       else reject(exportError(detail.code || 'SAV-E999', detail.message || 'Android保存に失敗しました。'));
     };
-    window.addEventListener('loopdeck-native-save-result', handler);
+    window.addEventListener('loopdeck3-save-result', handler);
     timeoutId = window.setTimeout(() => {
       cleanup();
       reject(exportError('SAV-A032', 'Android保存結果を受信できませんでした。もう一度お試しください。'));
@@ -102,8 +102,8 @@ function downloadBlobInBrowser(blob: Blob, filename: string): void {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function nativeBridge(): LoopDeckAndroidBridge | undefined {
-  const bridge = window.LoopDeckAndroid;
+function nativeBridge(): LoopDeck3HostBridge | undefined {
+  const bridge = window.LoopDeck3Host;
   if (!bridge) return undefined;
   if (typeof bridge.beginSaveFile !== 'function') return undefined;
   if (typeof bridge.appendSaveFileChunk !== 'function') return undefined;

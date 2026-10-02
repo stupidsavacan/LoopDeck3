@@ -1,3 +1,4 @@
+import type { ScreenContext } from '../app/context';
 import {
   buildAnalyticsOverview,
   type DailyStudyStat,
@@ -5,8 +6,8 @@ import {
   type MistakeTrendPoint,
   type ModuleStudyStat
 } from '../core/analyticsEngine';
-import { getActiveModules, getActiveQuestions, type ResolvedPackView } from '../packs/packResolver';
-import { db } from '../storage/db';
+import { getActiveModules, getActiveQuestions } from '../packs/packResolver';
+import { studyStore } from '../storage/studyRepository';
 import { button, clear, el } from '../ui/dom';
 import { appendIconLabel } from '../ui/icons';
 
@@ -111,15 +112,12 @@ function renderBreakdown(root: HTMLElement, breakdown: MistakeBreakdownItem[]): 
   root.append(card);
 }
 
-export async function renderGraphsScreen(
-  root: HTMLElement,
-  packView: ResolvedPackView,
-  navigateHome: () => void,
-  navigateReview: () => void,
-  isCurrent: () => boolean = () => true
-): Promise<void> {
+export async function renderGraphsScreen(context: ScreenContext): Promise<void> {
+  const { root: root, catalog: packView, isCurrent } = context;
+  const { home: navigateHome, review: navigateReview } = context.navigation;
+
   if (!isCurrent()) return;
-  const attempts = await db.getAttempts();
+  const attempts = await studyStore.getAttempts();
   if (!isCurrent()) return;
   const overview = buildAnalyticsOverview(attempts, getActiveModules(packView), getActiveQuestions(packView));
   clear(root);

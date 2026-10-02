@@ -1,102 +1,81 @@
-const DB_NAME = 'loopdeck3-db';
-const DB_VERSION = 4;
 export const USER_DATA_STORES = ['attempts', 'bookmarks', 'packs', 'packAssets', 'reviewCards', 'reviewLogs'] as const;
+export type StoreName = (typeof USER_DATA_STORES)[number];
+const schema: Record<StoreName, { key: string; indexes?: Record<string, string> }> = {
+  attempts: { key: 'attemptId', indexes: { byQuestionId: 'questionId', byResult: 'result' } },
+  bookmarks: { key: 'questionId' },
+  packs: { key: 'packId' },
+  packAssets: { key: 'assetId', indexes: { byPackId: 'packId' } },
+  reviewCards: { key: 'questionId' },
+  reviewLogs: { key: 'reviewLogId', indexes: { byQuestionId: 'questionId', byReviewedAt: 'reviewedAt' } }
+};
 
-function ensureStore(database: IDBDatabase, transaction: IDBTransaction, name: string, keyPath: string): IDBObjectStore {
-  return database.objectStoreNames.contains(name) ? transaction.objectStore(name) : database.createObjectStore(name, { keyPath });
-}
+export class LocalDatabase {
+  private connection: IDBDatabase | undefined;
+  private opening: Promise<IDBDatabase> | undefined;
+  constructor(private readonly name = 'loopdeck3-learning') {}
 
-function ensureIndex(store: IDBObjectStore, name: string, keyPath: string): void {
-  if (!store.indexNames.contains(name)) store.createIndex(name, keyPath, { unique: false });
-}
-
-let databaseConnection: IDBDatabase | undefined;
-let databasePromise: Promise<IDBDatabase> | undefined;
-
-function openDb(): Promise<IDBDatabase> {
-  if (databaseConnection) return Promise.resolve(databaseConnection);
-  if (databasePromise) return databasePromise;
-
-  databasePromise = new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
-    request.onupgradeneeded = () => {
-      const database = request.result;
-      if (database.objectStoreNames.contains('settings')) database.deleteObjectStore('settings');
-      const upgradeTransaction = request.transaction;
-      if (!upgradeTransaction) throw new Error('IndexedDB upgrade transaction is unavailable.');
-
-      const attempts = ensureStore(database, upgradeTransaction, 'attempts', 'attemptId');
-      ensureIndex(attempts, 'byQuestionId', 'questionId');
-      ensureIndex(attempts, 'byResult', 'result');
-
-      ensureStore(database, upgradeTransaction, 'bookmarks', 'questionId');
-      ensureStore(database, upgradeTransaction, 'packs', 'packId');
-
-      const packAssets = ensureStore(database, upgradeTransaction, 'packAssets', 'assetId');
-      ensureIndex(packAssets, 'byPackId', 'packId');
-
-      ensureStore(database, upgradeTransaction, 'reviewCards', 'questionId');
-
-      const reviewLogs = ensureStore(database, upgradeTransaction, 'reviewLogs', 'reviewLogId');
-      ensureIndex(reviewLogs, 'byQuestionId', 'questionId');
-      ensureIndex(reviewLogs, 'byReviewedAt', 'reviewedAt');
-    };
-    request.onsuccess = () => {
-      const database = request.result;
-      databaseConnection = database;
-      databasePromise = undefined;
-      database.onversionchange = () => {
-        database.close();
-        if (databaseConnection === database) databaseConnection = undefined;
-        databasePromise = undefined;
+  private open(): Promise<IDBDatabase> {
+    if (this.connection) return Promise.resolve(this.connection);
+    if (this.opening) return this.opening;
+    this.opening = new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open(this.name, 1);
+      let failed = false;
+      request.onupgradeneeded = () => {
+        for (const name of USER_DATA_STORES) {
+          const layout = schema[name];
+          const store = request.result.createObjectStore(name, { keyPath: layout.key });
+          for (const [index, key] of Object.entries(layout.indexes ?? {})) store.createIndex(index, key, { unique: false });
+        }
       };
-      resolve(database);
-    };
-    request.onerror = () => {
-      databasePromise = undefined;
-      reject(request.error ?? new Error('Failed to open LoopDeck IndexedDB.'));
-    };
-  });
-  return databasePromise;
-}
+      request.onblocked = () => {
+        failed = true;
+        reject(new Error('Close other LoopDeck3 windows before opening this database.'));
+      };
+      request.onerror = () => {
+        failed = true;
+        reject(request.error ?? new Error('Cannot open the study database.'));
+      };
+      request.onsuccess = () => {
+        const connection = request.result;
+        if (failed) { connection.close(); return; }
+        this.connection = connection;
+        connection.onversionchange = () => this.close();
+        resolve(connection);
+      };
+    }).finally(() => { this.opening = undefined; });
+    return this.opening;
+  }
 
-export async function runTransaction<T>(
-  storeNames: string | string[],
-  mode: IDBTransactionMode,
-  task: (transaction: IDBTransaction) => T
-): Promise<T> {
-  const database = await openDb();
-  return new Promise<T>((resolve, reject) => {
-    const tx = database.transaction(storeNames, mode);
-    let result: T;
-    try {
-      result = task(tx);
-    } catch (error) {
+  close(): void {
+    this.connection?.close();
+    this.connection = undefined;
+  }
+
+  async transact<T>(names: StoreName | readonly StoreName[], mode: IDBTransactionMode, schedule: (tx: IDBTransaction) => T): Promise<T> {
+    const connection = await this.open();
+    return new Promise<T>((resolve, reject) => {
+      const tx = connection.transaction(typeof names === 'string' ? names : [...names], mode);
+      let result: T;
+      tx.oncomplete = () => resolve(result);
+      tx.onerror = () => reject(tx.error ?? new Error('Study transaction failed.'));
+      tx.onabort = () => reject(tx.error ?? new Error('Study transaction aborted.'));
       try {
-        tx.abort();
-      } catch {
-        /* already inactive */
+        result = schedule(tx);
+      } catch (error) {
+        try { tx.abort(); } catch { /* Already inactive. */ }
+        reject(error);
       }
-      reject(error);
-      return;
-    }
-    tx.oncomplete = () => resolve(result);
-    tx.onerror = () => reject(tx.error ?? new Error('IndexedDB transaction failed.'));
-    tx.onabort = () => reject(tx.error ?? new Error('IndexedDB transaction was aborted.'));
-  });
-}
+    });
+  }
 
-export async function transaction<T>(
-  storeName: string,
-  mode: IDBTransactionMode,
-  task: (store: IDBObjectStore) => IDBRequest<T> | void
-): Promise<T | void> {
-  const request = await runTransaction<IDBRequest<T> | void>(storeName, mode, (tx) => task(tx.objectStore(storeName)));
-  return request ? request.result : undefined;
-}
+  async request<T>(name: StoreName, mode: IDBTransactionMode, schedule: (store: IDBObjectStore) => IDBRequest<T> | void): Promise<T | void> {
+    const request = await this.transact(name, mode, (tx) => schedule(tx.objectStore(name)));
+    return request?.result;
+  }
 
-export async function getAll<T>(storeName: string): Promise<T[]> {
-  const result = await transaction<T[]>(storeName, 'readonly', (store) => store.getAll());
-  return Array.isArray(result) ? result : [];
+  async all<T>(name: StoreName): Promise<T[]> {
+    const result = await this.request<T[]>(name, 'readonly', (store) => store.getAll());
+    return result ?? [];
+  }
 }
-
+export const database = new LocalDatabase();

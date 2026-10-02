@@ -7,8 +7,8 @@ const tsconfigPath = path.join(repoRoot, 'tsconfig.json');
 const srcRoot = path.join(repoRoot, 'src');
 const lowerAreas = new Set(['core', 'storage', 'packs', 'pdf', 'ui']);
 
-// Freeze the current cross-screen graph while #49 cleans up ownership. New peer
-// screen dependencies must be reviewed and added here deliberately, not silently.
+// Screens compose shared quiz and library helpers. Other cross-screen imports
+// must move to an owned shared module or have an explicit narrow justification.
 const screenImportAllowlist = new Map([
   ['src/screens/homeScreen.ts -> src/screens/homeFolders.ts', 'home-only helper currently colocated under screens'],
   ['src/screens/moduleScreen.ts -> src/screens/inlineQuiz.ts', 'deliberate composition of the shared inline quiz renderer'],
@@ -115,7 +115,7 @@ for (const [source, targets] of graph) {
     const targetArea = areaOf(target);
     const edge = `${repoPath(source)} -> ${repoPath(target)}`;
 
-    if (lowerAreas.has(sourceArea) && (targetArea === 'screens' || targetArea === 'main')) {
+    if (lowerAreas.has(sourceArea) && (targetArea === 'screens' || targetArea === 'main' || targetArea === 'app')) {
       errors.push(`reverse dependency: ${edge}\n  ${sourceArea} is reusable/lower-level and must not depend on ${targetArea}`);
     }
 

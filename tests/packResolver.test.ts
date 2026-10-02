@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import type { LoopDeckPack, ModuleInfo, Question } from '../src/core/models';
-import { getVisibleBuiltinModules } from '../src/packs/builtinNormalizer';
 import {
   getActiveModules,
   getActivePacks,
@@ -124,7 +123,7 @@ describe('packResolver duplicate ID resolution', () => {
     );
 
     const view = resolveActivePacks([builtin, imported]);
-    const homeModules = getVisibleBuiltinModules(getActiveModules(view));
+    const homeModules = getActiveModules(view).filter(module => module.questionIds.length > 0);
     const homeModule = new Map(homeModules.map((module) => [module.id, module])).get('leap');
     const openedModule = getModuleById(view, 'leap');
 

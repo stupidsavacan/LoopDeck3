@@ -2,9 +2,9 @@ import { importLoopDeckJson, importLoopDeckZip } from '../packs/zipImporter';
 import { validateImportFileSize } from '../packs/importLimits';
 import type { PackValidationResult } from '../packs/packTypes';
 import { looksLikeLoopDeckBackup, validateBackupPayload } from '../storage/backupValidator';
-import type { LoopDeckBackup } from '../storage/db';
+import type { StudyBackup } from '../storage/storageTypes';
 
-export type ImportFileResult = { kind: 'backup'; backup: LoopDeckBackup } | { kind: 'pack'; result: PackValidationResult };
+export type ImportFileResult = { kind: 'backup'; backup: StudyBackup } | { kind: 'pack'; result: PackValidationResult };
 
 export async function readImportFile(file: File): Promise<ImportFileResult> {
   const issues = validateImportFileSize(file);

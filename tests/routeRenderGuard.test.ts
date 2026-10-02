@@ -1,9 +1,10 @@
+import { screenContext } from './support/screenContext';
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Attempt } from '../src/core/models';
 import { resolveActivePacks } from '../src/packs/packResolver';
 import { renderGraphsScreen } from '../src/screens/graphsScreen';
-import { db } from '../src/storage/db';
+import { studyStore } from '../src/storage/studyRepository';
 import { RouteRenderCoordinator } from '../src/ui/routeRenderGuard';
 
 afterEach(() => {
@@ -66,17 +67,12 @@ describe('route render ownership', () => {
     const delayedAttempts = new Promise<Attempt[]>((resolve) => {
       resolveAttempts = resolve;
     });
-    vi.spyOn(db, 'getAttempts').mockReturnValueOnce(delayedAttempts);
+    vi.spyOn(studyStore, 'getAttempts').mockReturnValueOnce(delayedAttempts);
 
     const root = document.createElement('div');
     root.textContent = 'newer route';
     let current = true;
-    const pending = renderGraphsScreen(
-      root,
-      resolveActivePacks([]),
-      () => {},
-      () => {},
-      () => current
+    const pending = renderGraphsScreen(screenContext({ root: root, catalog: resolveActivePacks([]), isCurrent: () => current, navigation: { home: () => {}, review: () => {} } })
     );
 
     current = false;

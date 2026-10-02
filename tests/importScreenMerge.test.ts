@@ -1,10 +1,11 @@
+import { screenContext } from './support/screenContext';
 // @vitest-environment jsdom
 import 'fake-indexeddb/auto';
 import { describe, expect, it } from 'vitest';
 import type { LoopDeckPack } from '../src/core/models';
 import { resolveActivePacks } from '../src/packs/packResolver';
 import { renderImportScreen } from '../src/screens/importScreen';
-import { db } from '../src/storage/db';
+import { studyStore } from '../src/storage/studyRepository';
 
 function pack(packId: string, prompt: string): LoopDeckPack {
   return {
@@ -38,11 +39,11 @@ describe('same-packId import UI', () => {
     const packId = 'merge-ui-image-pack';
     const existing = pack(packId, 'Existing question');
     const incoming = pack(packId, 'Incoming question');
-    await db.deleteImportedPack(packId);
-    await db.saveImportedPack(existing);
+    await studyStore.deleteImportedPack(packId);
+    await studyStore.saveImportedPack(existing);
 
     const root = document.createElement('div');
-    await renderImportScreen(root, resolveActivePacks([existing]), () => {}, async () => {});
+    await renderImportScreen(screenContext({ root: root, catalog: resolveActivePacks([existing]), refreshCatalog: async () => {}, navigation: { home: () => {} } }));
 
     const input = root.querySelector<HTMLInputElement>('input[type="file"]')!;
     const file = new File([JSON.stringify(incoming)], 'same-id.loopdeck.json', { type: 'application/json' });
@@ -53,6 +54,6 @@ describe('same-packId import UI', () => {
     expect(labels).toContain('\u4e0a\u66f8\u304d\u66f4\u65b0\u3059\u308b');
     expect(labels).toContain('\u30de\u30fc\u30b8\u66f4\u65b0\u3059\u308b');
 
-    await db.deleteImportedPack(packId);
+    await studyStore.deleteImportedPack(packId);
   });
 });

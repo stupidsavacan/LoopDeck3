@@ -93,8 +93,8 @@ describe('SRS scheduler', () => {
   });
 
   it('treats legacy learning cards as relearning in the due buckets', () => {
-    const legacyLearning = card({ state: 'learning', dueAt: now.toISOString() });
-    const buckets = bucketReviewCards([legacyLearning], now);
+    const learning = card({ state: 'relearning', dueAt: now.toISOString() });
+    const buckets = bucketReviewCards([learning], now);
 
     expect(buckets.relearning.map((item) => item.questionId)).toEqual(['q1']);
   });
@@ -122,7 +122,7 @@ describe('SRS scheduler', () => {
 
   it('suspended cards are excluded from due queue', () => {
     const dueCard = card({ state: 'review', dueAt: now.toISOString(), intervalDays: 1 });
-    const suspended = card({ questionId: 'q2', state: 'suspended', suspended: true, dueAt: now.toISOString(), intervalDays: 1 });
+    const suspended = card({ questionId: 'q2', state: 'review', suspended: true, dueAt: now.toISOString(), intervalDays: 1 });
 
     expect(buildSrsReviewQueue([dueCard, suspended], now).map((item) => item.questionId)).toEqual(['q1']);
   });

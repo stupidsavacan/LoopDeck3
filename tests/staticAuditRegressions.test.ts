@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto';
 import { describe, expect, it } from 'vitest';
 import type { Attempt, InputQuestion, LoopDeckPack, StudySettings } from '../src/core/models';
-import { db } from '../src/storage/db';
+import { studyStore } from '../src/storage/studyRepository';
 import { validatePack } from '../src/packs/packValidator';
 import { resolveActivePacks } from '../src/packs/packResolver';
 import { buildHomeFolders } from '../src/screens/homeFolders';
@@ -26,9 +26,9 @@ function pack(id: string): LoopDeckPack {
 
 describe('static audit regressions', () => {
   it('newly imported pack overrides the older module regardless of packId sorting', async () => {
-    await db.saveImportedPack(pack('z-old'));
-    await db.saveImportedPack(pack('a-new'));
-    const loaded = await db.getImportedPacks();
+    await studyStore.saveImportedPack(pack('z-old'));
+    await studyStore.saveImportedPack(pack('a-new'));
+    const loaded = await studyStore.getImportedPacks();
     expect(loaded.map((p) => p.packId)).toEqual(['z-old', 'a-new']);
     expect(resolveActivePacks(loaded).modulePackIdById.get('m')).toBe('a-new');
   });

@@ -1,8 +1,9 @@
+import { questionRevision } from '../src/core/questionRevision';
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Attempt, ModuleInfo, Question, StudySettings } from '../src/core/models';
 import { buildWrongAnswerFeedback } from '../src/core/wrongAnswerExplanation';
-import { readStoredSession, restoreStoredSession } from '../src/screens/moduleScreen';
+import { readStoredSession, restoreStoredSession } from '../src/storage/sessionStorage';
 
 const moduleInfo: ModuleInfo = {
   id: 'resume-v2-module',
@@ -56,13 +57,13 @@ beforeEach(() => {
 
 afterEach(() => vi.useRealTimers());
 
-describe('stored session v2 resume state', () => {
+describe('LoopDeck3 session checkpoints', () => {
   it('restores the exact presented direction, attempts, start time, and current timing state', () => {
     localStorage.setItem(
-      `loopdeck3_session_${moduleInfo.id}`,
+      `loopdeck3.session.${moduleInfo.id}`,
       JSON.stringify({
-        version: 2,
-        questions: [{ questionId: reversible.id, questionMode: 'back_to_front' }],
+        format: 'loopdeck3.session', version: 1,
+        questions: [{ questionId: reversible.id, revision: questionRevision(reversible), questionMode: 'back_to_front' }],
         index: 0,
         mode: 'normal',
         settings,
@@ -113,8 +114,8 @@ describe('stored session v2 resume state', () => {
       answer: '\u71b1\u5e2f\u306e'
     };
     const stored = {
-      version: 2 as const,
-      questions: [{ questionId: pollution.id, questionMode: 'back_to_front' as const }],
+      format: 'loopdeck3.session' as const, version: 1 as const,
+      questions: [{ questionId: pollution.id, revision: questionRevision(pollution), questionMode: 'back_to_front' as const }],
       index: 0,
       mode: 'normal' as const,
       settings: { ...settings, questionMode: 'back_to_front' as const },
@@ -142,12 +143,12 @@ describe('stored session v2 resume state', () => {
     expect(feedback?.pair?.front).toMatchObject({ label: '\u82f1\u8a9e', text: 'tropical' });
     expect(feedback?.pair?.back).toMatchObject({ label: '\u65e5\u672c\u8a9e', text: '\u71b1\u5e2f\u306e' });
   });
-  it('accepts a completed v2 session so its summary can be resumed', () => {
+  it('accepts a completed current session so its summary can be resumed', () => {
     localStorage.setItem(
-      `loopdeck3_session_${moduleInfo.id}`,
+      `loopdeck3.session.${moduleInfo.id}`,
       JSON.stringify({
-        version: 2,
-        questions: [{ questionId: reversible.id, questionMode: 'front_to_back' }],
+        format: 'loopdeck3.session', version: 1,
+        questions: [{ questionId: reversible.id, revision: questionRevision(reversible), questionMode: 'front_to_back' }],
         index: 1,
         mode: 'normal',
         settings,
@@ -164,7 +165,7 @@ describe('stored session v2 resume state', () => {
 
   it('does not resume legacy mixed sessions because their already-presented direction was never stored', () => {
     localStorage.setItem(
-      `loopdeck3_session_${moduleInfo.id}`,
+      `loopdeck3.session.${moduleInfo.id}`,
       JSON.stringify({
         questionIds: [reversible.id],
         index: 0,

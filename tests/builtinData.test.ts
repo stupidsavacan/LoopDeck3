@@ -1,14 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import builtinPackData from '../data/builtin/loopdeck_builtin.loopdeck.json';
 import { buildGeneratedChoices } from '../src/core/choiceGenerator';
 import { loadBuiltinPacks } from '../src/packs/builtinLoader';
 import type { InputQuestion } from '../src/core/models';
 import { buildRangeOptions, createSession } from '../src/core/sessionEngine';
 import { validatePack } from '../src/packs/packValidator';
-import { getVisibleBuiltinModules, normalizeBuiltinPack, REVERSE_MODULE_IDS } from '../src/packs/builtinNormalizer';
 
 describe('built-in LoopDeck data', () => {
-  const pack = normalizeBuiltinPack(builtinPackData);
+  const pack = loadBuiltinPacks()[0];
 
   it('caches the normalized and validated built-in pack for the app lifetime', () => {
     expect(loadBuiltinPacks()).toBe(loadBuiltinPacks());
@@ -40,14 +38,14 @@ describe('built-in LoopDeck data', () => {
   });
 
   it('does not include reverse practice modules or questions', () => {
-    expect(pack.modules.some((module) => REVERSE_MODULE_IDS.has(module.id))).toBe(false);
-    expect(pack.questions.some((question) => REVERSE_MODULE_IDS.has(question.moduleId))).toBe(false);
+    expect(pack.modules.some((module) => ['english_reverse', 'leap_reverse', 'leap_final_reverse'].includes(module.id))).toBe(false);
+    expect(pack.questions.some((question) => ['english_reverse', 'leap_reverse', 'leap_final_reverse'].includes(question.moduleId))).toBe(false);
   });
 
   it('keeps 古文単語 empty and hides it from normal study cards', () => {
     const kobunVocab = pack.modules.find((module) => module.id === 'kobun_vocab' || module.title === '古文単語');
     expect(kobunVocab?.questionIds.length).toBe(0);
-    expect(getVisibleBuiltinModules(pack.modules).some((module) => module.id === kobunVocab?.id)).toBe(false);
+    expect(pack.modules.filter(module => module.questionIds.length > 0).some((module) => module.id === kobunVocab?.id)).toBe(false);
   });
 
   it('preserves original LEAP titles, question IDs, numbers, and ranges', () => {

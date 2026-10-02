@@ -1,10 +1,11 @@
+import { screenContext } from './support/screenContext';
 // @vitest-environment jsdom
 import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { Attempt, LoopDeckPack, ReviewCard } from '../src/core/models';
 import { resolveActivePacks } from '../src/packs/packResolver';
 import { renderReviewCenter } from '../src/screens/reviewCenter';
-import { db } from '../src/storage/db';
+import { studyStore } from '../src/storage/studyRepository';
 
 const pack: LoopDeckPack = {
   packVersion: 1,
@@ -59,24 +60,20 @@ function dueCard(questionId: string, moduleId: string): ReviewCard {
 
 describe('Review Center scope', () => {
   beforeEach(async () => {
-    sessionStorage.removeItem('loopdeck3_review_scope_session_v1');
-    await db.clearAttempts();
-    await db.clearReviewData();
-    await db.addAttempt(attempt('recent-attempt', 'recent-q', 'mixed-module', 1));
-    await db.addAttempt(attempt('old-attempt', 'old-q', 'mixed-module', 8));
-    await db.putReviewCard(dueCard('recent-q', 'mixed-module'));
-    await db.putReviewCard(dueCard('old-q', 'mixed-module'));
+    sessionStorage.removeItem('loopdeck3.review.scope');
+    await studyStore.clearAttempts();
+    await studyStore.clearReviewData();
+    await studyStore.addAttempt(attempt('recent-attempt', 'recent-q', 'mixed-module', 1));
+    await studyStore.addAttempt(attempt('old-attempt', 'old-q', 'mixed-module', 8));
+    await studyStore.putReviewCard(dueCard('recent-q', 'mixed-module'));
+    await studyStore.putReviewCard(dueCard('old-q', 'mixed-module'));
   });
 
   it('hides stale questions even when their module is still active and restores them in all-history scope', async () => {
     const root = document.createElement('div');
     const view = resolveActivePacks([pack]);
 
-    await renderReviewCenter(
-      root,
-      view,
-      () => {},
-      () => {}
+    await renderReviewCenter(screenContext({ root: root, catalog: view, navigation: { home: () => {}, graphs: () => {} } })
     );
 
     expect(root.textContent).toContain('RECENT QUESTION');
@@ -93,6 +90,6 @@ describe('Review Center scope', () => {
     await new Promise((resolve) => window.setTimeout(resolve, 50));
 
     expect(root.textContent).toContain('OLD QUESTION');
-    expect(sessionStorage.getItem('loopdeck3_review_scope_session_v1')).toBe('all');
+    expect(sessionStorage.getItem('loopdeck3.review.scope')).toBe('all');
   });
 });

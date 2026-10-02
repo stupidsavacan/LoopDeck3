@@ -5,8 +5,8 @@ export interface StoredPackAsset extends ImportedPackAsset {
   assetId: string;
 }
 
-export interface LoopDeckBackup {
-  loopDeckBackupVersion: 1;
+export interface StudyBackup {
+  format: 'loopdeck3.backup', schema: 1;
   exportedAt: string;
   attempts: Attempt[];
   bookmarks: string[];

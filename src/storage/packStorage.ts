@@ -2,7 +2,7 @@ import { validatePack } from '../packs/packValidator';
 import type { LoopDeckPack } from '../core/models';
 import type { ImportedPackAsset, PackAssetWriteStrategy } from '../packs/packTypes';
 import type { StoredPackAsset } from './storageTypes';
-import { runTransaction } from './indexedDb';
+import { database } from './indexedDb';
 
 export function packAssetId(packId: string, path: string): string {
   return `${packId}:${path}`;
@@ -32,7 +32,7 @@ export function putPacksInInstallOrder(store: IDBObjectStore, packs: LoopDeckPac
 }
 
 export async function savePackWithAssets(pack: LoopDeckPack, assets: ImportedPackAsset[], strategy: PackAssetWriteStrategy): Promise<void> {
-  await runTransaction(['packs', 'packAssets'], 'readwrite', (tx) => {
+  await database.transact(['packs', 'packAssets'], 'readwrite', (tx) => {
     putPacksInInstallOrder(tx.objectStore('packs'), [pack]);
     const assetStore = tx.objectStore('packAssets');
     const writeAssets = () => {
@@ -58,7 +58,7 @@ export async function savePackWithAssets(pack: LoopDeckPack, assets: ImportedPac
 }
 
 export async function deletePackAndAssets(packId: string): Promise<void> {
-  await runTransaction(['packs', 'packAssets'], 'readwrite', (tx) => {
+  await database.transact(['packs', 'packAssets'], 'readwrite', (tx) => {
     tx.objectStore('packs').delete(packId);
     const assetStore = tx.objectStore('packAssets');
     const request = assetStore.index('byPackId').openKeyCursor(IDBKeyRange.only(packId));
@@ -84,7 +84,7 @@ export function validatedPackForStorage(pack: unknown): LoopDeckPack {
 export function recoverStoredPacks(packs: unknown[]): LoopDeckPack[] {
   const recovered: LoopDeckPack[] = [];
   for (const stored of packs) {
-    const result = validatePack(stored, 'stored');
+    const result = validatePack(stored);
     if (result.ok && result.pack) {
       recovered.push(result.pack);
       continue;
@@ -93,4 +93,3 @@ export function recoverStoredPacks(packs: unknown[]): LoopDeckPack[] {
   }
   return recovered;
 }
-

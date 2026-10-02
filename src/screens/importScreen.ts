@@ -1,3 +1,4 @@
+import type { ScreenContext } from '../app/context';
 import { writeDebugLog } from '../debug/debugLog';
 import { validateActivePackIdentities } from '../packs/packValidator';
 import { validateImportFileSize } from '../packs/importLimits';
@@ -5,11 +6,12 @@ import type { LoopDeckPack } from '../core/models';
 import { analyzeImportConflicts, sharedModuleIds } from '../packs/importConflictAnalysis';
 import { mergeLoopDeckPacks, mergeLoopDeckPacksIntoExisting, type MergePackReport } from '../packs/packMerger';
 import packAuthoringPrompt from '../packs/packAuthoringPrompt.txt?raw';
-import { getActiveModules, getActivePacks, getActiveQuestions, type ResolvedPackView } from '../packs/packResolver';
+import { getActiveModules, getActivePacks, getActiveQuestions } from '../packs/packResolver';
 import { createLoopDeckZipBlob, makePackFileStem, stringifyLoopDeckJson } from '../packs/zipExporter';
 import { saveBlob } from '../platform/fileSave';
 import { readImportFile } from '../services/importFileService';
-import { db, type BackupImportMode, type LoopDeckBackup } from '../storage/db';
+import { studyStore } from '../storage/studyRepository';
+import type { BackupImportMode, StudyBackup } from '../storage/storageTypes';
 import { button, clear, el, toast } from '../ui/dom';
 import { appendIconLabel, createUiIcon } from '../ui/icons';
 
@@ -34,7 +36,7 @@ async function exportPackZip(pack: LoopDeckPack): Promise<void> {
 }
 
 async function exportBackup(): Promise<void> {
-  const backup = await db.exportUserData();
+  const backup = await studyStore.exportSnapshot();
   const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
   await saveBlob(blob, `loopdeck-backup-${backup.exportedAt.slice(0, 10)}.json`);
   toast('バックアップを書き出しました。');
@@ -76,15 +78,12 @@ function appendMergeReport(container: HTMLElement, report: MergePackReport): voi
   container.append(reportBox);
 }
 
-export async function renderImportScreen(
-  root: HTMLElement,
-  packView: ResolvedPackView,
-  navigateHome: () => void,
-  onImported: () => Promise<void>,
-  isCurrent: () => boolean = () => true
-): Promise<void> {
+export async function renderImportScreen(context: ScreenContext): Promise<void> {
+  const { root: root, catalog: packView, isCurrent, refreshCatalog: onImported } = context;
+  const { home: navigateHome } = context.navigation;
+
   if (!isCurrent()) return;
-  const importedPacks = await db.getImportedPacks();
+  const importedPacks = await studyStore.getImportedPacks();
   if (!isCurrent()) return;
   const activePacks = getActivePacks(packView);
   const importedIds = new Set(importedPacks.map((pack) => pack.packId));
@@ -143,7 +142,7 @@ export async function renderImportScreen(
   }
 
   async function importBackupFromUi(
-    backup: LoopDeckBackup,
+    backup: StudyBackup,
     mode: BackupImportMode,
     replaceButton: HTMLButtonElement,
     mergeButton: HTMLButtonElement
@@ -156,7 +155,7 @@ export async function renderImportScreen(
     replaceButton.disabled = true;
     mergeButton.disabled = true;
     try {
-      await db.importUserData(backup, mode);
+      await studyStore.restoreSnapshot(backup, mode);
       toast(mode === 'replace' ? 'バックアップから置き換え復元しました。' : 'バックアップを現在データへマージしました。');
       await onImported();
     } catch (error) {
@@ -176,7 +175,7 @@ export async function renderImportScreen(
     }
   }
 
-  function renderBackupImport(backup: LoopDeckBackup): void {
+  function renderBackupImport(backup: StudyBackup): void {
     clear(preview);
     preview.append(
       el('h2', '', 'バックアップを読み込む'),
@@ -302,7 +301,7 @@ export async function renderImportScreen(
             toast('問題IDが別パックと衝突しているため取り込めません。マージ更新を使ってください。');
             return;
           }
-          await db.saveImportedPackWithAssets(pack, assets, 'replace');
+          await studyStore.saveImportedPackWithAssets(pack, assets, 'replace');
           toast(duplicateImportedPackId ? '教材を上書き更新しました。' : '教材を取り込みました。');
           await onImported();
         };
@@ -311,9 +310,9 @@ export async function renderImportScreen(
         if (existingImportedPack) {
           const mergeInstall = button('マージ更新する', 'btn');
           mergeInstall.onclick = async () => {
-            const currentExistingPack = (await db.getImportedPacks()).find((importedPack) => importedPack.packId === pack.packId);
+            const currentExistingPack = (await studyStore.getImportedPacks()).find((importedPack) => importedPack.packId === pack.packId);
             if (!currentExistingPack) {
-              await db.saveImportedPackWithAssets(pack, assets, 'replace');
+              await studyStore.saveImportedPackWithAssets(pack, assets, 'replace');
               toast('同じIDのインポート済み教材が見つからなかったため、新規取り込みしました。');
               await onImported();
               return;
@@ -325,7 +324,7 @@ export async function renderImportScreen(
               toast('マージ結果の問題IDが別パックと衝突するため保存できません。');
               return;
             }
-            await db.saveImportedPackWithAssets(mergedPack, assets, 'upsert');
+            await studyStore.saveImportedPackWithAssets(mergedPack, assets, 'upsert');
             toast(
               `教材をマージ更新しました。追加${report.addedQuestions + report.renamedQuestions}問 / ID変更${report.renamedQuestions}問。`
             );
@@ -337,7 +336,7 @@ export async function renderImportScreen(
         if (moduleMergeTarget) {
           const moduleMergeInstall = button('教材マージ更新する', 'btn primary');
           moduleMergeInstall.onclick = async () => {
-            const currentImportedPacks = await db.getImportedPacks();
+            const currentImportedPacks = await studyStore.getImportedPacks();
             const currentTarget =
               currentImportedPacks.find((importedPack) => importedPack.packId === moduleMergeTarget.packId) ?? moduleMergeTarget;
             const { pack: mergedPack, report } = mergeLoopDeckPacksIntoExisting(currentTarget, pack);
@@ -346,7 +345,7 @@ export async function renderImportScreen(
               toast('マージ結果の問題IDが別パックと衝突するため保存できません。');
               return;
             }
-            await db.saveImportedPackWithAssets(mergedPack, assets, 'upsert');
+            await studyStore.saveImportedPackWithAssets(mergedPack, assets, 'upsert');
             toast(
               `教材をマージ更新しました。追加${report.addedQuestions + report.renamedQuestions}問 / ID変更${report.renamedQuestions}問。`
             );
@@ -406,7 +405,7 @@ export async function renderImportScreen(
       const remove = button('削除', 'btn ghost danger');
       remove.onclick = async () => {
         if (!window.confirm(`${pack.title} を削除します。学習履歴は残ります。`)) return;
-        await db.deleteImportedPack(pack.packId);
+        await studyStore.deleteImportedPack(pack.packId);
         toast('インポート済みパックを削除しました。');
         await onImported();
       };
@@ -426,19 +425,19 @@ export async function renderImportScreen(
   const clearHistory = button('回答履歴を全削除', 'btn ghost danger');
   clearHistory.onclick = async () => {
     if (!window.confirm('回答履歴をすべて削除します。ブックマークと教材パックは残ります。')) return;
-    await db.clearAttempts();
+    await studyStore.clearAttempts();
     toast('回答履歴を削除しました。');
   };
   const clearWrong = button('ミス履歴だけ削除', 'btn ghost danger');
   clearWrong.onclick = async () => {
     if (!window.confirm('不正解・答え表示の履歴だけ削除します。')) return;
-    await db.clearWrongAttempts();
+    await studyStore.clearWrongAttempts();
     toast('ミス履歴を削除しました。');
   };
   const clearBookmarks = button('ブックマーク全削除', 'btn ghost danger');
   clearBookmarks.onclick = async () => {
     if (!window.confirm('ブックマークをすべて削除します。')) return;
-    await db.clearBookmarks();
+    await studyStore.clearBookmarks();
     toast('ブックマークを削除しました。');
   };
   dataActions.append(backup);
@@ -452,8 +451,6 @@ export async function renderImportScreen(
     el('p', 'hint', 'JSONバックアップを読み込むと、「現在データを置き換えて復元」または「現在データにマージ」を選べます。'),
     dangerZone
   );
-
-
 
   const note = el('details', 'card safe-note');
   note.append(

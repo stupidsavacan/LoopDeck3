@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import type { ModuleInfo, Question } from '../src/core/models';
 import { createSession } from '../src/core/sessionEngine';
 import { renderInlineQuiz } from '../src/screens/inlineQuiz';
-import { db } from '../src/storage/db';
+import { studyStore } from '../src/storage/studyRepository';
 
 const moduleInfo: ModuleInfo = {
   id: 'input-lock-module',
@@ -42,7 +42,7 @@ describe('renderInlineQuiz input lock', () => {
     input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     await waitForPersistence();
 
-    const attempts = (await db.getAttempts()).filter((attempt) => attempt.questionId === question.id);
+    const attempts = (await studyStore.getAttempts()).filter((attempt) => attempt.questionId === question.id);
     expect(input.disabled).toBe(true);
     expect(input.readOnly).toBe(true);
     expect(submit.disabled).toBe(true);

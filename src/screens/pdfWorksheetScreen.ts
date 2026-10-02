@@ -1,3 +1,4 @@
+import type { ScreenContext } from '../app/context';
 import { reportIssue } from '../debug/reportIssue';
 import { writeDebugLog } from '../debug/debugLog';
 import type { ModuleInfo, Question } from '../core/models';
@@ -88,7 +89,10 @@ function worksheetModuleOptions(packView: ResolvedPackView): WorksheetModuleOpti
   return disambiguateLabels(options);
 }
 
-export async function renderPdfWorksheetScreen(root: HTMLElement, packView: ResolvedPackView, navigateHome: () => void): Promise<void> {
+export async function renderPdfWorksheetScreen(context: ScreenContext): Promise<void> {
+  const { root: root, catalog: packView } = context;
+  const { home: navigateHome } = context.navigation;
+
   const modules = worksheetModuleOptions(packView);
   clear(root);
   const screen = el('main', 'screen pdf-worksheet-screen');

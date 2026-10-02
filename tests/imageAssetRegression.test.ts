@@ -8,7 +8,7 @@ import { resolveActivePacks } from '../src/packs/packResolver';
 import type { ImportedPackAsset } from '../src/packs/packTypes';
 import { createLoopDeckZipBlob } from '../src/packs/zipExporter';
 import { importLoopDeckZip } from '../src/packs/zipImporter';
-import { db } from '../src/storage/db';
+import { studyStore } from '../src/storage/studyRepository';
 
 const PNG_BASE64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
 
@@ -47,13 +47,13 @@ async function zipFile(value: LoopDeckPack, images: Record<string, string>): Pro
 describe('real image asset regression flows', () => {
   it('imports, persists, resolves, exports, and re-imports the same image bytes', async () => {
     const value = pack('audit-image-round-trip', 'q-round-trip', 'images/pixel.png');
-    await db.deleteImportedPack(value.packId);
+    await studyStore.deleteImportedPack(value.packId);
 
     const imported = await importLoopDeckZip(await zipFile(value, { 'images/pixel.png': PNG_BASE64 }));
     expect(imported.ok).toBe(true);
-    await db.saveImportedPackWithAssets(imported.pack!, imported.assets ?? [], 'replace');
+    await studyStore.saveImportedPackWithAssets(imported.pack!, imported.assets ?? [], 'replace');
 
-    const storedPack = (await db.getImportedPacks()).find((item) => item.packId === value.packId)!;
+    const storedPack = (await studyStore.getImportedPacks()).find((item) => item.packId === value.packId)!;
     const view = resolveActivePacks([storedPack]);
     const resolver = createQuestionImageAssetResolver(view);
     expect(await resolver(view.questionById.get('q-round-trip')!)).toBe(`data:image/png;base64,${PNG_BASE64}`);
@@ -66,37 +66,37 @@ describe('real image asset regression flows', () => {
       new File([await exported.arrayBuffer()], 'round-trip.loopdeck.zip', { type: 'application/zip' })
     );
     expect(reimported.assets?.[0]?.dataUrl).toBe(`data:image/png;base64,${PNG_BASE64}`);
-    await db.deleteImportedPack(value.packId);
+    await studyStore.deleteImportedPack(value.packId);
   });
 
   it('retargets incoming ZIP assets when merging a different packId into an existing module', async () => {
     const target = pack('audit-module-merge-target', 'q-existing', 'images/existing.png');
     const addon = pack('audit-module-merge-addon', 'q-addon', 'images/addon.png');
-    await db.deleteImportedPack(target.packId);
-    await db.saveImportedPackWithAssets(target, [asset(target.packId, 'images/existing.png')], 'replace');
+    await studyStore.deleteImportedPack(target.packId);
+    await studyStore.saveImportedPackWithAssets(target, [asset(target.packId, 'images/existing.png')], 'replace');
 
     const imported = await importLoopDeckZip(await zipFile(addon, { 'images/addon.png': PNG_BASE64 }));
     const merged = mergeLoopDeckPacksIntoExisting(target, imported.pack!).pack;
-    await db.saveImportedPackWithAssets(merged, imported.assets ?? [], 'upsert');
+    await studyStore.saveImportedPackWithAssets(merged, imported.assets ?? [], 'upsert');
 
-    expect(await db.getPackAsset(target.packId, 'images/existing.png')).toBeDefined();
-    expect((await db.getPackAsset(target.packId, 'images/addon.png'))?.dataUrl).toBe(`data:image/png;base64,${PNG_BASE64}`);
+    expect(await studyStore.getPackAsset(target.packId, 'images/existing.png')).toBeDefined();
+    expect((await studyStore.getPackAsset(target.packId, 'images/addon.png'))?.dataUrl).toBe(`data:image/png;base64,${PNG_BASE64}`);
     const resolver = createQuestionImageAssetResolver(resolveActivePacks([merged]));
     expect(await resolver(merged.questions.find((question) => question.id === 'q-addon')!)).toBe(`data:image/png;base64,${PNG_BASE64}`);
-    await db.deleteImportedPack(target.packId);
+    await studyStore.deleteImportedPack(target.packId);
   });
 
   it('preserves image assets through user-data backup export and import', async () => {
     const value = pack('audit-image-backup', 'q-backup', 'images/backup.png');
-    await db.deleteImportedPack(value.packId);
-    await db.saveImportedPackWithAssets(value, [asset(value.packId, 'images/backup.png')], 'replace');
+    await studyStore.deleteImportedPack(value.packId);
+    await studyStore.saveImportedPackWithAssets(value, [asset(value.packId, 'images/backup.png')], 'replace');
 
-    const backup = await db.exportUserData();
-    await db.deleteImportedPack(value.packId);
-    expect(await db.getPackAsset(value.packId, 'images/backup.png')).toBeUndefined();
+    const backup = await studyStore.exportSnapshot();
+    await studyStore.deleteImportedPack(value.packId);
+    expect(await studyStore.getPackAsset(value.packId, 'images/backup.png')).toBeUndefined();
 
-    await db.importUserData(backup, 'replace');
-    expect((await db.getPackAsset(value.packId, 'images/backup.png'))?.dataUrl).toBe(`data:image/png;base64,${PNG_BASE64}`);
-    await db.deleteImportedPack(value.packId);
+    await studyStore.restoreSnapshot(backup, 'replace');
+    expect((await studyStore.getPackAsset(value.packId, 'images/backup.png'))?.dataUrl).toBe(`data:image/png;base64,${PNG_BASE64}`);
+    await studyStore.deleteImportedPack(value.packId);
   });
 });

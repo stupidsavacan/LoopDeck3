@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
 import { describe, expect, it } from 'vitest';
-import { db } from '../src/storage/db';
+import { studyStore } from '../src/storage/studyRepository';
 import { validateBackupPayload } from '../src/storage/backupValidator';
 
 function validPack() {
@@ -16,7 +16,7 @@ function validPack() {
 
 function backup(overrides: Record<string, unknown> = {}) {
   return {
-    loopDeckBackupVersion: 1,
+    format: 'loopdeck3.backup', schema: 1,
     exportedAt: '2026-09-27T00:00:00.000Z',
     attempts: [],
     bookmarks: [],
@@ -50,9 +50,9 @@ describe('backup import trust boundary', () => {
       ]
     });
 
-    await expect(db.importUserData(malformed, 'merge')).rejects.toThrow(/unknown folderId/);
-    expect((await db.getAttempts()).some((attempt) => attempt.attemptId === attemptId)).toBe(false);
-    expect((await db.getImportedPacks()).some((pack) => pack.packId === 'backup-safe-pack')).toBe(false);
+    await expect(studyStore.restoreSnapshot(malformed, 'merge')).rejects.toThrow(/unknown folderId/);
+    expect((await studyStore.getAttempts()).some((attempt) => attempt.attemptId === attemptId)).toBe(false);
+    expect((await studyStore.getImportedPacks()).some((pack) => pack.packId === 'backup-safe-pack')).toBe(false);
   });
 
   it('rejects malformed learning records and unsafe stored assets', () => {

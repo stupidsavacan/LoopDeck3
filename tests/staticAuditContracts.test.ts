@@ -1,3 +1,4 @@
+import { screenContext } from './support/screenContext';
 // @vitest-environment jsdom
 import 'fake-indexeddb/auto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -15,7 +16,7 @@ import { loadBuiltinPacks } from '../src/packs/builtinLoader';
 import { resolveActivePacks } from '../src/packs/packResolver';
 import { renderHomeScreen } from '../src/screens/homeScreen';
 import { disposeInlineQuizzes, renderInlineQuiz } from '../src/screens/inlineQuiz';
-import { db } from '../src/storage/db';
+import { studyStore } from '../src/storage/studyRepository';
 import { readStudyPreferences, studyPreferencesKey, writeStudyPreferences } from '../src/storage/studyPreferences';
 import { createJapaneseToEnglishWorksheetPlan } from '../src/pdf/worksheetPlanner';
 
@@ -62,9 +63,9 @@ function quiz(autoNext = false, question = q) {
 }
 beforeEach(() => {
   localStorage.clear();
-  vi.spyOn(db, 'hasBookmark').mockResolvedValue(false);
-  vi.spyOn(db, 'getReviewCard').mockResolvedValue(undefined);
-  vi.spyOn(db, 'saveAttemptWithReview').mockResolvedValue();
+  vi.spyOn(studyStore, 'hasBookmark').mockResolvedValue(false);
+  vi.spyOn(studyStore, 'getReviewCard').mockResolvedValue(undefined);
+  vi.spyOn(studyStore, 'saveAttemptWithReview').mockResolvedValue();
 });
 afterEach(() => {
   disposeInlineQuizzes(document.body);
@@ -161,13 +162,7 @@ describe('settings and aggregation contracts', () => {
     data.questions.push({ ...q, id: 'q2', moduleId: 'unfiled' });
     const root = document.createElement('div');
     const render = () =>
-      renderHomeScreen(
-        root,
-        resolveActivePacks([data]),
-        () => {},
-        () => {},
-        () => {},
-        () => {}
+      renderHomeScreen(screenContext({ root: root, catalog: resolveActivePacks([data]), navigation: { module: () => {} } })
       );
     render();
     root.querySelector<HTMLButtonElement>('.folder-head')!.click();
@@ -189,10 +184,10 @@ describe('settings and aggregation contracts', () => {
     expect(readStudyPreferences('a:b', 'c')?.shuffle).toBe(true);
     expect(readStudyPreferences('a', 'b:c')?.shuffle).toBe(false);
   });
-  it('migrates unambiguous v1 settings but ignores ambiguous legacy identities', () => {
+  it('ignores obsolete settings regardless of whether their IDs are ambiguous', () => {
     const value = JSON.stringify({ version: 1, settings: { selectedCategory: 'A' } });
     localStorage.setItem('loopdeck3_study_prefs_v1_p:m', value);
-    expect(readStudyPreferences('p', 'm')?.selectedCategory).toBe(encodeStudyCategory('A'));
+    expect(readStudyPreferences('p', 'm')).toBeUndefined();
     localStorage.setItem('loopdeck3_study_prefs_v1_a:b:c', value);
     expect(readStudyPreferences('a:b', 'c')).toBeUndefined();
   });
@@ -214,13 +209,7 @@ describe('settings and aggregation contracts', () => {
   });
   it('shows an imported reverse-style module ID on Home', () => {
     const root = document.createElement('div');
-    renderHomeScreen(
-      root,
-      resolveActivePacks([pack({ ...q, moduleId: 'english_reverse' })]),
-      () => {},
-      () => {},
-      () => {},
-      () => {}
+    renderHomeScreen(screenContext({ root: root, catalog: resolveActivePacks([pack({ ...q, moduleId: 'english_reverse' })]), navigation: { module: () => {} } })
     );
     expect(root.querySelector('.module-card')).not.toBeNull();
   });
@@ -249,7 +238,7 @@ describe('quiz asynchronous ownership', () => {
   });
   it('ignores a stale bookmark read after the same mount renders a newer question', async () => {
     const read = deferred<boolean>();
-    vi.spyOn(db, 'hasBookmark').mockReturnValueOnce(read.promise);
+    vi.spyOn(studyStore, 'hasBookmark').mockReturnValueOnce(read.promise);
     const { container } = quiz();
     renderInlineQuiz(container, createSession(pack().modules[0], [{ ...q, id: 'new' }], settings), {
       onSessionChange() {},
@@ -274,8 +263,8 @@ describe('quiz asynchronous ownership', () => {
   });
   it('disables bookmark toggles until the initial read completes and rolls back failed writes', async () => {
     const read = deferred<boolean>();
-    vi.spyOn(db, 'hasBookmark').mockReturnValue(read.promise);
-    const write = vi.spyOn(db, 'setBookmark').mockRejectedValue(new Error('disk full'));
+    vi.spyOn(studyStore, 'hasBookmark').mockReturnValue(read.promise);
+    const write = vi.spyOn(studyStore, 'setBookmark').mockRejectedValue(new Error('disk full'));
     const { container } = quiz();
     const bookmark = container.querySelector<HTMLButtonElement>('.bookmark-btn')!;
     bookmark.click();
@@ -290,11 +279,11 @@ describe('quiz asynchronous ownership', () => {
   });
   it('does not let an old save completion checkpoint or advance a disposed quiz', async () => {
     const save = deferred<void>();
-    vi.spyOn(db, 'saveAttemptWithReview').mockReturnValue(save.promise);
+    vi.spyOn(studyStore, 'saveAttemptWithReview').mockReturnValue(save.promise);
     const { container, callbacks } = quiz(true);
     container.querySelector<HTMLInputElement>('input')!.value = 'dog';
     [...container.querySelectorAll('button')].find((b) => b.textContent === '回答する')!.click();
-    await vi.waitFor(() => expect(db.saveAttemptWithReview).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(studyStore.saveAttemptWithReview).toHaveBeenCalledTimes(1));
     disposeInlineQuizzes(container);
     save.resolve();
     await new Promise((resolve) => setTimeout(resolve, 750));

@@ -1,9 +1,11 @@
+import { screenContext } from './support/screenContext';
 // @vitest-environment jsdom
 import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { resolveActivePacks } from '../src/packs/packResolver';
 import { renderImportScreen } from '../src/screens/importScreen';
-import { db, type LoopDeckBackup } from '../src/storage/db';
+import { studyStore } from '../src/storage/studyRepository';
+import type { StudyBackup } from '../src/storage/storageTypes';
 
 function installFileTextForJSDom(): void {
   if (typeof File.prototype.text === 'function') return;
@@ -20,8 +22,8 @@ function installFileTextForJSDom(): void {
   });
 }
 
-const backup: LoopDeckBackup = {
-  loopDeckBackupVersion: 1,
+const backup: StudyBackup = {
+  format: 'loopdeck3.backup', schema: 1,
   exportedAt: '2026-09-27T00:00:00.000Z',
   attempts: [],
   bookmarks: [],
@@ -39,15 +41,11 @@ afterEach(() => {
 describe('backup import UI semantics', () => {
   it('does not import immediately and offers explicit replace vs merge actions', async () => {
     installFileTextForJSDom();
-    vi.spyOn(db, 'getImportedPacks').mockResolvedValue([]);
-    const importUserData = vi.spyOn(db, 'importUserData').mockResolvedValue();
+    vi.spyOn(studyStore, 'getImportedPacks').mockResolvedValue([]);
+    const restoreSnapshot = vi.spyOn(studyStore, 'restoreSnapshot').mockResolvedValue();
     const root = document.createElement('div');
     document.body.append(root);
-    await renderImportScreen(
-      root,
-      resolveActivePacks([]),
-      () => {},
-      async () => {}
+    await renderImportScreen(screenContext({ root: root, catalog: resolveActivePacks([]), refreshCatalog: async () => {}, navigation: { home: () => {} } })
     );
 
     const input = root.querySelector<HTMLInputElement>('input[type="file"]')!;
@@ -55,13 +53,13 @@ describe('backup import UI semantics', () => {
     Object.defineProperty(input, 'files', { value: [file], configurable: true });
     await input.onchange?.(new Event('change'));
 
-    expect(importUserData).not.toHaveBeenCalled();
+    expect(restoreSnapshot).not.toHaveBeenCalled();
     const labels = [...root.querySelectorAll('button')].map((button) => button.textContent);
     expect(labels).toContain('現在データを置き換えて復元');
     expect(labels).toContain('現在データにマージ');
 
     const merge = [...root.querySelectorAll<HTMLButtonElement>('button')].find((button) => button.textContent === '現在データにマージ')!;
     merge.click();
-    await vi.waitFor(() => expect(importUserData).toHaveBeenCalledWith(backup, 'merge'));
+    await vi.waitFor(() => expect(restoreSnapshot).toHaveBeenCalledWith(backup, 'merge'));
   });
 });
