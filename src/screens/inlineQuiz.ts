@@ -84,6 +84,7 @@ export function renderInlineQuiz(
       : [];
   const answerMode = resolveQuizAnswerMode(question, requestedAnswerFormat, generatedChoices, nativeChoices.length);
   const card = el('section', 'quiz-card');
+  if (question.imageAsset) card.classList.add('with-question-image');
   const answerArea = el('div', 'answer-area');
   const controls = el('div', 'quiz-controls');
   const resultArea = el('div', 'result-area');

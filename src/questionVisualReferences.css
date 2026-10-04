@@ -1,3 +1,22 @@
+.quiz-card.with-question-image .question-prompt {
+  font-size: clamp(1.25rem, 2.2vw, 1.5rem) !important;
+  line-height: 1.5 !important;
+  letter-spacing: normal !important;
+  font-weight: 700 !important;
+  margin: 0 0 16px !important;
+}
+.quiz-card.with-question-image .question-image-mount {
+  margin: 12px 0 16px;
+}
+.quiz-card.with-question-image .question-image {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: min(52svh, 420px);
+  margin: 0 auto;
+}
+
 .question-visual-references {
   margin: 12px 0;
   padding: 12px;

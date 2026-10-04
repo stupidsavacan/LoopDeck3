@@ -83,6 +83,74 @@ test('visual references import and render offline with all patterns', async ({ p
   await expect(page.locator('.question-visual-references')).toHaveCount(0);
 });
 
+test('combined text image and visual references fit phone and desktop screens', async ({ page }, info) => {
+  await go(page, 'import');
+  const builtin = JSON.parse(await readFile(resolve('data/builtin/catalog.json'), 'utf8'));
+  const history = builtin.questions.find(question => question.id === 'history-62-E10');
+  const figures = await page.evaluate(() => {
+    const create = (width, height) => {
+      const canvas = document.createElement('canvas'); canvas.width = width; canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, width, height);
+      ctx.strokeStyle = '#ef8a84'; ctx.lineWidth = 4;
+      for (let x = 0; x < width; x += 24) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, height); ctx.stroke(); }
+      ctx.fillStyle = '#123456'; ctx.font = '24px sans-serif'; ctx.fillText('Image reference / 資料', 8, 40);
+      return canvas.toDataURL('image/png').split(',')[1];
+    };
+    return { wide: create(2400, 240), tall: create(240, 2400), small: create(120, 80) };
+  });
+  const questions = [
+    { ...history, id: 'combined-history', moduleId: 'combined-qa' },
+    ...Object.keys(figures).map(type => ({ id: `combined-${type}`, moduleId: 'combined-qa', type: 'input',
+      prompt: '資料の色と模様を見て答えてください。'.repeat(8), answer: '確認', imageAsset: `images/${type}.png`,
+      visualReferences: history.visualReferences }))
+  ];
+  const zip = new JSZip();
+  zip.file('manifest.json', JSON.stringify({ packVersion: 1, packId: 'combined-qa', title: '文・画像・参考模様', folders: [] }));
+  zip.file('modules.json', JSON.stringify([{ id: 'combined-qa', title: '文・画像・参考模様', questionIds: questions.map(question => question.id) }]));
+  zip.file('questions.json', JSON.stringify(questions));
+  zip.file(history.imageAsset, await readFile(resolve('public', history.imageAsset)));
+  for (const [type, bytes] of Object.entries(figures)) zip.file(`images/${type}.png`, bytes, { base64: true });
+  await page.locator('input[type=file]').setInputFiles({ name: 'combined.loopdeck.zip', mimeType: 'application/zip', buffer: await zip.generateAsync({ type: 'nodebuffer' }) });
+  await page.getByRole('button', { name: 'この教材を取り込む', exact: true }).click();
+  await expect(page.locator('.home-screen')).toBeVisible();
+  await go(page, 'module/combined-qa'); await start(page);
+  const measurements = [];
+  for (const question of questions) {
+    await expect(page.locator('.question-prompt')).toHaveText(question.prompt);
+    const image = page.locator('img.question-image');
+    await expect(image).toBeVisible();
+    await image.evaluate(image => image.decode());
+    await expect(page.locator('.visual-reference-swatch')).toHaveCount(2);
+    for (const [width, height] of [[320, 568], [390, 844], [768, 1024], [1280, 720], [390, 300]]) {
+      await page.setViewportSize({ width, height });
+      await layout(page, info, `${question.id}-${width}-${height}`);
+      const measure = await image.evaluate(image => {
+        const rect = image.getBoundingClientRect();
+        const prompt = document.querySelector('.question-prompt');
+        const style = getComputedStyle(image);
+        return { width: rect.width, height: rect.height, naturalWidth: image.naturalWidth, naturalHeight: image.naturalHeight,
+          contentWidth: rect.width - parseFloat(style.borderLeftWidth) - parseFloat(style.borderRightWidth),
+          contentHeight: rect.height - parseFloat(style.borderTopWidth) - parseFloat(style.borderBottomWidth),
+          objectFit: style.objectFit, promptHeight: prompt.getBoundingClientRect().height,
+          promptFont: getComputedStyle(prompt).fontSize, viewportHeight: innerHeight };
+      });
+      expect(measure.width).toBeLessThanOrEqual(width);
+      expect(measure.height).toBeLessThanOrEqual(Math.min(height * 0.52, 420) + 1);
+      expect(measure.width).toBeLessThanOrEqual(measure.naturalWidth + 2);
+      expect(measure.height).toBeLessThanOrEqual(measure.naturalHeight + 2);
+      expect(Math.abs(measure.contentWidth / measure.contentHeight - measure.naturalWidth / measure.naturalHeight)).toBeLessThan(0.05);
+      expect(parseFloat(measure.promptFont)).toBeLessThanOrEqual(24);
+      expect(measure.objectFit).toBe('contain');
+      measurements.push({ question: question.id, viewport: `${width}x${height}`, ...measure });
+      await page.screenshot({ path: info.outputPath(`${question.id}-${width}-${height}.png`), fullPage: true });
+    }
+    await page.getByRole('button', { name: '答えを見る', exact: true }).click();
+    await page.getByRole('button', { name: '次へ', exact: true }).click();
+  }
+  await info.attach('combined-layout-measurements', { body: JSON.stringify(measurements, null, 2), contentType: 'application/json' });
+});
+
 test('invalid hash normalization preserves browser back navigation', async ({ page }) => {
   await go(page, 'home');
   const before = await page.evaluate(() => history.length);
