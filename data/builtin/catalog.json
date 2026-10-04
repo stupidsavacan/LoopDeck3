@@ -2740,6 +2740,22 @@
     {
       "id": "history-62-E10",
       "moduleId": "history",
+      "visualReferences": [
+        {
+          "type": "color",
+          "color": "#edb0aa",
+          "label": "上の塗りつぶし：うすい赤の面塗り"
+        },
+        {
+          "type": "stripe",
+          "color": "#ef8a84",
+          "backgroundColor": "#FFFFFF",
+          "angle": 90,
+          "spacing": 11,
+          "lineWidth": 4,
+          "label": "下の縦線：赤い縦線模様"
+        }
+      ],
       "prompt": "地図の凡例：上の塗りつぶしの植民地はどこの植民地か。",
       "explanation": "地図の凡例の上はドイツ植民地。",
       "imageAsset": "images/history/map62.png",
@@ -2760,6 +2776,22 @@
     {
       "id": "history-62-E11",
       "moduleId": "history",
+      "visualReferences": [
+        {
+          "type": "color",
+          "color": "#edb0aa",
+          "label": "上の塗りつぶし：うすい赤の面塗り"
+        },
+        {
+          "type": "stripe",
+          "color": "#ef8a84",
+          "backgroundColor": "#FFFFFF",
+          "angle": 90,
+          "spacing": 11,
+          "lineWidth": 4,
+          "label": "下の縦線：赤い縦線模様"
+        }
+      ],
       "prompt": "地図の凡例：下の縦線の植民地はどこの植民地か。",
       "explanation": "地図の凡例の下はポルトガル植民地。",
       "imageAsset": "images/history/map62.png",

@@ -78,7 +78,8 @@ function japaneseMeanings(question: InputQuestion): string[] {
 }
 
 function createWorksheetRow(question: Question, fallbackIndex: number): WorksheetRow | undefined {
-  if (question.type !== 'input' || question.imageAsset || question.direction === 'en_to_ja') return undefined;
+  if (question.type !== 'input' || question.imageAsset || question.visualReferences?.length || question.direction === 'en_to_ja')
+    return undefined;
   const answer = getCorrectAnswer(question);
   if (typeof answer !== 'string') return undefined;
 

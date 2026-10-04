@@ -97,7 +97,7 @@ function answerCandidates(question: InputQuestion): string[] {
 }
 
 function autoLanguageStudyData(question: Question): AutoLanguageStudyData | undefined {
-  if (question.type !== 'input' || question.imageAsset) return undefined;
+  if (question.type !== 'input' || question.imageAsset || question.visualReferences?.length) return undefined;
   const prompt = question.prompt.trim();
   if (!prompt || hasHtml(question.prompt)) return undefined;
 

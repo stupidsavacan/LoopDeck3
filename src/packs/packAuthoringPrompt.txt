@@ -1,6 +1,6 @@
 # LoopDeck Pack Authoring Contract
 
-Authoring contract revision: 2026-10-01
+Authoring contract revision: 2026-10-04
 Target LoopDeck packVersion: 1
 Prompt target: modern reasoning models including GPT-5.6 Sol
 
@@ -366,6 +366,28 @@ Runtime rules:
 For explicit two-sided study, `sideChoiceCandidates` may provide different candidate sets for `front_to_back` and `back_to_front` using the same structure and rules.
 
 ## 8. Images and image-grounded questions
+
+### Question-specific reference colors and patterns
+
+Use optional `visualReferences` when the source question asks the learner to identify a color or pattern in a map legend, chart, or image. The references appear beside the question/image before answering, in array order. Describe the visual cue without naming the answer. Never invent a source legend or use these swatches as a replacement for the authoritative figure.
+
+```json
+"visualReferences": [
+  { "type": "color", "color": "#EDB0AA", "label": "上の塗りつぶし：うすい赤の面塗り" },
+  { "type": "stripe", "color": "#EF8A84", "backgroundColor": "#FFFFFF", "angle": 90, "spacing": 11, "lineWidth": 4, "label": "下の縦線：赤い縦線模様" },
+  { "type": "dots", "color": "#2563EB", "backgroundColor": "#EFF6FF", "spacing": 12, "lineWidth": 4, "shape": "circle", "label": "青い水玉" }
+]
+```
+
+Each question may have 0–16 references. Each reference requires `type`, a non-empty plain-text `label` (at most 500 characters), and `color` in six-digit `#RRGGBB` form.
+- `type`: `color` (solid fill), `stripe` (parallel stripes), `grid` (square grid), `crosshatch` (crossed diagonal lines), `dots` (round dots), or `checker` (checkerboard).
+- Optional `shape`: `rectangle` (default) or `circle`, for any type.
+- All patterns accept optional `backgroundColor` (six-digit hex, default `#FFFFFF`) and `spacing` (repeat distance in CSS pixels, finite number 4–64, default 12). For `checker`, spacing is the size of one square.
+- `stripe`, `grid`, and `crosshatch` accept `angle` (finite number 0–180 degrees): 0 gives horizontal stripes, 90 vertical stripes, 45 diagonal stripes. Defaults: stripe/grid 90, crosshatch 45; grid/crosshatch add a perpendicular second set of lines.
+- `stripe`, `grid`, `crosshatch`, and `dots` accept `lineWidth` (finite number 1–32, default 2, strictly less than spacing). For dots, this is the dot diameter.
+- `color` accepts no pattern parameters. `dots` and `checker` accept no angle; `checker` accepts no lineWidth. Unknown fields are rejected.
+- Only these declarative fields are allowed: never supply CSS expressions, HTML, SVG, URLs, data URLs, scripts, or arbitrary style fields. Labels and prompts remain plain text.
+- The metadata survives JSON/ZIP export/import and backups. Swatches need no separate image asset; use ZIP when the question also needs an imageAsset.
 
 Optional image references use `imageAsset`:
 

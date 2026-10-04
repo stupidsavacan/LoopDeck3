@@ -66,6 +66,24 @@ export interface ModuleInfo {
   questionIds: string[];
 }
 
+interface VisualReferenceBase {
+  label: string;
+  color: string;
+  shape?: 'rectangle' | 'circle';
+}
+
+interface PatternReferenceBase extends VisualReferenceBase {
+  backgroundColor?: string;
+  /** Pattern repeat distance in CSS pixels. */
+  spacing?: number;
+}
+
+export type VisualReference =
+  | (VisualReferenceBase & { type: 'color' })
+  | (PatternReferenceBase & { type: 'stripe' | 'grid' | 'crosshatch'; angle?: number; lineWidth?: number })
+  | (PatternReferenceBase & { type: 'dots'; lineWidth?: number })
+  | (PatternReferenceBase & { type: 'checker' });
+
 export interface BaseQuestion {
   id: string;
   moduleId: string;
@@ -73,6 +91,7 @@ export interface BaseQuestion {
   prompt: string;
   explanation?: string;
   imageAsset?: string;
+  visualReferences?: VisualReference[];
   category?: string;
   number?: number;
   example?: string;

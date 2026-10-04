@@ -13,6 +13,7 @@ import type { QuizDataStore } from '../storage/storageTypes';
 import { button, clear, el, toast } from '../ui/dom';
 import { appendIconLabel } from '../ui/icons';
 import { appendQuizResult, renderQuestionImage, renderQuizMeta, renderSessionSummary } from '../ui/inlineQuizView';
+import { renderQuestionVisualReferences } from '../ui/questionVisualReferences';
 
 export interface InlineQuizCallbacks {
   onSessionChange(session: QuizSession): void;
@@ -83,6 +84,7 @@ export function renderInlineQuiz(
       : [];
   const answerMode = resolveQuizAnswerMode(question, requestedAnswerFormat, generatedChoices, nativeChoices.length);
   const card = el('section', 'quiz-card');
+  if (question.imageAsset) card.classList.add('with-question-image');
   const answerArea = el('div', 'answer-area');
   const controls = el('div', 'quiz-controls');
   const resultArea = el('div', 'result-area');
@@ -338,6 +340,8 @@ export function renderInlineQuiz(
   }
   const image = renderQuestionImage(question, options.resolveImageAsset ?? (async () => undefined));
   if (image) card.append(image);
+  const visualReferences = renderQuestionVisualReferences(question);
+  if (visualReferences) card.append(visualReferences);
   card.append(answerArea, controls, resultArea);
   container.append(card);
   window.requestAnimationFrame(() => {
