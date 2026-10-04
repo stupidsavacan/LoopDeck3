@@ -160,6 +160,33 @@ describe('study preference storage', () => {
 });
 
 describe('module screen study preferences', () => {
+  it('offers cards fourth, preserves automatic settings, and leaves question direction available', async () => {
+    const pack = testPack(2);
+    const root = document.createElement('div');
+    await renderModuleScreen(screenContext({ root, catalog: resolveActivePacks([pack]), moduleId: moduleInfo.id }));
+    const format = fieldSelect(root, '回答形式');
+    expect([...format.options].map((option) => option.textContent)).toEqual(['自動', '4択', '入力', 'カード']);
+    const autoNext = settingCheckbox(root, '正解時');
+    const autoReveal = settingCheckbox(root, '10秒無操作');
+    autoNext.checked = true;
+    change(autoNext);
+    autoReveal.checked = true;
+    change(autoReveal);
+    format.value = 'flashcard';
+    change(format);
+    expect(autoNext.disabled).toBe(true);
+    expect(autoReveal.disabled).toBe(true);
+    expect(autoNext.checked).toBe(true);
+    expect(autoReveal.checked).toBe(true);
+    expect(fieldSelect(root, '出題形式').disabled).toBe(false);
+    expect(root.querySelector<HTMLElement>('.flashcard-toggle-notice')?.hidden).toBe(false);
+    format.value = 'input';
+    change(format);
+    expect(autoNext.disabled).toBe(false);
+    expect(autoReveal.disabled).toBe(false);
+    expect(autoNext.checked).toBe(true);
+    expect(autoReveal.checked).toBe(true);
+  });
   it('persists changes immediately and restores them without starting a session', async () => {
     const pack = testPack();
     const view = resolveActivePacks([pack]);

@@ -11,6 +11,7 @@ import { renderImportScreen } from '../screens/importScreen';
 import { renderPdfWorksheetScreen } from '../screens/pdfWorksheetScreen';
 import { renderDebugLogScreen } from '../screens/debugLogScreen';
 import { disposeInlineQuizzes } from '../screens/inlineQuiz';
+import { disposeFlashcardSessions } from '../screens/flashcardSession';
 import { renderBottomNav } from '../ui/bottomNav';
 import { button, el } from '../ui/dom';
 import { renderLoading } from '../ui/loading';
@@ -64,6 +65,7 @@ export class StudyApplication {
     if (!this.active) return;
     // The current lease still owns its last visible-time checkpoint here.
     disposeInlineQuizzes(this.root);
+    disposeFlashcardSessions(this.root);
     this.active = false;
     this.unsubscribeCatalog?.();
     this.unsubscribeCatalog = undefined;
@@ -98,6 +100,7 @@ export class StudyApplication {
     if (location.hash !== hash) history.pushState(null, '', hash);
     this.currentHash = hash;
     disposeInlineQuizzes(this.root);
+    disposeFlashcardSessions(this.root);
     const lease = this.coordinator.begin();
     this.root.inert = true;
     this.root.setAttribute('aria-busy', 'true');

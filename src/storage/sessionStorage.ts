@@ -85,7 +85,7 @@ function validSettings(value: unknown): value is StudySettings {
   const optionalEnum = (item: unknown, options: string[]) => item === undefined || (typeof item === 'string' && options.includes(item));
   return (
     optionalEnum(settings.filter, ['all', 'wrong', 'bookmarked']) &&
-    optionalEnum(settings.answerFormat, ['auto', 'choice', 'input']) &&
+    optionalEnum(settings.answerFormat, ['auto', 'choice', 'input', 'flashcard']) &&
     optionalEnum(settings.questionMode, ['as_stored', 'front_to_back', 'back_to_front', 'mixed'])
   );
 }

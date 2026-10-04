@@ -3,7 +3,7 @@ import { decodeStudyCategory, encodeStudyCategory } from '../core/studyCategory'
 
 const STUDY_PREFERENCES_VERSION = 1;
 const QUESTION_LIMITS = new Set<StudySettings['questionLimit']>([10, 20, 50, 'all']);
-const ANSWER_FORMATS = new Set(['auto', 'choice', 'input']);
+const ANSWER_FORMATS = new Set(['auto', 'choice', 'input', 'flashcard']);
 const BOOLEAN_KEYS = ['shuffle', 'autoNext', 'autoRevealAfterIdle', 'showExample', 'showNumber', 'showCategory'] as const;
 
 type StoredBooleanKey = (typeof BOOLEAN_KEYS)[number];

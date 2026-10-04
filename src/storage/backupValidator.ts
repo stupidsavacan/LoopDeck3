@@ -20,7 +20,7 @@ import type { StudyBackup, StoredPackAsset } from './storageTypes';
 
 const ANSWER_RESULTS = new Set<AnswerResult>(['correct', 'wrong', 'revealed']);
 const ATTEMPT_MODES = new Set(['normal', 'review']);
-const ANSWER_FORMATS = new Set<AnswerFormat>(['auto', 'choice', 'input']);
+const ANSWER_FORMATS = new Set<AnswerFormat>(['auto', 'choice', 'input', 'flashcard']);
 const QUESTION_MODES = new Set<ConcreteStudyQuestionMode>(['as_stored', 'front_to_back', 'back_to_front']);
 const REVIEW_STATES = new Set<ReviewState>(['new', 'learning', 'review', 'relearning', 'leech', 'mastered', 'suspended']);
 const REVIEW_RATINGS = new Set<ReviewRating>(['again', 'hard', 'good', 'easy']);

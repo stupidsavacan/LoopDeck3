@@ -18,7 +18,8 @@ import { readStudyPreferences, sanitizeStudyPreferences, writeStudyPreferences }
 import { button, clear, el, toast } from '../ui/dom';
 import { appendIconLabel, createUiIcon, iconNameForModule } from '../ui/icons';
 import { moduleMeta } from '../ui/modulePresentation';
-import { renderInlineQuiz } from './inlineQuiz';
+import { renderInlineQuiz, disposeInlineQuizzes } from './inlineQuiz';
+import { renderFlashcardSession, disposeFlashcardSessions } from './flashcardSession';
 
 type ToggleSettingKey = 'shuffle' | 'autoNext' | 'autoRevealAfterIdle' | 'showExample' | 'showNumber' | 'showCategory';
 
@@ -187,7 +188,8 @@ export async function renderModuleScreen(context: ScreenContext & { moduleId: st
   for (const [value, label] of [
     ['auto', '自動'],
     ['choice', '4択'],
-    ['input', '入力']
+    ['input', '入力'],
+    ['flashcard', 'カード']
   ] as const) {
     const option = el('option', '', label) as HTMLOptionElement;
     option.value = value;
@@ -196,6 +198,7 @@ export async function renderModuleScreen(context: ScreenContext & { moduleId: st
   answerField.select.value = settings.answerFormat ?? 'auto';
   answerField.select.onchange = () => {
     settings.answerFormat = answerField.select.value as StudySettings['answerFormat'];
+    updateFlashcardToggles();
     persistStudyPreferences();
   };
 
@@ -225,11 +228,13 @@ export async function renderModuleScreen(context: ScreenContext & { moduleId: st
     ['showNumber', '番号表示'],
     ['showCategory', 'カテゴリ表示']
   ];
+  const autoToggles: HTMLInputElement[] = [];
   for (const [key, label] of toggles) {
     const wrap = el('label', 'check-label');
     const input = document.createElement('input');
     input.type = 'checkbox';
     input.checked = Boolean(settings[key]);
+    if (key === 'autoNext' || key === 'autoRevealAfterIdle') autoToggles.push(input);
     input.onchange = () => {
       settings[key] = input.checked;
       persistStudyPreferences();
@@ -237,6 +242,14 @@ export async function renderModuleScreen(context: ScreenContext & { moduleId: st
     wrap.append(input, document.createTextNode(` ${label}`));
     settingRow.append(wrap);
   }
+  const flashcardNotice = el('p', 'flashcard-toggle-notice', 'カードでは自動で次へ・無操作で答えを表示は適用されません。');
+  function updateFlashcardToggles(): void {
+    const flashcard = settings.answerFormat === 'flashcard';
+    for (const input of autoToggles) input.disabled = flashcard;
+    flashcardNotice.hidden = !flashcard;
+  }
+  updateFlashcardToggles();
+  settingsCard.append(flashcardNotice);
   settingsCard.append(settingRow, el('p', 'hint', '通常はシャッフルONで使います。必要なら問題数や範囲を絞れます。'));
 
   const actions = el('section', 'card action-card module-secondary-actions');
@@ -249,12 +262,15 @@ export async function renderModuleScreen(context: ScreenContext & { moduleId: st
   }
 
   function mountSession(session: QuizSession): void {
+    disposeInlineQuizzes(quizMount);
+    disposeFlashcardSessions(quizMount);
     session.sourceByQuestionId ??= sources;
     persistSession(session);
     const update = (next: QuizSession) => {
       mountSession(next);
     };
-    renderInlineQuiz(
+    const renderSession = session.settings.answerFormat === 'flashcard' ? renderFlashcardSession : renderInlineQuiz;
+    renderSession(
       quizMount,
       session,
       {
