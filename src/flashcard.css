@@ -27,18 +27,33 @@
   height: 48px;
   flex-shrink: 0;
 }
-.flashcard-header .flashcard-back-button {
+.flashcard-header-leading,
+.flashcard-header .flashcard-bookmark-button {
+  width: 40px;
+  height: 40px;
   min-height: 40px;
+}
+.flashcard-header .flashcard-bookmark-button {
+  padding: 0;
   border: 1px solid var(--editorial-line);
   border-radius: 13px;
   background: rgba(255, 255, 255, 0.78);
+  color: var(--editorial-ink);
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 0 12px;
-  color: var(--editorial-ink);
-  font-size: 0.79rem;
-  font-weight: 800;
+  justify-content: center;
+}
+.flashcard-header .flashcard-bookmark-button .icon-button-label {
+  display: none;
+}
+.flashcard-header .flashcard-bookmark-button .icon-button-mark {
+  width: 18px;
+  height: 18px;
+}
+.flashcard-header .flashcard-bookmark-button.selected {
+  border-color: #c7d5fb;
+  background: #eef3ff;
+  color: var(--editorial-blue);
 }
 .flashcard-brand {
   text-align: center;
@@ -365,9 +380,13 @@
   background: #fff;
   display: grid;
   place-items: center;
-  font-size: 0.84rem;
   font-style: normal;
   flex-shrink: 0;
+}
+.flashcard-arrow-svg {
+  width: 15px;
+  height: 15px;
+  display: block;
 }
 .flashcard-key-hint {
   text-align: center;
@@ -568,21 +587,6 @@
   font-size: 0.78rem;
   line-height: 1.55;
 }
-.flashcard-custom-start {
-  width: 100%;
-  min-height: 50px;
-  margin-bottom: 14px;
-  border: 0;
-  border-radius: 14px;
-  background: var(--editorial-ink);
-  color: #fff;
-  font-weight: 900;
-  cursor: pointer;
-}
-.flashcard-custom-start:focus-visible {
-  outline: 3px solid var(--editorial-blue);
-  outline-offset: 3px;
-}
 @media (max-width: 640px) {
   .flashcard-session {
     padding-left: 16px;
@@ -590,14 +594,6 @@
   }
   .flashcard-brand {
     font-size: 0.56rem;
-  }
-  .flashcard-header .flashcard-back-button {
-    width: 40px;
-    padding: 0;
-    justify-content: center;
-  }
-  .flashcard-back-button span {
-    display: none;
   }
   .flashcard-stage {
     min-height: 430px;
