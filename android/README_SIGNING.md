@@ -2,7 +2,7 @@
 
 Build `LoopDeck3.html` first with `npm run build:single`. Then run Gradle `assembleDebug` in this directory, or use the debug workflow. The Android application ID is `com.loopdeck3.app` (debug adds `.debug`).
 
-Release tags and manual runs use four GitHub Actions secrets:
+Every push/merge to main and manual release runs use four GitHub Actions secrets:
 
 - `ANDROID_KEYSTORE_BASE64`
 - `KEYSTORE_PASSWORD`

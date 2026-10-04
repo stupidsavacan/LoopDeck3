@@ -1,13 +1,16 @@
 name: Release HTML and APK
 on:
   push:
-    tags: ['v*']
+    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read
 concurrency:
-  group: loopdeck3-release
-  cancel-in-progress: false
+  group: loopdeck3-release-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  NODE_ENV: development
+  NPM_CONFIG_PRODUCTION: "false"
 jobs:
   release:
     runs-on: ubuntu-latest
@@ -22,22 +25,8 @@ jobs:
           node-version: 20.19.0
           cache: npm
       - run: npm ci --include=dev
-      - name: Validate release version
-        id: version
-        shell: bash
-        run: |
-          set -euo pipefail
-          version=$(node -p "require('./package.json').version")
-          [[ "$version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]
-          major=${BASH_REMATCH[1]}; minor=${BASH_REMATCH[2]}; patch=${BASH_REMATCH[3]}
-          test "$minor" -lt 1000 && test "$patch" -lt 1000
-          code=$((10#$major * 1000000 + 10#$minor * 1000 + 10#$patch))
-          test "$code" -gt 0 && test "$code" -le 2100000000
-          tag="v$version"
-          if [ "$GITHUB_REF_TYPE" = tag ]; then test "$GITHUB_REF_NAME" = "$tag"; fi
-          echo "name=$version" >> "$GITHUB_OUTPUT"
-          echo "code=$code" >> "$GITHUB_OUTPUT"
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+      - name: Derive traceable Android version
+        run: node scripts/android-version.mjs
       - run: npm run verify
       - run: npm run build:single
       - run: npx playwright install --with-deps chromium
@@ -76,7 +65,7 @@ jobs:
           PY
       - name: Package the release HTML in WebView
         working-directory: android
-        run: gradle --no-daemon assembleRelease -PappVersionName=${{ steps.version.outputs.name }} -PappVersionCode=${{ steps.version.outputs.code }}
+        run: gradle --no-daemon assembleRelease -PappVersionName="$LOOPDECK_VERSION_NAME" -PappVersionCode="$LOOPDECK_VERSION_CODE"
       - name: Verify signature and identical HTML payload
         run: |
           set -euo pipefail
@@ -90,8 +79,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          gh release create '${{ steps.version.outputs.tag }}' LoopDeck3.apk LoopDeck3.html SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title 'LoopDeck3 ${{ steps.version.outputs.name }}' --notes "Offline HTML application with a WebView host. APK embeds the exact HTML attached to this release. No old user-data or internal API compatibility is provided. Source: $GITHUB_SHA. Independent Android app ID: com.loopdeck3.app." --draft
-          gh release edit '${{ steps.version.outputs.tag }}' --repo "$GITHUB_REPOSITORY" --draft=false --latest
+          release_tag="signed-apk-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
+          release_title="LoopDeck3 build ${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}"
+          apk_asset_name="LoopDeck3-signed-release-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}.apk"
+          html_asset_name="LoopDeck3-single-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}.html"
+          cp LoopDeck3.apk "$apk_asset_name"
+          cp LoopDeck3.html "$html_asset_name"
+          sha256sum "$apk_asset_name" "$html_asset_name" > SHA256SUMS.txt
+          gh release create "$release_tag" "$apk_asset_name" "$html_asset_name" SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "$release_title" --notes "Signed APK and single-file HTML built from ${GITHUB_SHA}. APK embeds the exact HTML attached to this release. Independent Android app ID: com.loopdeck3.app." --draft
+          gh release edit "$release_tag" --repo "$GITHUB_REPOSITORY" --draft=false --latest
       - uses: actions/upload-artifact@v7
         if: always()
         with:
