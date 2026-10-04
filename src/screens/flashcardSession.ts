@@ -3,6 +3,8 @@ import { QuizController } from '../core/quizController';
 import { currentQuestion, isSessionComplete, type QuizSession } from '../core/sessionEngine';
 import { writeDebugLog } from '../debug/debugLog';
 import { button, clear, el, toast } from '../ui/dom';
+import { createUiIcon } from '../ui/icons';
+import { createQuizBookmarkButton } from '../ui/quizBookmark';
 import { renderFlashcardFace, renderFlashcardHeader, renderFlashcardProgress, renderFlashcardResult } from '../ui/flashcardView';
 import type { InlineQuizCallbacks, InlineQuizOptions } from './inlineQuiz';
 
@@ -32,8 +34,8 @@ export function renderFlashcardSession(
   const back = () => {
     if (isCurrent()) callbacks.onComplete();
   };
-  screen.append(renderFlashcardHeader(session, back));
   if (isSessionComplete(session)) {
+    screen.append(renderFlashcardHeader(session));
     const restart = (onlyAgain: boolean) => {
       if (!isCurrent()) return;
       const next = restartFlashcardSession(session, onlyAgain);
@@ -58,7 +60,9 @@ export function renderFlashcardSession(
   }
   const question = currentQuestion(session);
   if (!question) return;
-  screen.append(renderFlashcardProgress(session));
+  const bookmark = createQuizBookmarkButton(question.id, isCurrent, options.store);
+  bookmark.classList.add('flashcard-bookmark-button');
+  screen.append(renderFlashcardHeader(session, bookmark), renderFlashcardProgress(session));
   const stage = el('section', 'flashcard-stage');
   const stack = el('div', 'flashcard-stack');
   const wrap = el('div', 'flashcard-wrap');
@@ -80,10 +84,16 @@ export function renderFlashcardSession(
   stage.append(stack, againLabel, knownLabel);
   const controls = el('div', 'flashcard-controls');
   const again = button('', 'btn flashcard-again');
-  again.append(el('i', 'flashcard-arrow', '←'), document.createTextNode(' 知らない'));
+  const againArrow = el('i', 'flashcard-arrow');
+  againArrow.append(createUiIcon('arrowLeft', 'flashcard-arrow-svg'));
+  again.append(againArrow, document.createTextNode('知らない'));
+  again.setAttribute('aria-label', '知らない');
   const flipButton = button('タップで表 / 裏', 'btn ghost flashcard-flip');
   const known = button('', 'btn flashcard-known');
-  known.append(document.createTextNode('知ってる '), el('i', 'flashcard-arrow', '→'));
+  const knownArrow = el('i', 'flashcard-arrow');
+  knownArrow.append(createUiIcon('arrowRight', 'flashcard-arrow-svg'));
+  known.append(document.createTextNode('知ってる'), knownArrow);
+  known.setAttribute('aria-label', '知ってる');
   controls.append(again, flipButton, known);
   const status = el('div', 'flashcard-status');
   status.setAttribute('aria-live', 'polite');
