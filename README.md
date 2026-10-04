@@ -6,8 +6,8 @@ HTMLを中心に動くオフライン学習アプリ。Android版は同じHTML�
 
 [Releases](https://github.com/stupidsavacan/LoopDeck3/releases/latest)から以下を取得します。このリポジトリとリリースは非公開です。
 
-- `LoopDeck3.html`: 保存してブラウザで開く単体HTML
-- `LoopDeck3.apk`: 署名付きAndroidアプリ
+- `LoopDeck3-single-<run>-<attempt>.html`: 保存してブラウザで開く単体HTML
+- `LoopDeck3-signed-release-<run>-<attempt>.apk`: 署名付きAndroidアプリ
 - `SHA256SUMS.txt`: 両ファイルの検証用ハッシュ
 
 AndroidアプリIDは `com.loopdeck3.app`。LoopDeck2と別アプリとして共存します。旧アプリの保存領域とバックアップは扱いません。0.2.1では保存形式を新設したため、0.1.xのデータも読み込みません。HTMLの保存領域もブラウザ・ファイルの場所によって異なるため、移動前にバックアップしてください。
@@ -32,8 +32,8 @@ npm run code:map
 
 ## リリース
 
-`package.json` のバージョンを更新して `v<version>` タグをpushします。手動実行もできます。公開前に型・静的検査・単体テスト・ブラウザQA・署名検証・APK内HTMLとの完全一致を確認します。失敗したビルドは公開しません。
+mainへのマージ・pushで、署名付きAPKと単体HTMLを自動生成し、ReleaseのLatestに掲載します。L2と同じ `signed-apk-<run>-<attempt>` タグとビルド番号の方式を使います。タグの手動pushや `package.json` のバージョン更新は不要です。手動実行も同じ方式で新しいReleaseを作成します。公開前に型・静的検査・単体テスト・ブラウザQA・署名検証・APK内HTMLとの完全一致を確認します。失敗したビルドは公開しません。
 
-mainへのマージでは、Actionsの `Build Android Debug APK` がHTMLとデバッグAPKを生成し、`LoopDeck3-debug-apk` 成果物としてまとめて保存します。Releaseに載る署名付きAPKとHTMLは、バージョンタグによるリリース手順で生成します。
+Actionsの `Build Android Debug APK` もHTMLとデバッグAPKを生成し、`LoopDeck3-debug-apk` 成果物としてまとめて保存します。普段のダウンロードにはReleaseの署名付きAPK・HTMLを使用します。
 
 署名鍵の扱いは [android/README_SIGNING.md](android/README_SIGNING.md)。Androidの実機でのファイル選択・保存・復帰はブラウザQAとは別に確認が必要です。
