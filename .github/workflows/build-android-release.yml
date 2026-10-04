@@ -27,13 +27,19 @@ jobs:
       - run: npm ci --include=dev
       - name: Derive traceable Android version
         run: node scripts/android-version.mjs
-      - run: npm run verify
-      - run: npm run build:single
-      - run: npx playwright install --with-deps chromium
-      - name: Exercise the exact release HTML
-        env:
-          QA_BROWSER: chromium
-        run: npx playwright test
+
+      # Full unit/browser QA runs in ci.yml. Release only rebuilds and
+      # validates the exact artifacts that will be published.
+      - name: Build release single HTML
+        run: npm run build:single
+      - name: Smoke-check release HTML
+        run: |
+          set -euo pipefail
+          test -s LoopDeck3.html
+          grep -qi '<!doctype html>' LoopDeck3.html
+          grep -q 'id="app"' LoopDeck3.html
+          echo "Release HTML size: $(wc -c < LoopDeck3.html) bytes"
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -92,10 +98,7 @@ jobs:
         if: always()
         with:
           name: release-evidence
-          path: |
-            qa-results/
-            qa-report/
-            SHA256SUMS.txt
+          path: SHA256SUMS.txt
           if-no-files-found: warn
       - name: Remove temporary signing files
         if: always()
