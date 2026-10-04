@@ -47,6 +47,7 @@ export function buildReviewCenterModel(
   const questionsById = new Map(questions.map((question) => [question.id, question]));
   const recentAttempts = filterRecentAttempts(attempts, now, DEFAULT_REVIEW_LOOKBACK_DAYS);
   const scopedAttempts = scope === 'recent' ? recentAttempts : attempts;
+  const objectiveAttempts = scopedAttempts.filter((attempt) => attempt.answerMode !== 'flashcard');
   const activeModuleIds = new Set(scopedAttempts.map((attempt) => attempt.moduleId));
   const recentQuestionIds = new Set(recentAttempts.map((attempt) => attempt.questionId));
   const validReviewCards = reviewCards.filter((card) => {
@@ -56,13 +57,13 @@ export function buildReviewCenterModel(
   const scopedReviewCards =
     scope === 'recent' ? validReviewCards.filter((card) => recentQuestionIds.has(card.questionId)) : validReviewCards;
   const scoreOptions = scope === 'recent' ? { now, halfLifeDays: DEFAULT_REVIEW_SCORE_HALF_LIFE_DAYS } : {};
-  const aggregation = aggregateReviewAttempts(scopedAttempts);
-  const queue = buildReviewQueue(scopedAttempts, questions, scoreOptions, aggregation);
-  const mistakes = buildMistakeQuestions(questions, scopedAttempts, aggregation);
-  const analyses = analyzeProblems(scopedAttempts, questions, scoreOptions, aggregation)
+  const aggregation = aggregateReviewAttempts(objectiveAttempts);
+  const queue = buildReviewQueue(objectiveAttempts, questions, scoreOptions, aggregation);
+  const mistakes = buildMistakeQuestions(questions, objectiveAttempts, aggregation);
+  const analyses = analyzeProblems(objectiveAttempts, questions, scoreOptions, aggregation)
     .filter((item) => item.needsAttention)
     .slice(0, 8);
-  const weak = summarizeWeakModules(scopedAttempts, aggregation);
+  const weak = summarizeWeakModules(objectiveAttempts, aggregation);
   const schedule = summarizeReviewSchedule(scopedReviewCards, now);
   const allSchedule = summarizeReviewSchedule(validReviewCards, now);
   const buckets = bucketReviewCards(scopedReviewCards, now);

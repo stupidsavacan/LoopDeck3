@@ -61,4 +61,16 @@ describe('review center model', () => {
     expect(model.srsQueue.map((item) => item.questionId)).toEqual(['recent']);
     expect(model.hiddenDueCount).toBe(1);
   });
+
+  it('keeps flashcard AGAIN in SRS while excluding it from objective mistake review', () => {
+    const now = new Date('2026-09-27T00:00:00.000Z');
+    const flashcard = { ...attempt('recent', 1), attemptId: 'flash-again', answerMode: 'flashcard' as const };
+    const model = buildReviewCenterModel([flashcard], [card('recent')], questions, 'recent', now);
+
+    expect(model.queue).toHaveLength(0);
+    expect(model.mistakes).toHaveLength(0);
+    expect(model.analyses).toHaveLength(0);
+    expect(model.weak).toEqual({});
+    expect(model.srsQueue.map((item) => item.questionId)).toEqual(['recent']);
+  });
 });

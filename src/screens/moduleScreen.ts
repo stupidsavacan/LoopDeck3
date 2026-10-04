@@ -63,7 +63,9 @@ export async function renderModuleScreen(context: ScreenContext & { moduleId: st
   storageScope.packRevision = revisions.get(modulePackId ?? '') ?? 'builtin';
   storageScope.resetEpoch = revisions.get('') ?? '0';
   if (!isCurrent()) return;
-  const wrongIds = new Set(attempts.filter((attempt) => attempt.result !== 'correct').map((attempt) => attempt.questionId));
+  const wrongIds = new Set(
+    attempts.filter((attempt) => attempt.answerMode !== 'flashcard' && attempt.result !== 'correct').map((attempt) => attempt.questionId)
+  );
   const bookmarkIds = new Set(bookmarks);
   const wrongQuestions = questions.filter((question) => wrongIds.has(question.id));
   const bookmarkedQuestions = questions.filter((question) => bookmarkIds.has(question.id));
@@ -247,12 +249,10 @@ export async function renderModuleScreen(context: ScreenContext & { moduleId: st
     'flashcard-toggle-notice',
     'カード：タップで表裏を切り替え、左へスワイプで「知らない」、右へスワイプで「知ってる」。カードの向きは「出題形式」を使います。自動で次へ・無操作で答えを表示は適用されません。'
   );
-  const customStart = button('この設定で学習を始める →', 'flashcard-custom-start');
   function updateFlashcardToggles(): void {
     const flashcard = settings.answerFormat === 'flashcard';
     for (const input of autoToggles) input.disabled = flashcard;
     flashcardNotice.hidden = !flashcard;
-    customStart.hidden = !flashcard;
   }
   updateFlashcardToggles();
   settingsCard.append(flashcardNotice);
@@ -302,7 +302,6 @@ export async function renderModuleScreen(context: ScreenContext & { moduleId: st
   }
 
   start.onclick = () => startSession(settings, 'normal');
-  customStart.onclick = () => startSession(settings, 'normal');
 
   if (storedSession) {
     const resumeLabel =
@@ -370,7 +369,7 @@ export async function renderModuleScreen(context: ScreenContext & { moduleId: st
   customizeSummary.append(customizeTitle);
   customize.append(customizeSummary, settingsCard);
 
-  screen.append(header, info, quick, customize, customStart);
+  screen.append(header, info, quick, customize);
   if (actions.childElementCount) screen.append(actions);
   screen.append(quizMount);
   root.append(screen);

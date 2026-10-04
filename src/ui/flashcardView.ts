@@ -6,15 +6,12 @@ import { button, el } from './dom';
 import { renderQuestionImage } from './inlineQuizView';
 import { renderQuestionVisualReferences } from './questionVisualReferences';
 
-export function renderFlashcardHeader(session: QuizSession, onComplete: () => void): HTMLElement {
+export function renderFlashcardHeader(session: QuizSession, leading?: HTMLElement): HTMLElement {
   const header = el('header', 'flashcard-header');
-  const back = button('', 'btn ghost flashcard-back-button');
-  back.setAttribute('aria-label', '教材へ戻る');
-  back.append(el('b', '', '←'), el('span', '', '教材へ'));
-  back.onclick = onComplete;
   const sample = session.choicePool.find((question) => question.id === session.queue[0]?.id) ?? session.queue[0];
+  const leadingSlot = leading ?? el('span', 'flashcard-header-leading');
   header.append(
-    back,
+    leadingSlot,
     el('span', 'flashcard-brand', 'LOOPDECK · FLASHCARDS'),
     el('span', 'flashcard-direction', getStudyQuestionModeLabel(session.settings.questionMode ?? 'as_stored', sample))
   );

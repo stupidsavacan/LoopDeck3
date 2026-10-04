@@ -164,4 +164,21 @@ describe('analytics engine', () => {
     expect(byId.get('slow_correct')).toBeUndefined();
     expect(byId.get('repeated')).toBe(1);
   });
+
+  it('keeps flashcard self-ratings out of objective accuracy and mistake analytics', () => {
+    const flashcards: Attempt[] = [
+      { ...attempts[1], attemptId: 'fc-known', answerMode: 'flashcard', result: 'correct', input: '' },
+      { ...attempts[0], attemptId: 'fc-again', answerMode: 'flashcard', result: 'wrong', input: '' }
+    ];
+    const mixed = [...attempts, ...flashcards];
+    const now = new Date('2026-06-02T12:00:00.000Z');
+
+    expect(buildDailyStudyStats(mixed, 3, now)).toEqual(buildDailyStudyStats(attempts, 3, now));
+    expect(buildModuleStudyStats(mixed, modules)).toEqual(buildModuleStudyStats(attempts, modules));
+    expect(buildMistakeTrend(mixed, 2, now)).toEqual(buildMistakeTrend(attempts, 2, now));
+    expect(buildMistakeBreakdown(mixed, questions)).toEqual(buildMistakeBreakdown(attempts, questions));
+    expect(buildAnalyticsOverview(mixed, modules, questions, { dailyDays: 3, trendDays: 2, now })).toEqual(
+      buildAnalyticsOverview(attempts, modules, questions, { dailyDays: 3, trendDays: 2, now })
+    );
+  });
 });
