@@ -45,7 +45,11 @@ function setup(persist = vi.fn(async (_attempt: Attempt) => {}), session?: QuizS
   const quiz =
     session ?? createSession(module, [question, { ...question, id: 'flash-next', prompt: 'agree', answer: '賛成する' }], settings);
   const callbacks = { onSessionChange: vi.fn(), onSessionCheckpoint: vi.fn(), onComplete: vi.fn() };
-  const store = { recordAnswer: persist, hasBookmark: async () => false, setBookmark: async () => {} };
+  const store = {
+    recordAnswer: persist,
+    hasBookmark: vi.fn(async () => false),
+    setBookmark: vi.fn(async () => {})
+  };
   renderFlashcardSession(container, quiz, callbacks, { store });
   return { session: quiz, callbacks, store, persist, wrap: container.querySelector<HTMLElement>('.flashcard-wrap')! };
 }
@@ -59,6 +63,21 @@ function button(label: string): HTMLButtonElement {
 }
 
 describe('flashcard session rendering and lifecycle', () => {
+  it('uses the header slot for bookmarking, removes mid-session exit, and renders SVG judgment arrows', async () => {
+    const { store } = setup();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(container.querySelector('.flashcard-back-button')).toBeNull();
+    expect(container.querySelectorAll('.flashcard-arrow-svg')).toHaveLength(2);
+    const bookmark = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (item) => item.getAttribute('aria-label') === 'ブックマーク'
+    )!;
+    expect(bookmark).toBeDefined();
+    expect(bookmark.disabled).toBe(false);
+    bookmark.click();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(store.setBookmark).toHaveBeenCalledWith(question.id, true);
+    expect(bookmark.getAttribute('aria-label')).toBe('ブックマーク済み');
+  });
   it('pre-renders both faces, flips next frame on a tap, and does not save a judgment', async () => {
     const { wrap, persist, session } = setup();
     expect(container.querySelector('.flashcard-front')?.textContent).toContain(session.queue[0].prompt);
@@ -143,7 +162,7 @@ describe('flashcard session rendering and lifecycle', () => {
         })
     );
     const { callbacks } = setup(persist);
-    button('知ってる →').click();
+    button('知ってる').click();
     await vi.advanceTimersByTimeAsync(1000);
     expect(callbacks.onSessionChange).not.toHaveBeenCalled();
     expect(callbacks.onSessionCheckpoint).not.toHaveBeenCalled();
@@ -156,10 +175,10 @@ describe('flashcard session rendering and lifecycle', () => {
     const persist = vi.fn(async (_attempt: Attempt) => {});
     persist.mockRejectedValueOnce(new Error('disk full'));
     const { callbacks } = setup(persist);
-    button('知ってる →').click();
+    button('知ってる').click();
     await vi.advanceTimersByTimeAsync(300);
     expect(callbacks.onSessionChange).not.toHaveBeenCalled();
-    expect(button('知ってる →').disabled).toBe(true);
+    expect(button('知ってる').disabled).toBe(true);
     button('保存を再試行').click();
     await vi.advanceTimersByTimeAsync(300);
     expect(persist).toHaveBeenCalledTimes(2);
@@ -175,7 +194,7 @@ describe('flashcard session rendering and lifecycle', () => {
         })
     );
     const { callbacks } = setup(persist);
-    button('知ってる →').click();
+    button('知ってる').click();
     disposeFlashcardSessions(container);
     resolve();
     await vi.advanceTimersByTimeAsync(1000);
@@ -186,11 +205,11 @@ describe('flashcard session rendering and lifecycle', () => {
   });
   it('renders the full result and repeats missed/all queues with concrete directions preserved', async () => {
     const { callbacks } = setup();
-    button('知ってる →').click();
+    button('知ってる').click();
     await vi.advanceTimersByTimeAsync(280);
     const next = callbacks.onSessionChange.mock.calls[0][0];
     const second = setup(undefined, next);
-    button('← 知らない').click();
+    button('知らない').click();
     await vi.advanceTimersByTimeAsync(280);
     const complete = second.callbacks.onSessionChange.mock.calls[0][0];
     const result = setup(undefined, complete);
