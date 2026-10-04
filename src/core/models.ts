@@ -41,7 +41,7 @@ export interface SideChoiceCandidates {
   back_to_front?: ManualChoiceCandidates;
 }
 
-export type ReviewState = 'new' | 'review' | 'relearning' | 'leech' | 'mastered';
+export type ReviewState = 'new' | 'learning' | 'review' | 'relearning' | 'leech' | 'mastered' | 'suspended';
 export type ReviewRating = 'again' | 'hard' | 'good' | 'easy';
 
 export interface FolderInfo {
@@ -134,14 +134,24 @@ export interface Attempt {
   elapsedMs: number;
   mode: 'normal' | 'review';
   nearMiss?: boolean;
+  contentRetired?: boolean;
   hiddenTimeExcludedMs?: number;
   priorityDelta?: number;
   answerMode?: AnswerFormat;
   questionMode?: ConcreteStudyQuestionMode;
 }
 
+export interface QuizAnswerSource {
+  packId: string;
+  question: Question;
+  packRevision?: string;
+  resetEpoch?: string;
+  imageDataUrl?: string | null;
+}
+
 export interface ReviewCard {
   questionId: string;
+  questionMode?: ConcreteStudyQuestionMode;
   moduleId: string;
   state: ReviewState;
   dueAt: string | null;
@@ -163,6 +173,7 @@ export interface ReviewCard {
 
 export interface ReviewLog {
   reviewLogId: string;
+  questionMode?: ConcreteStudyQuestionMode;
   questionId: string;
   moduleId: string;
   reviewedAt: string;

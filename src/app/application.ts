@@ -19,7 +19,10 @@ import { navigationFor, parseRoute, routeHash, type AppRoute, type ScreenContext
 import { renderStartupError } from './errorView';
 
 type CatalogLoader = () => Promise<ResolvedPackView>;
-interface ApplicationDependencies { store?: StudyRepository; loadCatalog?: CatalogLoader; }
+interface ApplicationDependencies {
+  store?: StudyRepository;
+  loadCatalog?: CatalogLoader;
+}
 
 async function loadCatalog(store: StudyRepository): Promise<ResolvedPackView> {
   return resolveActivePacks([...loadBuiltinPacks(), ...(await store.getImportedPacks())]);
@@ -33,10 +36,15 @@ export class StudyApplication {
   private catalogLoaded = false;
   private active = false;
   private currentHash = '';
+  private unsubscribeCatalog?: () => void;
+  private catalogRefreshTimer?: number;
 
   private readonly catalogLoader: CatalogLoader;
   private readonly store: StudyRepository;
-  constructor(private readonly root: HTMLElement, dependencies: ApplicationDependencies = {}) {
+  constructor(
+    private readonly root: HTMLElement,
+    dependencies: ApplicationDependencies = {}
+  ) {
     this.store = dependencies.store ?? studyStore;
     this.catalogLoader = dependencies.loadCatalog ?? (() => loadCatalog(this.store));
   }
@@ -44,6 +52,7 @@ export class StudyApplication {
   start(): void {
     if (this.active) return;
     this.active = true;
+    this.unsubscribeCatalog = this.store.subscribePackChanges(this.catalogChanged);
     window.addEventListener('popstate', this.locationChanged);
     window.addEventListener('hashchange', this.locationChanged);
     const route = parseRoute(location.hash);
@@ -53,17 +62,35 @@ export class StudyApplication {
 
   dispose(): void {
     if (!this.active) return;
+    // The current lease still owns its last visible-time checkpoint here.
+    disposeInlineQuizzes(this.root);
     this.active = false;
+    this.unsubscribeCatalog?.();
+    this.unsubscribeCatalog = undefined;
     this.coordinator.begin();
     window.removeEventListener('popstate', this.locationChanged);
     window.removeEventListener('hashchange', this.locationChanged);
     for (const timer of this.timers) window.clearTimeout(timer);
     this.timers.clear();
-    disposeInlineQuizzes(this.root);
+    this.catalogRefreshTimer = undefined;
     this.root.inert = false;
     this.root.removeAttribute('aria-busy');
     this.root.replaceChildren();
   }
+
+  private readonly catalogChanged = (): void => {
+    if (!this.active) return;
+    this.catalogLoaded = false;
+    if (this.catalogRefreshTimer !== undefined) return;
+    // Let the command's success/navigation callback finish before remounting.
+    const timer = window.setTimeout(() => {
+      this.timers.delete(timer);
+      this.catalogRefreshTimer = undefined;
+      if (this.active) this.navigate(parseRoute(location.hash));
+    }, 0);
+    this.catalogRefreshTimer = timer;
+    this.timers.add(timer);
+  };
 
   navigate(route: AppRoute): void {
     if (!this.active) return;
@@ -91,7 +118,9 @@ export class StudyApplication {
       root: this.root,
       store: this.store,
       catalog: this.catalog,
-      navigation: navigationFor(route => { if (this.active && lease.isCurrent()) this.navigate(route); }),
+      navigation: navigationFor((route) => {
+        if (this.active && lease.isCurrent()) this.navigate(route);
+      }),
       resolveImage: createQuestionImageAssetResolver(this.catalog, this.store),
       isCurrent: () => this.active && lease.isCurrent(),
       refreshCatalog: async () => {
@@ -118,13 +147,27 @@ export class StudyApplication {
       if (!current()) return;
       const context = this.context(lease);
       switch (route.name) {
-        case 'home': renderHomeScreen(context); break;
-        case 'module': await renderModuleScreen({ ...context, moduleId: route.moduleId }); break;
-        case 'review': await renderReviewCenter(context); break;
-        case 'graphs': await renderGraphsScreen(context); break;
-        case 'import': await renderImportScreen(context); break;
-        case 'pdfWorksheet': await renderPdfWorksheetScreen(context); break;
-        case 'debugLog': renderDebugLogScreen(context); break;
+        case 'home':
+          renderHomeScreen(context);
+          break;
+        case 'module':
+          await renderModuleScreen({ ...context, moduleId: route.moduleId });
+          break;
+        case 'review':
+          await renderReviewCenter(context);
+          break;
+        case 'graphs':
+          await renderGraphsScreen(context);
+          break;
+        case 'import':
+          await renderImportScreen(context);
+          break;
+        case 'pdfWorksheet':
+          await renderPdfWorksheetScreen(context);
+          break;
+        case 'debugLog':
+          renderDebugLogScreen(context);
+          break;
       }
       if (current()) this.appendShell(route, context.navigation);
     } finally {
@@ -139,10 +182,14 @@ export class StudyApplication {
 
   private appendShell(route: AppRoute, navigation: Navigation): void {
     if (route.name === 'module' || route.name === 'debugLog') return;
-    this.root.append(renderBottomNav(
-      route.name === 'home' || route.name === 'review' || route.name === 'graphs' ? route.name : undefined,
-      navigation.home, navigation.review, navigation.graphs
-    ));
+    this.root.append(
+      renderBottomNav(
+        route.name === 'home' || route.name === 'review' || route.name === 'graphs' ? route.name : undefined,
+        navigation.home,
+        navigation.review,
+        navigation.graphs
+      )
+    );
     if (route.name !== 'home') return;
     const screen = this.root.querySelector('main.home-screen');
     if (!screen) return;

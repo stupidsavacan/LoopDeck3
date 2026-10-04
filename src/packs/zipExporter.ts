@@ -1,6 +1,6 @@
 import JSZip from 'jszip';
 import type { LoopDeckPack } from '../core/models';
-import { isSafeImageAssetRef, isSafeImageDataUrl } from './assetSafety';
+import { extensionOf, isSafeImageAssetRef, isSafeImageDataUrl } from './assetSafety';
 import type { ImportedPackAsset } from './packTypes';
 
 export interface LoopDeckZipFiles {
@@ -32,9 +32,13 @@ function createZip(pack: LoopDeckPack, assets: ImportedPackAsset[] = []): JSZip 
   zip.file('questions.json', stringifyJson(files.questions));
 
   const referencedPaths = new Set(pack.questions.map((question) => question.imageAsset).filter((path): path is string => Boolean(path)));
-  for (const asset of assets) {
-    if (asset.packId !== pack.packId || !referencedPaths.has(asset.path)) continue;
-    if (!isSafeImageAssetRef(asset.path) || !isSafeImageDataUrl(asset.dataUrl)) continue;
+  for (const path of referencedPaths) {
+    const asset = assets.find((item) => item.packId === pack.packId && item.path === path);
+    if (!isSafeImageAssetRef(path) || !asset || !isSafeImageDataUrl(asset.dataUrl))
+      throw new Error(`画像ファイルがないか破損しています。ZIPを書き出せません: ${path}`);
+    const mime = extensionOf(path) === '.png' ? 'image/png' : extensionOf(path) === '.webp' ? 'image/webp' : 'image/jpeg';
+    if (asset.mimeType.toLowerCase() !== mime || !asset.dataUrl.toLowerCase().startsWith(`data:${mime};base64,`))
+      throw new Error(`Image type does not match its filename: ${path}`);
     zip.file(asset.path.replace(/\\/g, '/'), assetBase64(asset.dataUrl), { base64: true });
   }
 
@@ -59,6 +63,8 @@ export function createLoopDeckZipFiles(pack: LoopDeckPack): LoopDeckZipFiles {
 }
 
 export function stringifyLoopDeckJson(pack: LoopDeckPack): string {
+  if (pack.questions.some((question) => question.imageAsset))
+    throw new Error('画像ファイルを含む教材はZIPで書き出してください。JSONでは画像を保存できません。');
   return stringifyJson(pack);
 }
 

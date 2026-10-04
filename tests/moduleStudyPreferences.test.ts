@@ -164,7 +164,13 @@ describe('module screen study preferences', () => {
     const pack = testPack();
     const view = resolveActivePacks([pack]);
     const root = document.createElement('div');
-    await renderModuleScreen(screenContext({ root: root, catalog: view, moduleId: moduleInfo.id, navigation: { home: () => {}, review: () => {}, graphs: () => {} } })
+    await renderModuleScreen(
+      screenContext({
+        root: root,
+        catalog: view,
+        moduleId: moduleInfo.id,
+        navigation: { home: () => {}, review: () => {}, graphs: () => {} }
+      })
     );
 
     const count = fieldSelect(root, '\u554f\u984c\u6570');
@@ -193,7 +199,13 @@ describe('module screen study preferences', () => {
       shuffle: false
     });
 
-    await renderModuleScreen(screenContext({ root: root, catalog: view, moduleId: moduleInfo.id, navigation: { home: () => {}, review: () => {}, graphs: () => {} } })
+    await renderModuleScreen(
+      screenContext({
+        root: root,
+        catalog: view,
+        moduleId: moduleInfo.id,
+        navigation: { home: () => {}, review: () => {}, graphs: () => {} }
+      })
     );
     expect(fieldSelect(root, '\u554f\u984c\u6570').value).toBe('20');
     expect(fieldSelect(root, '\u7bc4\u56f2').value).toBe('1-25');
@@ -204,9 +216,16 @@ describe('module screen study preferences', () => {
 
   it('clears only resume state when a session completes and keeps reusable preferences', async () => {
     const pack = testPack(1);
+    await studyStore.saveImportedPack(pack);
     const view = resolveActivePacks([pack]);
     const root = document.createElement('div');
-    await renderModuleScreen(screenContext({ root: root, catalog: view, moduleId: moduleInfo.id, navigation: { home: () => {}, review: () => {}, graphs: () => {} } })
+    await renderModuleScreen(
+      screenContext({
+        root: root,
+        catalog: view,
+        moduleId: moduleInfo.id,
+        navigation: { home: () => {}, review: () => {}, graphs: () => {} }
+      })
     );
 
     const answerFormat = fieldSelect(root, '\u56de\u7b54\u5f62\u5f0f');
@@ -236,7 +255,7 @@ describe('module screen study preferences', () => {
       .click();
     await settle();
 
-    expect(localStorage.getItem(`loopdeck3.session.${moduleInfo.id}`)).toBeNull();
+    expect(localStorage.getItem(`loopdeck3.session.${JSON.stringify([pack.packId, moduleInfo.id])}`)).toBeNull();
     expect(localStorage.getItem(preferenceKey)).not.toBeNull();
     expect(readStudyPreferences(pack.packId, moduleInfo.id)?.answerFormat).toBe('input');
   });

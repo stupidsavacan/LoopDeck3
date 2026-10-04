@@ -16,6 +16,7 @@ export interface StudyPreferences {
   version: 1;
   settings: Partial<StoredStudySettings>;
   savedAt: string;
+  contentIdentity?: string;
 }
 
 export interface StudyPreferenceSanitizeContext {
@@ -31,12 +32,14 @@ export function studyPreferencesKey(packId: string, moduleId: string): string {
 export function readStudyPreferences(
   packId: string,
   moduleId: string,
-  storage: Pick<Storage, 'getItem'> = localStorage
+  storage?: Pick<Storage, 'getItem'>,
+  contentIdentity?: string
 ): Partial<StudySettings> | undefined {
   try {
-    const raw = storage.getItem(studyPreferencesKey(packId, moduleId));
+    const raw = (storage ?? localStorage).getItem(studyPreferencesKey(packId, moduleId));
     if (!raw) return undefined;
     const parsed = JSON.parse(raw) as Partial<StudyPreferences>;
+    if (contentIdentity !== undefined && parsed.contentIdentity !== contentIdentity) return undefined;
     if (
       parsed.version !== STUDY_PREFERENCES_VERSION ||
       !parsed.settings ||
@@ -71,15 +74,17 @@ export function writeStudyPreferences(
   packId: string,
   moduleId: string,
   settings: StudySettings,
-  storage: Pick<Storage, 'setItem'> = localStorage
+  storage?: Pick<Storage, 'setItem'>,
+  contentIdentity?: string
 ): boolean {
   try {
     const stored: StudyPreferences = {
       version: STUDY_PREFERENCES_VERSION,
       settings: storedSettings(settings),
-      savedAt: new Date().toISOString()
+      savedAt: new Date().toISOString(),
+      ...(contentIdentity !== undefined ? { contentIdentity } : {})
     };
-    storage.setItem(studyPreferencesKey(packId, moduleId), JSON.stringify(stored));
+    (storage ?? localStorage).setItem(studyPreferencesKey(packId, moduleId), JSON.stringify(stored));
     return true;
   } catch {
     return false;

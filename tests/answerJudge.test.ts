@@ -97,3 +97,57 @@ describe('multi-select judging', () => {
     expect(judgeMultiSelectAnswer(multiSelectQuestion, ['天保の改革', '享保の改革', '寛政の改革'])).toBe(true);
   });
 });
+
+describe('Japanese vocabulary meaning separators', () => {
+  const question: InputQuestion = { id: 'agree', moduleId: 'external', type: 'input', prompt: 'agree', answer: '①賛成する ②同意する' };
+
+  it('normalizes circled meaning numbers before NFKC, preserving meaning order', () => {
+    for (const answer of ['①賛成する ②同意する', '㉑賛成する㉟同意する', '㊱賛成する㊿同意する', '賛成する、 同意する']) {
+      expect(judgeInputAnswer({ ...question, answer }, '賛成する、同意する')).toBe(true);
+    }
+    expect(judgeInputAnswer({ ...question, answer: '賛成する、同意する' }, '①賛成する ②同意する')).toBe(true);
+  });
+
+  it('rejects reordered, changed, missing and empty meaning items', () => {
+    for (const answer of [
+      '同意する、賛成する',
+      '賛成する、反対する',
+      '賛成する同意する',
+      '賛成する',
+      '①②',
+      '①賛成する②同意する③',
+      '①賛成する②③同意する'
+    ]) {
+      expect(judgeInputAnswer(question, answer), answer).toBe(false);
+    }
+  });
+
+  it('does not infer meaning separators from ordinary numbers or general question numbering', () => {
+    expect(judgeInputAnswer({ ...question, prompt: 'article', answer: '第①条' }, '第、条')).toBe(false);
+    expect(judgeInputAnswer(question, '1賛成する2同意する')).toBe(false);
+    expect(judgeInputAnswer({ ...question, answer: '1賛成する2同意する' }, '賛成する、同意する')).toBe(false);
+    expect(judgeInputAnswer({ ...question, prompt: '番号を答えよ', answer: '①徳川家康②徳川秀忠' }, '徳川家康、徳川秀忠')).toBe(false);
+    expect(judgeInputAnswer({ ...question, prompt: '番号を答えよ', answer: '①徳川家康②徳川秀忠' }, '1徳川家康2徳川秀忠')).toBe(true);
+  });
+
+  it('respects structured, strict and non-vocabulary questions', () => {
+    for (const answerJudging of [
+      { mode: 'exact_phrase' as const },
+      { mode: 'numeric' as const },
+      { mode: 'all_of' as const, requiredParts: ['①賛成する'] },
+      { caseSensitive: true }
+    ]) {
+      expect(judgeInputAnswer({ ...question, answerJudging }, '賛成する、同意する')).toBe(false);
+    }
+    for (const prompt of ['agree?', 'Lesson ①', 'agree + support', '<b>agree</b>']) {
+      expect(judgeInputAnswer({ ...question, prompt }, '賛成する、同意する')).toBe(false);
+    }
+    expect(judgeInputAnswer({ ...question, prompt: '賛成する', answer: 'agree' }, 'agree')).toBe(true);
+  });
+
+  it('preserves acceptedAnswers priority over acceptableAnswers', () => {
+    const aliases = { ...question, acceptedAnswers: ['①支持する②同意する'], acceptableAnswers: ['①承認する②同意する'] };
+    expect(judgeInputAnswer(aliases, '支持する、同意する')).toBe(true);
+    expect(judgeInputAnswer(aliases, '承認する、同意する')).toBe(false);
+  });
+});

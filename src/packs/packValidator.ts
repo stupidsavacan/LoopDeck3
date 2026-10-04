@@ -14,6 +14,7 @@ import type {
 } from '../core/models';
 import { extensionOf, isSafeImageAssetRef, isSafePackPath } from './assetSafety';
 import { judgeInputAnswer, normalizeAnswer, normalizeAnswerForQuestion } from '../core/answerJudge';
+import { presentQuestionForStudy } from '../core/questionPresentation';
 import { FORBIDDEN_EXTENSIONS, type PackValidationIssue, type PackValidationResult } from './packTypes';
 
 const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
@@ -515,11 +516,14 @@ export function validatePack(rawPack: unknown): PackValidationResult {
         if (parsed.type !== 'input' && parsed.supportedStudyModes?.length) {
           issues.push(contractIssue(`Question ${parsed.id}: reversible study modes are only supported for input questions.`));
         }
-        if (parsed.type === 'input' && parsed.sides && parsed.sideChoiceCandidates) {
+        if (parsed.type === 'input' && parsed.sideChoiceCandidates) {
           for (const mode of ['front_to_back', 'back_to_front'] as const) {
             const manual = parsed.sideChoiceCandidates[mode];
-            const answerSide = mode === 'front_to_back' ? parsed.sides.back : parsed.sides.front;
-            if (manual && !manual.choices.includes(answerSide.text))
+            if (!manual) continue;
+            const presented = presentQuestionForStudy(parsed, mode);
+            if (presented.activeStudyMode !== mode || presented.type !== 'input')
+              issues.push(contractIssue(`Question ${parsed.id}: ${mode} choices require a supported study direction.`));
+            else if (!manual.choices.includes(presented.answer))
               issues.push(contractIssue(`Question ${parsed.id}: ${mode} choices must include the directional answer.`));
           }
         }

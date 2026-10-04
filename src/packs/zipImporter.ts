@@ -1,6 +1,6 @@
 import JSZip from 'jszip';
 import type { LoopDeckPack } from '../core/models';
-import { extensionOf, isSafeImageAssetRef } from './assetSafety';
+import { extensionOf, isSafeImageAssetRef, isSafeImageDataUrl } from './assetSafety';
 import { MAX_IMAGE_ASSET_BYTES, MAX_JSON_ENTRY_BYTES, validateImportFileSize } from './importLimits';
 import type { ImportedPackAsset, PackValidationIssue, PackValidationResult } from './packTypes';
 import { validatePack, validatePackFiles } from './packValidator';
@@ -64,13 +64,18 @@ async function readReferencedAssets(
     }
 
     const base64 = await zipFile.async('base64');
-    assets.push({ packId: pack.packId, path, mimeType, dataUrl: `data:${mimeType};base64,${base64}` });
+    const dataUrl = `data:${mimeType};base64,${base64}`;
+    if (!isSafeImageDataUrl(dataUrl)) {
+      issues.push({ level: 'error', message: 'Referenced asset is not a structurally valid image of its declared type.', path });
+      continue;
+    }
+    assets.push({ packId: pack.packId, path, mimeType, dataUrl });
   }
 
   return assets;
 }
 
-export async function importLoopDeckZip(file: File): Promise<PackValidationResult> {
+async function readLoopDeckZip(file: File): Promise<PackValidationResult> {
   const fileIssues = validateContainerFile(file);
   if (fileIssues.some((issue) => issue.level === 'error')) return { ok: false, issues: fileIssues };
 
@@ -110,7 +115,7 @@ export async function importLoopDeckZip(file: File): Promise<PackValidationResul
   return { ok: true, issues: [...issues, ...packResult.issues], pack: packResult.pack, assets };
 }
 
-export async function importLoopDeckJson(file: File): Promise<PackValidationResult> {
+async function readLoopDeckJson(file: File): Promise<PackValidationResult> {
   const issues = validateContainerFile(file);
   if (issues.some((issue) => issue.level === 'error')) return { ok: false, issues };
 
@@ -123,4 +128,30 @@ export async function importLoopDeckJson(file: File): Promise<PackValidationResu
     pack: packResult.pack,
     assets: []
   };
+}
+
+export async function importLoopDeckZip(file: File): Promise<PackValidationResult> {
+  try {
+    return await readLoopDeckZip(file);
+  } catch (error) {
+    return {
+      ok: false,
+      issues: [
+        { level: 'error', message: `ZIP could not be read: ${error instanceof Error ? error.message : String(error)}`, path: file.name }
+      ]
+    };
+  }
+}
+
+export async function importLoopDeckJson(file: File): Promise<PackValidationResult> {
+  try {
+    return await readLoopDeckJson(file);
+  } catch (error) {
+    return {
+      ok: false,
+      issues: [
+        { level: 'error', message: `JSON could not be read: ${error instanceof Error ? error.message : String(error)}`, path: file.name }
+      ]
+    };
+  }
 }

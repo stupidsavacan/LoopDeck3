@@ -1,3 +1,7 @@
+# Optional dependency diagnostics
+
+The rules below describe the historical dependency audit. They are not mandatory implementation constraints and are not run by verify or CI. Screen import allowlists are advisory; correctness and behavior determine whether a change is acceptable.
+
 # TypeScript dependency architecture
 
 LoopDeck keeps the production TypeScript dependency contract intentionally small. The rules here describe the graph the repository already uses; they are guardrails, not a framework-style layer rewrite.

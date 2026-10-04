@@ -2,7 +2,9 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import 'fake-indexeddb/auto';
 import { studyStore } from '../src/storage/studyRepository';
-import { readStoredSession } from '../src/storage/sessionStorage';
+import { readStoredSession, saveStoredSession } from '../src/storage/sessionStorage';
+import { createSession } from '../src/core/sessionEngine';
+import type { InputQuestion } from '../src/core/models';
 import { readStudyPreferences, writeStudyPreferences } from '../src/storage/studyPreferences';
 import { defaultStudySettings } from '../src/core/studySettings';
 
@@ -40,13 +42,26 @@ describe('LoopDeck2 and LoopDeck3 in the same browser origin', () => {
   it('does not consume or overwrite LoopDeck2 preferences or resume checkpoints', () => {
     const legacyPreferences = JSON.stringify({ version: 2, settings: { autoNext: false } });
     const settings = defaultStudySettings({ id: 'module', title: 'Module', folderId: 'folder', subject: 'test', questionIds: [] });
-    const legacySession = JSON.stringify({ version: 2, questions: [], index: 0, settings, mode: 'normal', startedAt: 0, currentElapsedMs: 0, currentHiddenTimeExcludedMs: 0, attempts: [], savedAt: new Date().toISOString() });
+    const legacySession = JSON.stringify({
+      version: 2,
+      questions: [],
+      index: 0,
+      settings,
+      mode: 'normal',
+      startedAt: 0,
+      currentElapsedMs: 0,
+      currentHiddenTimeExcludedMs: 0,
+      attempts: [],
+      savedAt: new Date().toISOString()
+    });
     localStorage.setItem('loopdeck_study_prefs_v2_["pack","module"]', legacyPreferences);
     localStorage.setItem('loopdeck_session_module', legacySession);
     expect(readStudyPreferences('pack', 'module')).toBeUndefined();
     expect(readStoredSession('module', new Map())).toBeUndefined();
-    localStorage.setItem('loopdeck3.session.module', legacySession.replace('"version":2', '"format":"loopdeck3.session","version":1'));
-    expect(readStoredSession('module', new Map())).toEqual({ ...JSON.parse(legacySession), format: 'loopdeck3.session', version: 1 });
+    const question: InputQuestion = { id: 'q', moduleId: 'module', type: 'input', prompt: 'Question', answer: 'Answer' };
+    const module = { id: 'module', title: 'Module', folderId: 'folder', subject: 'test', questionIds: ['q'] };
+    expect(saveStoredSession('module', createSession(module, [question], settings))).toBe(true);
+    expect(readStoredSession('module', new Map([['q', question]]))).toMatchObject({ format: 'loopdeck3.session', version: 1, index: 0 });
     writeStudyPreferences('pack', 'module', settings);
     expect(readStudyPreferences('pack', 'module')?.autoNext).toBe(true);
     expect(localStorage.getItem('loopdeck_study_prefs_v2_["pack","module"]')).toBe(legacyPreferences);

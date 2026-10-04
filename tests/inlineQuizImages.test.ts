@@ -43,16 +43,22 @@ describe('renderInlineQuiz image assets', () => {
       container,
       session(),
       { onSessionChange() {}, onComplete() {} },
-      { store: studyStore, ...({
-        resolveImageAsset: async () => 'data:image/png;base64,iVBORw0KGgo='
-      }) }
+      {
+        store: studyStore,
+        ...{
+          resolveImageAsset: async () =>
+            'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+        }
+      }
     );
 
     await settleImageResolution();
 
     const image = container.querySelector<HTMLImageElement>('img.question-image');
     expect(image).not.toBeNull();
-    expect(image?.src).toBe('data:image/png;base64,iVBORw0KGgo=');
+    expect(image?.src).toBe(
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+    );
     expect(container.querySelector('.image-fallback')).toBeNull();
   });
 
@@ -62,9 +68,12 @@ describe('renderInlineQuiz image assets', () => {
       container,
       session(),
       { onSessionChange() {}, onComplete() {} },
-      { store: studyStore, ...({
-        resolveImageAsset: async () => 'images/map.png'
-      }) }
+      {
+        store: studyStore,
+        ...{
+          resolveImageAsset: async () => 'images/map.png'
+        }
+      }
     );
 
     await settleImageResolution();
@@ -92,7 +101,7 @@ describe('renderInlineQuiz image assets', () => {
           packId: pack.packId,
           path: 'images/map.png',
           mimeType: 'image/png',
-          dataUrl: 'data:image/png;base64,iVBORw0KGgo='
+          dataUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
         }
       ],
       'replace'
@@ -100,10 +109,12 @@ describe('renderInlineQuiz image assets', () => {
     const resolveImageAsset = createQuestionImageAssetResolver(resolveActivePacks([pack]), studyStore);
 
     const container = document.createElement('div');
-    renderInlineQuiz(container, session(), { onSessionChange() {}, onComplete() {} }, { store: studyStore, ...({ resolveImageAsset }) });
+    renderInlineQuiz(container, session(), { onSessionChange() {}, onComplete() {} }, { store: studyStore, ...{ resolveImageAsset } });
     await settleImageResolution();
 
-    expect(container.querySelector<HTMLImageElement>('img.question-image')?.src).toBe('data:image/png;base64,iVBORw0KGgo=');
+    expect(container.querySelector<HTMLImageElement>('img.question-image')?.src).toBe(
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+    );
     expect(container.querySelector('.image-fallback')).toBeNull();
     await studyStore.deleteImportedPack(pack.packId);
   });
@@ -114,9 +125,12 @@ describe('renderInlineQuiz image assets', () => {
       container,
       session(),
       { onSessionChange() {}, onComplete() {} },
-      { store: studyStore, ...({
-        resolveImageAsset: async () => undefined
-      }) }
+      {
+        store: studyStore,
+        ...{
+          resolveImageAsset: async () => undefined
+        }
+      }
     );
 
     await settleImageResolution();

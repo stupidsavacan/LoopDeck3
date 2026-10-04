@@ -1,5 +1,5 @@
 import { buildChoiceCandidateIndex, type ChoiceCandidateIndex } from './choiceGenerator';
-import type { Attempt, ModuleInfo, Question, StudySettings } from './models';
+import type { Attempt, ModuleInfo, Question, QuizAnswerSource, StudySettings } from './models';
 import { decodeStudyCategory } from './studyCategory';
 import { getSupportedStudyQuestionModes, presentQuestionForStudy, resolveConcreteStudyQuestionMode } from './questionPresentation';
 import { buildWrongAnswerLookupIndexForStudyMode, type WrongAnswerLookupIndex } from './wrongAnswerExplanation';
@@ -8,11 +8,14 @@ export interface QuizSession {
   module: ModuleInfo;
   queue: Question[];
   choicePool: Question[];
+  sourceByQuestionId?: ReadonlyMap<string, QuizAnswerSource>;
   choiceCandidateIndex: ChoiceCandidateIndex;
   wrongAnswerLookupIndex: WrongAnswerLookupIndex;
   index: number;
   settings: StudySettings;
   startedAt: number;
+  sessionElapsedMs?: number;
+  sessionSegmentStartedAt?: number;
   currentStartedAt: number;
   currentElapsedMs: number;
   currentHiddenTimeExcludedMs: number;
@@ -133,6 +136,8 @@ export function createSession(
     index: 0,
     settings,
     startedAt: now,
+    sessionElapsedMs: 0,
+    sessionSegmentStartedAt: now,
     currentStartedAt: now,
     currentElapsedMs: 0,
     currentHiddenTimeExcludedMs: 0,
@@ -147,11 +152,22 @@ export function currentQuestion(session: QuizSession): Question | undefined {
 export function elapsedForCurrent(session: QuizSession, excludedMs = 0): number {
   return session.currentElapsedMs + Math.max(0, Date.now() - session.currentStartedAt - Math.max(0, excludedMs));
 }
-export function advanceSession(session: QuizSession, attempt?: Attempt): QuizSession {
+/** Active time survives resume; the original start remains a wall-clock timestamp. */
+export function elapsedForSession(session: QuizSession, excludedMs = 0, now = Date.now()): number {
+  const accumulated =
+    session.sessionElapsedMs ??
+    session.attempts.reduce((sum, attempt) => sum + Math.max(0, attempt.elapsedMs), 0) + session.currentElapsedMs;
+  if (isSessionComplete(session)) return accumulated;
+  return accumulated + Math.max(0, now - (session.sessionSegmentStartedAt ?? session.currentStartedAt) - Math.max(0, excludedMs));
+}
+export function advanceSession(session: QuizSession, attempt?: Attempt, sessionElapsedMs = elapsedForSession(session)): QuizSession {
+  const now = Date.now();
   return {
     ...session,
     index: session.index + 1,
-    currentStartedAt: Date.now(),
+    sessionElapsedMs,
+    sessionSegmentStartedAt: now,
+    currentStartedAt: now,
     currentElapsedMs: 0,
     currentHiddenTimeExcludedMs: 0,
     attempts: attempt ? [...session.attempts, attempt] : session.attempts

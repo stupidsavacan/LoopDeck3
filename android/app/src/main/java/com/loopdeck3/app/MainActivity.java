@@ -32,8 +32,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class MainActivity extends Activity {
-    private static final int FILE_CHOOSER_REQUEST = 2410;
-    private static final int SAVE_FILE_REQUEST = 2411;
+    private static final String STATE_NEXT_PICKER_REQUEST = "loopdeck.nextPickerRequest";
     private static final String ASSET_BASE_URL = "https://appassets.androidplatform.net/assets/loopdeck/";
 
     private static final int SAVE_RAW_CHUNK_BYTES = 48 * 1024;
@@ -53,6 +52,8 @@ public class MainActivity extends Activity {
     private final Handler saveSessionHandler = new Handler(Looper.getMainLooper());
 
     private ValueCallback<Uri[]> filePathCallback;
+    private int fileChooserRequest = -1;
+    private int nextPickerRequest = 2410;
     private PendingSave pendingSave;
     private WebView webView;
 
@@ -62,6 +63,10 @@ public class MainActivity extends Activity {
         final String mimeType;
         final File tempFile;
         final int expectedBytes;
+        long lastTouchedMs = SystemClock.elapsedRealtime();
+        int pickerRequest = -1;
+        boolean pickerOpen = false;
+        volatile boolean cancelled = false;
 
         PendingSave(String saveId, String filename, String mimeType, File tempFile, int expectedBytes) {
             this.saveId = saveId;
@@ -113,7 +118,7 @@ public class MainActivity extends Activity {
 
             final PendingSaveBuffer buffer;
             synchronized (saveLock) {
-                if (pendingSaveBuffers.containsKey(saveId)) return false;
+                if (pendingSaveBuffers.containsKey(saveId) || (pendingSave != null && pendingSave.saveId.equals(saveId))) return false;
                 if (stagedSaveCountLocked() >= MAX_CONCURRENT_SAVE_SESSIONS) return false;
                 if ((long) stagedBytesLocked() + expectedBytes > MAX_SAVE_BYTES) return false;
                 try {
@@ -214,6 +219,7 @@ public class MainActivity extends Activity {
                 readySave = new PendingSave(buffer.saveId, buffer.filename, buffer.mimeType, buffer.tempFile, buffer.expectedBytes);
                 pendingSave = readySave;
             }
+            scheduleSaveSessionExpiry(saveId);
             runOnUiThread(() -> launchSavePicker(readySave));
             return true;
         }
@@ -222,17 +228,30 @@ public class MainActivity extends Activity {
         public void cancelSaveFile(String saveId) {
             if (saveId == null) return;
             final PendingSaveBuffer buffer;
+            final PendingSave save;
             synchronized (saveLock) {
                 buffer = pendingSaveBuffers.remove(saveId);
+                save = pendingSave != null && pendingSave.saveId.equals(saveId) ? pendingSave : null;
+                if (save != null) {
+                    save.cancelled = true;
+                    pendingSave = null;
+                }
             }
             if (buffer != null) cleanupBuffer(buffer);
+            if (save != null) {
+                cleanupFile(save.tempFile);
+                runOnUiThread(() -> {
+                    if (save.pickerRequest >= 0) finishActivity(save.pickerRequest);
+                });
+            }
         }
     }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        restorePendingSave(savedInstanceState);
+        if (savedInstanceState != null) nextPickerRequest = savedInstanceState.getInt(STATE_NEXT_PICKER_REQUEST, 2410);
+        discardInterruptedSave(savedInstanceState);
 
         webView = new WebView(this);
         setContentView(webView);
@@ -278,18 +297,15 @@ public class MainActivity extends Activity {
                     ValueCallback<Uri[]> callback,
                     FileChooserParams fileChooserParams
             ) {
-                if (MainActivity.this.filePathCallback != null) {
-                    MainActivity.this.filePathCallback.onReceiveValue(null);
-                }
+                cancelFileChooser();
                 MainActivity.this.filePathCallback = callback;
-
-                Intent intent = fileChooserParams.createIntent();
-                intent.addCategory(Intent.CATEGORY_OPENABLE);
                 try {
-                    startActivityForResult(intent, FILE_CHOOSER_REQUEST);
+                    Intent intent = fileChooserParams.createIntent();
+                    intent.addCategory(Intent.CATEGORY_OPENABLE);
+                    fileChooserRequest = allocatePickerRequest();
+                    startActivityForResult(intent, fileChooserRequest);
                 } catch (Exception error) {
-                    MainActivity.this.filePathCallback = null;
-                    return false;
+                    resolveFileChooser(null);
                 }
                 return true;
             }
@@ -333,19 +349,31 @@ public class MainActivity extends Activity {
 
     private void expireSaveSessionIfIdle(String saveId) {
         PendingSaveBuffer expired = null;
+        PendingSave expiredSave = null;
         long retryDelay = -1L;
         synchronized (saveLock) {
             PendingSaveBuffer buffer = pendingSaveBuffers.get(saveId);
-            if (buffer == null) return;
-            long idleMs = SystemClock.elapsedRealtime() - buffer.lastTouchedMs;
-            if (idleMs >= SAVE_SESSION_IDLE_TIMEOUT_MS) {
-                expired = pendingSaveBuffers.remove(saveId);
+            if (buffer == null) {
+                if (pendingSave == null || !pendingSave.saveId.equals(saveId) || pendingSave.pickerOpen) return;
+                long idleMs = SystemClock.elapsedRealtime() - pendingSave.lastTouchedMs;
+                if (idleMs >= SAVE_SESSION_IDLE_TIMEOUT_MS) {
+                    expiredSave = pendingSave;
+                    pendingSave = null;
+                } else retryDelay = SAVE_SESSION_IDLE_TIMEOUT_MS - idleMs;
             } else {
-                retryDelay = SAVE_SESSION_IDLE_TIMEOUT_MS - idleMs;
+                long idleMs = SystemClock.elapsedRealtime() - buffer.lastTouchedMs;
+                if (idleMs >= SAVE_SESSION_IDLE_TIMEOUT_MS) {
+                    expired = pendingSaveBuffers.remove(saveId);
+                } else {
+                    retryDelay = SAVE_SESSION_IDLE_TIMEOUT_MS - idleMs;
+                }
             }
         }
         if (expired != null) {
             cleanupBuffer(expired);
+            reportSaveResult(saveId, false, "SAV-A022", "Android保存セッションがタイムアウトしました。", 0);
+        } else if (expiredSave != null) {
+            cleanupFile(expiredSave.tempFile);
             reportSaveResult(saveId, false, "SAV-A022", "Android保存セッションがタイムアウトしました。", 0);
         } else if (retryDelay >= 0L) {
             saveSessionHandler.postDelayed(() -> expireSaveSessionIfIdle(saveId), retryDelay);
@@ -384,7 +412,8 @@ public class MainActivity extends Activity {
     }
 
     private void reportSaveResult(String saveId, boolean ok, String code, String message, int bytes) {
-        if (webView == null || saveId == null || saveId.isEmpty()) return;
+        final WebView target = webView;
+        if (target == null || saveId == null || saveId.isEmpty()) return;
         try {
             JSONObject detail = new JSONObject();
             detail.put("id", saveId);
@@ -393,22 +422,26 @@ public class MainActivity extends Activity {
             detail.put("message", message);
             detail.put("bytes", bytes);
             String script = "window.dispatchEvent(new CustomEvent('loopdeck3-save-result',{detail:" + detail.toString() + "}))";
-            webView.post(() -> webView.evaluateJavascript(script, null));
+            target.post(() -> {
+                if (webView == target) target.evaluateJavascript(script, null);
+            });
         } catch (Exception ignored) {
             // Best effort only.
         }
     }
 
     private void launchSavePicker(PendingSave save) {
-        synchronized (saveLock) {
-            if (pendingSave != save) return;
-        }
-        Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
-        intent.addCategory(Intent.CATEGORY_OPENABLE);
-        intent.setType(save.mimeType);
-        intent.putExtra(Intent.EXTRA_TITLE, save.filename);
         try {
-            startActivityForResult(intent, SAVE_FILE_REQUEST);
+            synchronized (saveLock) {
+                if (pendingSave != save) return;
+                save.pickerRequest = allocatePickerRequest();
+                save.pickerOpen = true;
+            }
+            Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+            intent.addCategory(Intent.CATEGORY_OPENABLE);
+            intent.setType(save.mimeType);
+            intent.putExtra(Intent.EXTRA_TITLE, save.filename);
+            startActivityForResult(intent, save.pickerRequest);
         } catch (Exception error) {
             synchronized (saveLock) {
                 if (pendingSave == save) pendingSave = null;
@@ -419,12 +452,10 @@ public class MainActivity extends Activity {
         }
     }
 
-    private void completeSaveFile(Uri uri) {
-        final PendingSave save;
+    private void completeSaveFile(PendingSave save, Uri uri) {
         synchronized (saveLock) {
-            save = pendingSave;
+            if (pendingSave != save) return;
         }
-        if (save == null) return;
 
         int bytesWritten = 0;
         try (FileInputStream input = new FileInputStream(save.tempFile);
@@ -437,9 +468,11 @@ public class MainActivity extends Activity {
             byte[] buffer = new byte[64 * 1024];
             int read;
             while ((read = input.read(buffer)) != -1) {
+                if (save.cancelled) throw new IOException("Save cancelled");
                 output.write(buffer, 0, read);
                 bytesWritten += read;
             }
+            if (save.cancelled) throw new IOException("Save cancelled");
             output.flush();
             if (bytesWritten != save.expectedBytes) {
                 throw new IllegalStateException("Written bytes " + bytesWritten + " did not match expected " + save.expectedBytes);
@@ -457,7 +490,7 @@ public class MainActivity extends Activity {
         }
     }
 
-    private void restorePendingSave(Bundle savedInstanceState) {
+    private void discardInterruptedSave(Bundle savedInstanceState) {
         if (savedInstanceState == null) return;
         String saveId = savedInstanceState.getString(STATE_SAVE_ID);
         String filename = savedInstanceState.getString(STATE_SAVE_FILENAME);
@@ -469,11 +502,14 @@ public class MainActivity extends Activity {
         File tempFile = new File(path);
         File parent = tempFile.getParentFile();
         if (parent == null || !parent.equals(getCacheDir()) || !tempFile.isFile() || tempFile.length() != expectedBytes) return;
-        pendingSave = new PendingSave(saveId, filename, mimeType, tempFile, expectedBytes);
+        // A recreated WebView has no matching JS promise. Cancel rather than
+        // retaining a picker operation that could block every later save.
+        cleanupFile(tempFile);
     }
 
     @Override
     protected void onSaveInstanceState(Bundle outState) {
+        outState.putInt(STATE_NEXT_PICKER_REQUEST, nextPickerRequest);
         if (webView != null) webView.saveState(outState);
         synchronized (saveLock) {
             if (pendingSave != null) {
@@ -491,14 +527,16 @@ public class MainActivity extends Activity {
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
 
-        if (requestCode == SAVE_FILE_REQUEST) {
+        final PendingSave currentSave;
+        synchronized (saveLock) { currentSave = pendingSave; }
+        if (currentSave != null && requestCode == currentSave.pickerRequest) {
             if (resultCode == RESULT_OK && data != null && data.getData() != null) {
-                completeSaveFile(data.getData());
+                completeSaveFile(currentSave, data.getData());
             } else {
                 final PendingSave cancelled;
                 synchronized (saveLock) {
-                    cancelled = pendingSave;
-                    pendingSave = null;
+                    cancelled = pendingSave == currentSave ? currentSave : null;
+                    if (cancelled != null) pendingSave = null;
                 }
                 if (cancelled != null) {
                     cleanupFile(cancelled.tempFile);
@@ -508,7 +546,7 @@ public class MainActivity extends Activity {
             return;
         }
 
-        if (requestCode != FILE_CHOOSER_REQUEST || filePathCallback == null) return;
+        if (requestCode != fileChooserRequest || filePathCallback == null) return;
 
         Uri[] results = null;
         if (resultCode == RESULT_OK && data != null) {
@@ -522,24 +560,44 @@ public class MainActivity extends Activity {
                 results = new Uri[]{data.getData()};
             }
         }
-        filePathCallback.onReceiveValue(results);
+        resolveFileChooser(results);
+    }
+
+    private int allocatePickerRequest() {
+        if (nextPickerRequest > 65535) throw new IllegalStateException("Picker request IDs exhausted; restart the app");
+        return nextPickerRequest++;
+    }
+
+    private void resolveFileChooser(Uri[] result) {
+        ValueCallback<Uri[]> callback = filePathCallback;
         filePathCallback = null;
+        fileChooserRequest = -1;
+        if (callback != null) callback.onReceiveValue(result);
+    }
+
+    private void cancelFileChooser() {
+        if (fileChooserRequest >= 0) finishActivity(fileChooserRequest);
+        resolveFileChooser(null);
     }
 
     @Override
     protected void onDestroy() {
+        cancelFileChooser();
+        saveSessionHandler.removeCallbacksAndMessages(null);
         PendingSaveBuffer[] buffers;
         PendingSave saveToDelete = null;
         synchronized (saveLock) {
             buffers = pendingSaveBuffers.values().toArray(new PendingSaveBuffer[0]);
             pendingSaveBuffers.clear();
-            if (!isChangingConfigurations()) {
-                saveToDelete = pendingSave;
-                pendingSave = null;
-            }
+            saveToDelete = pendingSave;
+            pendingSave = null;
         }
         for (PendingSaveBuffer buffer : buffers) cleanupBuffer(buffer);
-        if (saveToDelete != null) cleanupFile(saveToDelete.tempFile);
+        if (saveToDelete != null) {
+            saveToDelete.cancelled = true;
+            if (saveToDelete.pickerRequest >= 0) finishActivity(saveToDelete.pickerRequest);
+            cleanupFile(saveToDelete.tempFile);
+        }
 
         if (webView != null) {
             webView.removeJavascriptInterface("LoopDeck3Host");

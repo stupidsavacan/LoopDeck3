@@ -1,10 +1,25 @@
+import { loadBuiltinPacks } from '../packs/builtinLoader';
+import { getQuestionsForModule, resolveActivePacks } from '../packs/packResolver';
+import { questionIdentity } from './packLearningState';
+import { readContentEpoch } from './packEpoch';
+import { exportBackup } from './backupExport';
+import { recoverReviewCard, recoverReviewRows } from './reviewRecovery';
 import { buildReviewPersistence } from '../core/reviewPersistence';
-import type { Attempt, LoopDeckPack, ReviewCard, ReviewLog } from '../core/models';
+import type { Attempt, ConcreteStudyQuestionMode, LoopDeckPack, QuizAnswerSource, ReviewCard, ReviewLog } from '../core/models';
 import type { ImportedPackAsset, PackAssetWriteStrategy } from '../packs/packTypes';
 
-import { database, USER_DATA_STORES, type LocalDatabase } from './indexedDb';
-import { installedOrder, putPacksInInstallOrder, savePackWithAssets, deletePackAndAssets, validatedPackForStorage, recoverStoredPacks, packAssetId } from './packStorage';
+import { database, type LocalDatabase } from './indexedDb';
+import {
+  installedOrder,
+  installedRevision,
+  savePackWithAssets,
+  deletePackAndAssets,
+  validatedPackForStorage,
+  recoverStoredPacks,
+  packAssetId
+} from './packStorage';
 import { importBackup } from './backupStorage';
+import { notifyPackChanges, subscribePackChanges } from './packChanges';
 import type { BackupImportMode } from './storageTypes';
 
 import type { StudyBackup, StoredPackAsset } from './storageTypes';
@@ -27,36 +42,100 @@ async function deleteAttemptsByResult(database: LocalDatabase, results: Attempt[
 
 export class StudyRepository {
   constructor(private readonly data: LocalDatabase = database) {}
+  subscribePackChanges(onChange: () => void): () => void {
+    return subscribePackChanges(this.data.identity, onChange);
+  }
   async addAttempt(attempt: Attempt): Promise<void> {
     await this.data.request('attempts', 'readwrite', (store) => store.put(attempt));
   }
-  async recordAnswer(attempt: Attempt): Promise<void> {
+  async recordAnswer(attempt: Attempt, source?: QuizAnswerSource): Promise<void> {
     let failure: unknown;
     try {
-      await this.data.transact(['attempts', 'reviewCards', 'reviewLogs'], 'readwrite', (tx) => {
-        const abort = (error: unknown) => { failure = error; tx.abort(); };
-        const attempts = tx.objectStore('attempts');
-        const cards = tx.objectStore('reviewCards');
-        const existing = attempts.get(attempt.attemptId);
-        existing.onsuccess = () => {
-          try {
-            if (existing.result) return;
-            const current = cards.get(attempt.questionId);
-            current.onsuccess = () => {
+      await this.data.transact(
+        ['attempts', 'reviewCards', 'reviewLogs', ...(source ? (['packs', 'packAssets', 'contentMetadata'] as const) : [])],
+        'readwrite',
+        (tx) => {
+          const abort = (error: unknown) => {
+            failure = error;
+            tx.abort();
+          };
+          const attempts = tx.objectStore('attempts');
+          const cards = tx.objectStore('reviewCards');
+          const saveAnswer = () => {
+            const existing = attempts.get(attempt.attemptId);
+            existing.onsuccess = () => {
               try {
-                const { card, log } = buildReviewPersistence(attempt, current.result as ReviewCard | undefined);
-                attempts.add(attempt);
-                cards.put(card);
-                tx.objectStore('reviewLogs').add(log);
-              } catch (error) { abort(error); }
+                if (existing.result) return;
+                const current = cards.get([attempt.questionId, attempt.questionMode ?? 'as_stored']);
+                current.onsuccess = () => {
+                  try {
+                    let recovered: ReviewCard | undefined;
+                    if (current.result) {
+                      try {
+                        recovered = recoverReviewCard(current.result);
+                      } catch (error) {
+                        console.warn('Replacing an unrecoverable stored review card.', attempt.questionId, error);
+                      }
+                    }
+                    const { card, log } = buildReviewPersistence(attempt, recovered);
+                    attempts.add(attempt);
+                    cards.put(card);
+                    tx.objectStore('reviewLogs').add(log);
+                  } catch (error) {
+                    abort(error);
+                  }
+                };
+              } catch (error) {
+                abort(error);
+              }
             };
-          } catch (error) { abort(error); }
-        };
-      });
-    } catch (error) { throw failure ?? error; }
+          };
+          if (!source) {
+            saveAnswer();
+            return;
+          }
+          const packs = tx.objectStore('packs').getAll();
+          const epoch = tx.objectStore('contentMetadata').get('contentEpoch');
+          epoch.onsuccess = () => {
+            try {
+              const rows = packs.result.sort((a, b) => installedOrder(a) - installedOrder(b));
+              const active = resolveActivePacks([...loadBuiltinPacks(), ...recoverStoredPacks(rows)]);
+              const current = getQuestionsForModule(active, source.question.moduleId).find((q) => q.id === source.question.id);
+              const stale = () => abort(new Error('教材が変更されたため、この回答を保存できません。教材を開き直してください。'));
+              if (
+                !current ||
+                active.modulePackIdById.get(source.question.moduleId) !== source.packId ||
+                attempt.questionId !== source.question.id ||
+                attempt.moduleId !== source.question.moduleId ||
+                questionIdentity(current) !== questionIdentity(source.question) ||
+                (source.packRevision !== undefined &&
+                  installedRevision(rows.find((row) => row.packId === source.packId)) !== source.packRevision) ||
+                (source.resetEpoch !== undefined && readContentEpoch(epoch.result) !== source.resetEpoch)
+              ) {
+                stale();
+                return;
+              }
+              if (source.imageDataUrl === undefined) {
+                saveAnswer();
+                return;
+              }
+              const image = tx.objectStore('packAssets').get(packAssetId(source.packId, source.question.imageAsset ?? ''));
+              image.onsuccess = () => {
+                if ((image.result?.dataUrl ?? null) !== source.imageDataUrl) stale();
+                else saveAnswer();
+              };
+            } catch (error) {
+              abort(error);
+            }
+          };
+        }
+      );
+    } catch (error) {
+      throw failure ?? error;
+    }
   }
   async getAttempts(): Promise<Attempt[]> {
-    return this.data.all<Attempt>('attempts');
+    return (await this.data.all<Attempt>('attempts')).filter((row) => !row.contentRetired);
   }
   async clearAttempts(): Promise<void> {
     await this.data.request('attempts', 'readwrite', (store) => store.clear());
@@ -65,7 +144,8 @@ export class StudyRepository {
     await deleteAttemptsByResult(this.data, ['wrong', 'revealed']);
   }
   async setBookmark(questionId: string, enabled: boolean): Promise<void> {
-    if (enabled) await this.data.request('bookmarks', 'readwrite', (store) => store.put({ questionId, createdAt: new Date().toISOString() }));
+    if (enabled)
+      await this.data.request('bookmarks', 'readwrite', (store) => store.put({ questionId, createdAt: new Date().toISOString() }));
     else await this.data.request('bookmarks', 'readwrite', (store) => store.delete(questionId));
   }
   async getBookmarks(): Promise<string[]> {
@@ -79,14 +159,26 @@ export class StudyRepository {
   }
   async saveImportedPack(pack: LoopDeckPack): Promise<void> {
     const normalized = validatedPackForStorage(pack);
-    await this.data.transact('packs', 'readwrite', (tx) => putPacksInInstallOrder(tx.objectStore('packs'), [normalized]));
+    await savePackWithAssets(this.data, normalized, [], 'upsert');
+    notifyPackChanges(this.data.identity);
   }
   async saveImportedPackWithAssets(pack: LoopDeckPack, assets: ImportedPackAsset[], strategy: PackAssetWriteStrategy): Promise<void> {
     await savePackWithAssets(this.data, validatedPackForStorage(pack), assets, strategy);
+    notifyPackChanges(this.data.identity);
   }
   async getImportedPacks(): Promise<LoopDeckPack[]> {
     const rows = await this.data.all<unknown>('packs');
     return recoverStoredPacks(rows.sort((left, right) => installedOrder(left) - installedOrder(right)));
+  }
+  async getImportedPackRevisions(): Promise<ReadonlyMap<string, string>> {
+    const requests = await this.data.transact(['packs', 'contentMetadata'], 'readonly', (tx) => ({
+      packs: tx.objectStore('packs').getAll(),
+      epoch: tx.objectStore('contentMetadata').get('contentEpoch')
+    }));
+    return new Map([
+      ...requests.packs.result.map((row) => [row.packId, installedRevision(row)] as [string, string]),
+      ['', readContentEpoch(requests.epoch.result)]
+    ]);
   }
   async getImportedPackAssets(): Promise<StoredPackAsset[]> {
     return this.data.all<StoredPackAsset>('packAssets');
@@ -97,27 +189,39 @@ export class StudyRepository {
   }
   async deleteImportedPack(packId: string): Promise<void> {
     await deletePackAndAssets(this.data, packId);
+    notifyPackChanges(this.data.identity);
   }
   async getReviewCards(): Promise<ReviewCard[]> {
-    return this.data.all<ReviewCard>('reviewCards');
+    const rows: ReviewCard[] = [];
+    await this.data.transact('reviewCards', 'readwrite', (tx) => recoverReviewRows(tx.objectStore('reviewCards'), rows));
+    return rows;
   }
-  async getReviewCard(questionId: string): Promise<ReviewCard | undefined> {
-    return (await this.data.request<ReviewCard>('reviewCards', 'readonly', (store) => store.get(questionId))) as ReviewCard | undefined;
+  async getReviewCard(questionId: string, questionMode: ConcreteStudyQuestionMode = 'as_stored'): Promise<ReviewCard | undefined> {
+    const rows: ReviewCard[] = [];
+    await this.data.transact('reviewCards', 'readwrite', (tx) => {
+      const store = tx.objectStore('reviewCards');
+      recoverReviewRows(store, rows, store, IDBKeyRange.only([questionId, questionMode]));
+    });
+    return rows[0];
   }
   async putReviewCard(card: ReviewCard): Promise<void> {
-    await this.data.request('reviewCards', 'readwrite', (store) => store.put(card));
+    await this.data.request('reviewCards', 'readwrite', (store) => store.put(recoverReviewCard(card)));
   }
   async putReviewLog(log: ReviewLog): Promise<void> {
-    await this.data.request('reviewLogs', 'readwrite', (store) => store.put(log));
+    await this.data.request('reviewLogs', 'readwrite', (store) => store.put({ ...log, questionMode: log.questionMode ?? 'as_stored' }));
   }
   async getReviewLogs(): Promise<ReviewLog[]> {
-    return this.data.all<ReviewLog>('reviewLogs');
+    const rows: ReviewLog[] = [];
+    await this.data.transact('reviewLogs', 'readwrite', (tx) => recoverReviewRows(tx.objectStore('reviewLogs'), rows));
+    return rows;
   }
   async getReviewLogsForQuestion(questionId: string): Promise<ReviewLog[]> {
-    const request = await this.data.transact<IDBRequest<ReviewLog[]>>('reviewLogs', 'readonly', (tx) =>
-      tx.objectStore('reviewLogs').index('byQuestionId').getAll(questionId)
-    );
-    return request.result.sort((a, b) => Date.parse(a.reviewedAt) - Date.parse(b.reviewedAt));
+    const rows: ReviewLog[] = [];
+    await this.data.transact('reviewLogs', 'readwrite', (tx) => {
+      const store = tx.objectStore('reviewLogs');
+      recoverReviewRows(store, rows, store.index('byQuestionId'), IDBKeyRange.only(questionId));
+    });
+    return rows.sort((a, b) => Date.parse(a.reviewedAt) - Date.parse(b.reviewedAt));
   }
   async clearReviewData(): Promise<void> {
     await this.data.transact(['reviewCards', 'reviewLogs'], 'readwrite', (tx) => {
@@ -126,24 +230,11 @@ export class StudyRepository {
     });
   }
   async exportSnapshot(): Promise<StudyBackup> {
-    const requests = await this.data.transact(USER_DATA_STORES, 'readonly', (tx) => ({
-      attempts: tx.objectStore('attempts').getAll() as IDBRequest<Attempt[]>,
-      bookmarks: tx.objectStore('bookmarks').getAll() as IDBRequest<{ questionId: string }[]>,
-      packs: tx.objectStore('packs').getAll() as IDBRequest<unknown[]>,
-      assets: tx.objectStore('packAssets').getAll() as IDBRequest<StoredPackAsset[]>,
-      cards: tx.objectStore('reviewCards').getAll() as IDBRequest<ReviewCard[]>,
-      logs: tx.objectStore('reviewLogs').getAll() as IDBRequest<ReviewLog[]>
-    }));
-    return {
-      format: 'loopdeck3.backup', schema: 1, exportedAt: new Date().toISOString(),
-      attempts: requests.attempts.result,
-      bookmarks: requests.bookmarks.result.map(row => row.questionId),
-      importedPacks: recoverStoredPacks(requests.packs.result.sort((a, b) => installedOrder(a) - installedOrder(b))),
-      importedPackAssets: requests.assets.result, reviewCards: requests.cards.result, reviewLogs: requests.logs.result
-    };
+    return exportBackup(this.data);
   }
   async restoreSnapshot(backup: unknown, mode: BackupImportMode): Promise<void> {
     await importBackup(this.data, backup, mode);
+    notifyPackChanges(this.data.identity);
   }
 }
 export const studyStore = new StudyRepository();

@@ -3,10 +3,11 @@ import { writeDebugLog } from '../debug/debugLog';
 import { validateActivePackIdentities } from '../packs/packValidator';
 import { validateImportFileSize } from '../packs/importLimits';
 import type { LoopDeckPack } from '../core/models';
+import { loadBuiltinPacks } from '../packs/builtinLoader';
 import { analyzeImportConflicts, sharedModuleIds } from '../packs/importConflictAnalysis';
 import { mergeLoopDeckPacks, mergeLoopDeckPacksIntoExisting, type MergePackReport } from '../packs/packMerger';
 import packAuthoringPrompt from '../packs/packAuthoringPrompt.txt?raw';
-import { getActiveModules, getActivePacks, getActiveQuestions } from '../packs/packResolver';
+import { getActiveModules, getActivePacks, getActiveQuestions, resolveActivePacks } from '../packs/packResolver';
 import { createLoopDeckZipBlob, makePackFileStem, stringifyLoopDeckJson } from '../packs/zipExporter';
 import { saveBlob } from '../platform/fileSave';
 import { readImportFile } from '../services/importFileService';
@@ -37,10 +38,14 @@ async function exportPackZip(pack: LoopDeckPack, studyStore: StudyRepository): P
 }
 
 async function exportBackup(studyStore: StudyRepository): Promise<void> {
-  const backup = await studyStore.exportSnapshot();
-  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
-  await saveBlob(blob, `loopdeck-backup-${backup.exportedAt.slice(0, 10)}.json`);
-  toast('バックアップを書き出しました。');
+  try {
+    const backup = await studyStore.exportSnapshot();
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+    await saveBlob(blob, `loopdeck-backup-${backup.exportedAt.slice(0, 10)}.json`);
+    toast('バックアップを書き出しました。');
+  } catch (error) {
+    toast(`書き出しに失敗しました：${error instanceof Error ? error.message : String(error)}`);
+  }
 }
 
 async function exportPackAuthoringPrompt(): Promise<void> {
@@ -90,6 +95,23 @@ export async function renderImportScreen(context: ScreenContext): Promise<void> 
   const importedIds = new Set(importedPacks.map((pack) => pack.packId));
   const activeModules = getActiveModules(packView);
   const activeQuestions = getActiveQuestions(packView);
+
+  const latestPackState = async () => {
+    const imported = await studyStore.getImportedPacks();
+    const view = resolveActivePacks([...loadBuiltinPacks(), ...imported]);
+    return { imported, view, active: getActivePacks(view) };
+  };
+  const runInstall = async (control: HTMLButtonElement, install: () => Promise<void>) => {
+    if (!isCurrent()) return;
+    control.disabled = true;
+    try {
+      await install();
+    } catch (error) {
+      if (isCurrent()) toast(`教材を保存できませんでした：${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      if (isCurrent()) control.disabled = false;
+    }
+  };
 
   clear(root);
   const screen = el('main', 'screen import-screen');
@@ -212,6 +234,7 @@ export async function renderImportScreen(context: ScreenContext): Promise<void> 
     setImporting(true);
     try {
       const imported = await readImportFile(file);
+      if (!isCurrent()) return;
       if (imported.kind === 'backup') {
         renderBackupImport(imported.backup);
         return;
@@ -239,10 +262,19 @@ export async function renderImportScreen(context: ScreenContext): Promise<void> 
           duplicateImportedPackId,
           duplicateActivePackId,
           duplicateModuleIds,
-          duplicateQuestionIds
+          duplicateQuestionIds,
+          ambiguousModuleMerge
         } = analyzeImportConflicts(pack, importedPacks, activePacks, activeModules, activeQuestions);
         const summary = el('p', 'import-summary', `${pack.title} / ${pack.modules.length}教材 / ${pack.questions.length}問`);
         preview.append(summary);
+        if (ambiguousModuleMerge)
+          preview.append(
+            el(
+              'p',
+              'issue error',
+              '同じIDの教材が複数のパックに分かれています。教材マージ更新の対象を一つに決められないため、パックを分けて取り込んでください。'
+            )
+          );
 
         if (existingImportedPack) {
           const previewMerge = mergeLoopDeckPacks(existingImportedPack, pack);
@@ -295,63 +327,80 @@ export async function renderImportScreen(context: ScreenContext): Promise<void> 
           duplicateModuleIds.length ? 'btn ghost danger' : 'btn primary'
         );
         install.disabled = directIdentityIssues.length > 0;
-        install.onclick = async () => {
-          const latestActive = getActivePacks(packView);
-          const identityIssues = validateActivePackIdentities([...latestActive, pack]).filter((issue) => issue.level === 'error');
-          if (identityIssues.length) {
-            toast('問題IDが別パックと衝突しているため取り込めません。マージ更新を使ってください。');
-            return;
-          }
-          await studyStore.saveImportedPackWithAssets(pack, assets, 'replace');
-          toast(duplicateImportedPackId ? '教材を上書き更新しました。' : '教材を取り込みました。');
-          await onImported();
-        };
+        install.onclick = () =>
+          runInstall(install, async () => {
+            const { active: latestActive } = await latestPackState();
+            if (!isCurrent()) return;
+            const identityIssues = validateActivePackIdentities([...latestActive, pack]).filter((issue) => issue.level === 'error');
+            if (identityIssues.length) {
+              toast('問題IDが別パックと衝突しているため取り込めません。マージ更新を使ってください。');
+              return;
+            }
+            await studyStore.saveImportedPackWithAssets(pack, assets, 'replace');
+            toast(duplicateImportedPackId ? '教材を上書き更新しました。' : '教材を取り込みました。');
+            await onImported();
+          });
         preview.append(install);
 
         if (existingImportedPack) {
           const mergeInstall = button('マージ更新する', 'btn');
-          mergeInstall.onclick = async () => {
-            const currentExistingPack = (await studyStore.getImportedPacks()).find((importedPack) => importedPack.packId === pack.packId);
-            if (!currentExistingPack) {
-              await studyStore.saveImportedPackWithAssets(pack, assets, 'replace');
-              toast('同じIDのインポート済み教材が見つからなかったため、新規取り込みしました。');
+          mergeInstall.onclick = () =>
+            runInstall(mergeInstall, async () => {
+              const latest = await latestPackState();
+              if (!isCurrent()) return;
+              const currentExistingPack = latest.imported.find((importedPack) => importedPack.packId === pack.packId);
+              const merged = currentExistingPack ? mergeLoopDeckPacks(currentExistingPack, pack) : undefined;
+              const mergedPack = merged?.pack ?? pack;
+              const identityIssues = validateActivePackIdentities([...latest.active, mergedPack]).filter(
+                (issue) => issue.level === 'error'
+              );
+              if (identityIssues.length) {
+                toast('マージ結果の問題IDが別パックと衝突するため保存できません。');
+                return;
+              }
+              await studyStore.saveImportedPackWithAssets(mergedPack, assets, currentExistingPack ? 'upsert' : 'replace');
+              toast(
+                merged
+                  ? `教材をマージ更新しました。追加${merged.report.addedQuestions + merged.report.renamedQuestions}問 / ID変更${merged.report.renamedQuestions}問。`
+                  : '教材を新規取り込みしました。'
+              );
               await onImported();
-              return;
-            }
-
-            const { pack: mergedPack, report } = mergeLoopDeckPacks(currentExistingPack, pack);
-            const identityIssues = validateActivePackIdentities([...activePacks, mergedPack]).filter((issue) => issue.level === 'error');
-            if (identityIssues.length) {
-              toast('マージ結果の問題IDが別パックと衝突するため保存できません。');
-              return;
-            }
-            await studyStore.saveImportedPackWithAssets(mergedPack, assets, 'upsert');
-            toast(
-              `教材をマージ更新しました。追加${report.addedQuestions + report.renamedQuestions}問 / ID変更${report.renamedQuestions}問。`
-            );
-            await onImported();
-          };
+            });
           preview.append(mergeInstall);
         }
 
         if (moduleMergeTarget) {
           const moduleMergeInstall = button('教材マージ更新する', 'btn primary');
-          moduleMergeInstall.onclick = async () => {
-            const currentImportedPacks = await studyStore.getImportedPacks();
-            const currentTarget =
-              currentImportedPacks.find((importedPack) => importedPack.packId === moduleMergeTarget.packId) ?? moduleMergeTarget;
-            const { pack: mergedPack, report } = mergeLoopDeckPacksIntoExisting(currentTarget, pack);
-            const identityIssues = validateActivePackIdentities([...activePacks, mergedPack]).filter((issue) => issue.level === 'error');
-            if (identityIssues.length) {
-              toast('マージ結果の問題IDが別パックと衝突するため保存できません。');
-              return;
-            }
-            await studyStore.saveImportedPackWithAssets(mergedPack, assets, 'upsert');
-            toast(
-              `教材をマージ更新しました。追加${report.addedQuestions + report.renamedQuestions}問 / ID変更${report.renamedQuestions}問。`
-            );
-            await onImported();
-          };
+          moduleMergeInstall.onclick = () =>
+            runInstall(moduleMergeInstall, async () => {
+              const latest = await latestPackState();
+              if (!isCurrent()) return;
+              const conflicts = analyzeImportConflicts(
+                pack,
+                latest.imported,
+                latest.active,
+                getActiveModules(latest.view),
+                getActiveQuestions(latest.view)
+              );
+              const currentTarget = conflicts.moduleMergeTarget;
+              if (!currentTarget || currentTarget.packId !== moduleMergeTarget.packId || conflicts.ambiguousModuleMerge) {
+                toast('マージ対象の教材が変更されました。ファイルを読み込み直してください。');
+                return;
+              }
+              const { pack: mergedPack, report } = mergeLoopDeckPacksIntoExisting(currentTarget, pack);
+              const identityIssues = validateActivePackIdentities([...latest.active, mergedPack]).filter(
+                (issue) => issue.level === 'error'
+              );
+              if (identityIssues.length) {
+                toast('マージ結果の問題IDが別パックと衝突するため保存できません。');
+                return;
+              }
+              await studyStore.saveImportedPackWithAssets(mergedPack, assets, 'upsert');
+              toast(
+                `教材をマージ更新しました。追加${report.addedQuestions + report.renamedQuestions}問 / ID変更${report.renamedQuestions}問。`
+              );
+              await onImported();
+            });
           preview.append(moduleMergeInstall);
         }
       }
@@ -405,7 +454,12 @@ export async function renderImportScreen(context: ScreenContext): Promise<void> 
     if (importedIds.has(pack.packId)) {
       const remove = button('削除', 'btn ghost danger');
       remove.onclick = async () => {
-        if (!window.confirm(`${pack.title} を削除します。学習履歴は残ります。`)) return;
+        if (
+          !window.confirm(
+            `${pack.title} を削除します。この教材のブックマーク・復習進捗・再開位置はリセットされます。過去の回答はバックアップに残り、現在の学習集計から除外されます。`
+          )
+        )
+          return;
         await studyStore.deleteImportedPack(pack.packId);
         toast('インポート済みパックを削除しました。');
         await onImported();

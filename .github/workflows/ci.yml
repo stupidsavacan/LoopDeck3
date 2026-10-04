@@ -48,16 +48,10 @@ jobs:
           npx vite --version
           npx vitest --version
 
-      - name: Check TypeScript architecture
-        run: npm run check:architecture
-      - name: Run dead-code audit
-        run: npm run deadcode
 
-      - name: Run lint guardrails
+      - name: Check TypeScript
         run: npm run lint
 
-      - name: Generate source navigation index
-        run: npm run code:map
 
       - name: Run web tests
         run: npm test

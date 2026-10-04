@@ -14,7 +14,7 @@ export function fixture() {
     const q = questions[i % questions.length];
     return { attemptId: `qa-attempt-${i}`, questionId: q.id, moduleId: q.moduleId, answeredAt: new Date(Date.now() - i * 3600000).toISOString(), result: i % 2 ? 'correct' : 'wrong', input: 'x', answer: 'answer', elapsedMs: 1000, mode: 'normal' };
   });
-  const reviewCards = questions.map(q => ({ questionId: q.id, moduleId: q.moduleId, state: 'review', dueAt: now, lastReviewedAt: now, firstReviewedAt: now, intervalDays: 1, ease: 2.5, totalReviews: 5, totalCorrect: 2, totalWrong: 3, correctStreak: 0, wrongStreak: 1, lapseCount: 1, leechLevel: 0, suspended: false, createdAt: now, updatedAt: now }));
+  const reviewCards = questions.map(q => ({ questionId: q.id, questionMode: 'as_stored', moduleId: q.moduleId, state: 'review', dueAt: now, lastReviewedAt: now, firstReviewedAt: now, intervalDays: 1, ease: 2.5, totalReviews: 5, totalCorrect: 2, totalWrong: 3, correctStreak: 0, wrongStreak: 1, lapseCount: 1, leechLevel: 0, suspended: false, createdAt: now, updatedAt: now }));
   return { packs: [pack], attempts, reviewCards, bookmarks: questions.map(q => ({ questionId: q.id, createdAt: now })) };
 }
 
@@ -34,7 +34,7 @@ export async function seed(page, volume = true) {
       const ctx = canvas.getContext('2d'); ctx.fillStyle = '#dceaff'; ctx.fillRect(0, 0, width, height); ctx.fillStyle = '#123'; ctx.font = '20px sans-serif';
       for (let y = 20; y < height; y += 30) ctx.fillText('Dense labels 日本語 123 '.repeat(20), 0, y);
       const path = `assets/image-${i + 3}.png`;
-      assets.push({ assetId: `qa-hostile:${path}`, packId: 'qa-hostile', path, mimeType: 'image/png', dataUrl: canvas.toDataURL() });
+      assets.push({ assetId: JSON.stringify(['qa-hostile', path]), packId: 'qa-hostile', path, mimeType: 'image/png', dataUrl: canvas.toDataURL() });
     });
     data.packAssets = assets; // 9–11 intentionally missing, shared by many questions.
     await new Promise((resolve, reject) => {

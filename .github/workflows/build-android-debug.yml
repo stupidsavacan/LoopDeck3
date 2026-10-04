@@ -57,9 +57,12 @@ jobs:
         with:
           gradle-version: 8.10.2
 
+      - name: Compute traceable debug version
+        run: node scripts/android-version.mjs
+
       - name: Build debug-signed APK
         working-directory: android
-        run: gradle --no-daemon assembleDebug
+        run: gradle --no-daemon assembleDebug -PappVersionCode=${{ env.LOOPDECK_VERSION_CODE }} -PappVersionName=${{ env.LOOPDECK_VERSION_NAME }}
 
       - name: List debug APK outputs
         if: always()

@@ -3,21 +3,26 @@ import type {
   AnswerResult,
   Attempt,
   ConcreteStudyQuestionMode,
+  LoopDeckPack,
   ReviewCard,
   ReviewLog,
   ReviewRating,
   ReviewState
 } from '../core/models';
 import { isSafeImageDataUrl, isSafeImageAssetRef, extensionOf } from '../packs/assetSafety';
+import { packAssetId } from '../packs/packAssetIdentity';
 import { estimateBase64DecodedBytes, MAX_BACKUP_COLLECTION_ITEMS, MAX_IMAGE_ASSET_BYTES } from '../packs/importLimits';
-import { validatePack } from '../packs/packValidator';
+import { validatePack, validateActivePackIdentities } from '../packs/packValidator';
+import { loadBuiltinPacks } from '../packs/builtinLoader';
+import { resolveActivePacks } from '../packs/packResolver';
+import { getSupportedStudyQuestionModes } from '../core/questionPresentation';
 import type { StudyBackup, StoredPackAsset } from './storageTypes';
 
 const ANSWER_RESULTS = new Set<AnswerResult>(['correct', 'wrong', 'revealed']);
 const ATTEMPT_MODES = new Set(['normal', 'review']);
 const ANSWER_FORMATS = new Set<AnswerFormat>(['auto', 'choice', 'input']);
 const QUESTION_MODES = new Set<ConcreteStudyQuestionMode>(['as_stored', 'front_to_back', 'back_to_front']);
-const REVIEW_STATES = new Set<ReviewState>(['new', 'review', 'relearning', 'leech', 'mastered']);
+const REVIEW_STATES = new Set<ReviewState>(['new', 'learning', 'review', 'relearning', 'leech', 'mastered', 'suspended']);
 const REVIEW_RATINGS = new Set<ReviewRating>(['again', 'hard', 'good', 'easy']);
 const IMAGE_MIME_TYPES: Record<string, string> = {
   '.png': 'image/png',
@@ -50,6 +55,45 @@ function optionalArray(value: unknown, name: string): unknown[] {
   return requireArray(value, name);
 }
 
+function requireUnique<T>(rows: T[], key: (row: T) => string, name: string): void {
+  const seen = new Set<string>();
+  for (const row of rows) {
+    const id = key(row);
+    if (seen.has(id)) fail(`${name} contains duplicate key ${id}.`);
+    seen.add(id);
+  }
+}
+
+export function validateBackupRelationships(backup: StudyBackup, importedPacks: LoopDeckPack[] = backup.importedPacks): void {
+  const packs = [...loadBuiltinPacks(), ...importedPacks];
+  const errors = validateActivePackIdentities(packs).filter((issue) => issue.level === 'error');
+  if (errors.length) fail(`active pack identity conflict: ${errors.map((issue) => issue.message).join('; ')}`);
+  const view = resolveActivePacks(packs);
+  // Deleted material remains useful history. When material is active, ownership
+  // must agree; IDs for removed questions are retained as historical records.
+  for (const row of [...backup.attempts, ...(backup.reviewCards ?? []), ...(backup.reviewLogs ?? [])]) {
+    if ('contentRetired' in row && row.contentRetired === true) continue;
+    const question = view.questionById.get(row.questionId);
+    if (question && question.moduleId !== row.moduleId) fail(`question ${row.questionId} references the wrong module ${row.moduleId}.`);
+    if (question && !getSupportedStudyQuestionModes(question).includes(row.questionMode ?? 'as_stored'))
+      fail(`question ${row.questionId} references an unsupported study direction.`);
+  }
+  const attempts = new Map(backup.attempts.map((attempt) => [attempt.attemptId, attempt]));
+  for (const log of backup.reviewLogs ?? []) {
+    const attempt = log.attemptId ? attempts.get(log.attemptId) : undefined;
+    // Missing attempts are allowed: clearing mistake history leaves SRS intact.
+    if (
+      attempt &&
+      (attempt.questionId !== log.questionId ||
+        attempt.moduleId !== log.moduleId ||
+        (attempt.questionMode ?? 'as_stored') !== (log.questionMode ?? 'as_stored') ||
+        attempt.result !== log.result ||
+        Date.parse(attempt.answeredAt) !== Date.parse(log.reviewedAt))
+    )
+      fail(`review log ${log.reviewLogId} does not match its attempt.`);
+  }
+}
+
 export function parseAttempt(value: unknown, index: number): Attempt {
   const path = `attempts[${index}]`;
   if (!isObject(value)) fail(`${path} must be an object.`);
@@ -63,6 +107,7 @@ export function parseAttempt(value: unknown, index: number): Attempt {
   if (!nonNegativeNumber(value.elapsedMs)) fail(`${path}.elapsedMs must be a non-negative finite number.`);
   if (typeof value.mode !== 'string' || !ATTEMPT_MODES.has(value.mode)) fail(`${path}.mode is unsupported.`);
   if (value.nearMiss !== undefined && typeof value.nearMiss !== 'boolean') fail(`${path}.nearMiss must be boolean.`);
+  if (value.contentRetired !== undefined && typeof value.contentRetired !== 'boolean') fail(`${path}.contentRetired must be boolean.`);
   if (value.hiddenTimeExcludedMs !== undefined && !nonNegativeNumber(value.hiddenTimeExcludedMs))
     fail(`${path}.hiddenTimeExcludedMs must be non-negative.`);
   if (value.priorityDelta !== undefined && !finiteNumber(value.priorityDelta)) fail(`${path}.priorityDelta must be finite.`);
@@ -85,6 +130,7 @@ export function parseAttempt(value: unknown, index: number): Attempt {
     elapsedMs: value.elapsedMs,
     mode: value.mode as Attempt['mode'],
     ...(value.nearMiss !== undefined ? { nearMiss: value.nearMiss } : {}),
+    ...(value.contentRetired !== undefined ? { contentRetired: value.contentRetired } : {}),
     ...(value.hiddenTimeExcludedMs !== undefined ? { hiddenTimeExcludedMs: value.hiddenTimeExcludedMs } : {}),
     ...(value.priorityDelta !== undefined ? { priorityDelta: value.priorityDelta } : {}),
     ...(value.answerMode !== undefined ? { answerMode: value.answerMode as AnswerFormat } : {}),
@@ -92,11 +138,13 @@ export function parseAttempt(value: unknown, index: number): Attempt {
   };
 }
 
-function parseReviewCard(value: unknown, index: number): ReviewCard {
+export function parseReviewCard(value: unknown, index: number): ReviewCard {
   const path = `reviewCards[${index}]`;
   if (!isObject(value)) fail(`${path} must be an object.`);
   if (!nonEmptyString(value.questionId)) fail(`${path}.questionId is required.`);
   if (!nonEmptyString(value.moduleId)) fail(`${path}.moduleId is required.`);
+  if (value.questionMode !== undefined && !QUESTION_MODES.has(value.questionMode as ConcreteStudyQuestionMode))
+    fail(`${path}.questionMode is unsupported.`);
   if (typeof value.state !== 'string' || !REVIEW_STATES.has(value.state as ReviewState)) fail(`${path}.state is unsupported.`);
   for (const key of ['dueAt', 'lastReviewedAt', 'firstReviewedAt'] as const)
     if (!validNullableDate(value[key])) fail(`${path}.${key} must be null or a valid date.`);
@@ -115,8 +163,34 @@ function parseReviewCard(value: unknown, index: number): ReviewCard {
   }
   if (typeof value.suspended !== 'boolean') fail(`${path}.suspended must be boolean.`);
   if (!validDate(value.createdAt) || !validDate(value.updatedAt)) fail(`${path}.createdAt/updatedAt must be valid dates.`);
+  for (const key of [
+    'intervalDays',
+    'totalReviews',
+    'totalCorrect',
+    'totalWrong',
+    'correctStreak',
+    'wrongStreak',
+    'lapseCount',
+    'leechLevel'
+  ] as const) {
+    if (!Number.isSafeInteger(value[key])) fail(`${path}.${key} must be a safe integer.`);
+  }
+  if ((value.ease as number) < 1.3 || (value.ease as number) > 3) fail(`${path}.ease must be between 1.3 and 3.`);
+  if ((value.totalCorrect as number) + (value.totalWrong as number) !== value.totalReviews)
+    fail(`${path}.review counters are inconsistent.`);
+  if (
+    (value.correctStreak as number) > (value.totalCorrect as number) ||
+    (value.wrongStreak as number) > (value.totalWrong as number) ||
+    ((value.correctStreak as number) > 0 && (value.wrongStreak as number) > 0) ||
+    (value.lapseCount as number) > (value.totalWrong as number) ||
+    (value.leechLevel as number) > 3
+  )
+    fail(`${path}.streak/lapse/leech counters are inconsistent.`);
+  if (value.state === 'new' && value.totalReviews !== 0) fail(`${path}.new state cannot contain review progress.`);
+  if (value.state !== 'new' && value.state !== 'suspended' && value.dueAt === null) fail(`${path}.scheduled state requires dueAt.`);
   return {
     questionId: value.questionId,
+    questionMode: (value.questionMode ?? 'as_stored') as ConcreteStudyQuestionMode,
     moduleId: value.moduleId,
     state: value.state as ReviewState,
     dueAt: value.dueAt as string | null,
@@ -137,12 +211,14 @@ function parseReviewCard(value: unknown, index: number): ReviewCard {
   };
 }
 
-function parseReviewLog(value: unknown, index: number): ReviewLog {
+export function parseReviewLog(value: unknown, index: number): ReviewLog {
   const path = `reviewLogs[${index}]`;
   if (!isObject(value)) fail(`${path} must be an object.`);
   if (!nonEmptyString(value.reviewLogId)) fail(`${path}.reviewLogId is required.`);
   if (!nonEmptyString(value.questionId)) fail(`${path}.questionId is required.`);
   if (!nonEmptyString(value.moduleId)) fail(`${path}.moduleId is required.`);
+  if (value.questionMode !== undefined && !QUESTION_MODES.has(value.questionMode as ConcreteStudyQuestionMode))
+    fail(`${path}.questionMode is unsupported.`);
   if (!validDate(value.reviewedAt)) fail(`${path}.reviewedAt must be a valid date.`);
   if (typeof value.rating !== 'string' || !REVIEW_RATINGS.has(value.rating as ReviewRating)) fail(`${path}.rating is unsupported.`);
   if (typeof value.result !== 'string' || !ANSWER_RESULTS.has(value.result as AnswerResult)) fail(`${path}.result is unsupported.`);
@@ -155,9 +231,18 @@ function parseReviewLog(value: unknown, index: number): ReviewLog {
     if (!nonNegativeNumber(value[key])) fail(`${path}.${key} must be a non-negative finite number.`);
   }
   if (value.attemptId !== undefined && !nonEmptyString(value.attemptId)) fail(`${path}.attemptId must be a non-empty string.`);
+  for (const key of ['previousIntervalDays', 'nextIntervalDays'] as const) {
+    if (!Number.isSafeInteger(value[key])) fail(`${path}.${key} must be a safe integer.`);
+  }
+  for (const key of ['previousEase', 'nextEase'] as const) {
+    if ((value[key] as number) < 1.3 || (value[key] as number) > 3) fail(`${path}.${key} must be between 1.3 and 3.`);
+  }
+  if (value.nextState !== 'new' && value.nextState !== 'suspended' && value.nextDueAt === null)
+    fail(`${path}.scheduled next state requires nextDueAt.`);
   return {
     reviewLogId: value.reviewLogId,
     questionId: value.questionId,
+    questionMode: (value.questionMode ?? 'as_stored') as ConcreteStudyQuestionMode,
     moduleId: value.moduleId,
     reviewedAt: value.reviewedAt,
     rating: value.rating as ReviewRating,
@@ -175,7 +260,7 @@ function parseReviewLog(value: unknown, index: number): ReviewLog {
   };
 }
 
-function parseStoredAsset(value: unknown, index: number, packIds: Set<string>): StoredPackAsset {
+export function parseStoredAsset(value: unknown, index: number, packIds: Set<string>): StoredPackAsset {
   const path = `importedPackAssets[${index}]`;
   if (!isObject(value)) fail(`${path} must be an object.`);
   if (!nonEmptyString(value.packId) || !packIds.has(value.packId)) fail(`${path}.packId must reference an imported pack.`);
@@ -184,8 +269,12 @@ function parseStoredAsset(value: unknown, index: number, packIds: Set<string>): 
   if (typeof value.mimeType !== 'string' || value.mimeType !== expectedMime) fail(`${path}.mimeType does not match the asset extension.`);
   if (typeof value.dataUrl !== 'string' || !isSafeImageDataUrl(value.dataUrl)) fail(`${path}.dataUrl must be a supported image data URL.`);
   if (estimateBase64DecodedBytes(value.dataUrl) > MAX_IMAGE_ASSET_BYTES) fail(`${path}.dataUrl exceeds the per-asset size limit.`);
-  const expectedAssetId = `${value.packId}:${value.path}`;
-  if (value.assetId !== undefined && value.assetId !== expectedAssetId) fail(`${path}.assetId does not match packId/path.`);
+  if (!value.dataUrl.toLowerCase().startsWith(`data:${expectedMime};base64,`))
+    fail(`${path}.dataUrl MIME does not match the asset extension.`);
+  const expectedAssetId = packAssetId(value.packId, value.path);
+  const legacyAssetId = `${value.packId}:${value.path}`;
+  if (value.assetId !== undefined && value.assetId !== expectedAssetId && value.assetId !== legacyAssetId)
+    fail(`${path}.assetId does not match packId/path.`);
   return {
     assetId: expectedAssetId,
     packId: value.packId,
@@ -230,8 +319,15 @@ export function validateBackupPayload(value: unknown): StudyBackup {
   const reviewCards = optionalArray(value.reviewCards, 'reviewCards').map(parseReviewCard);
   const reviewLogs = optionalArray(value.reviewLogs, 'reviewLogs').map(parseReviewLog);
 
-  return {
-    format: 'loopdeck3.backup', schema: 1,
+  requireUnique(attempts, (row) => row.attemptId, 'attempts');
+  requireUnique(bookmarks, (row) => row, 'bookmarks');
+  requireUnique(importedPackAssets, (row) => row.assetId, 'importedPackAssets');
+  requireUnique(reviewCards, (row) => JSON.stringify([row.questionId, row.questionMode]), 'reviewCards');
+  requireUnique(reviewLogs, (row) => row.reviewLogId, 'reviewLogs');
+
+  const backup: StudyBackup = {
+    format: 'loopdeck3.backup',
+    schema: 1,
     exportedAt: value.exportedAt,
     attempts,
     bookmarks,
@@ -240,4 +336,6 @@ export function validateBackupPayload(value: unknown): StudyBackup {
     ...(value.reviewCards !== undefined ? { reviewCards } : {}),
     ...(value.reviewLogs !== undefined ? { reviewLogs } : {})
   };
+  validateBackupRelationships(backup);
+  return backup;
 }

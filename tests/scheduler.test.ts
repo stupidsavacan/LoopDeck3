@@ -135,3 +135,12 @@ describe('SRS scheduler', () => {
     expect(inferReviewRating('correct', 3000, 'choice')).toBe('easy');
   });
 });
+
+it('starts due reviews only at the actual due instant, including same-day relearning and leech cards', () => {
+  const now = new Date('2026-10-03T10:00:00Z');
+  const future = ['relearning', 'leech', 'review'].map(
+    (state, index) => ({ ...createReviewCard(`future-${index}`, 'm', now), state, dueAt: '2026-10-03T10:10:00Z' }) as ReviewCard
+  );
+  expect(buildSrsReviewQueue(future, now)).toEqual([]);
+  expect(buildSrsReviewQueue(future, new Date('2026-10-03T10:10:00Z'))).toHaveLength(3);
+});

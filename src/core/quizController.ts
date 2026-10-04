@@ -1,7 +1,7 @@
 import { isNearMissAnswer, judgeQuestion } from './answerJudge';
 import type { AnswerFormat, Attempt, Question } from './models';
 import { buildQuizAttempt } from './quizAnswer';
-import { advanceSession, elapsedForCurrent, type QuizSession } from './sessionEngine';
+import { advanceSession, elapsedForCurrent, elapsedForSession, type QuizSession } from './sessionEngine';
 
 export type QuizPhase = 'answering' | 'pending' | 'saving' | 'failed' | 'saved' | 'advanced' | 'disposed';
 export interface QuizControllerOptions {
@@ -24,23 +24,36 @@ export class QuizController {
   private excludedMs = 0;
   private autoNext: ReturnType<typeof setTimeout> | undefined;
   constructor(private readonly options: QuizControllerOptions) {}
-  get phase(): QuizPhase { return this.state; }
-  get canAnswer(): boolean { return this.state === 'answering' && this.options.isCurrent(); }
+  get phase(): QuizPhase {
+    return this.state;
+  }
+  get canAnswer(): boolean {
+    return this.state === 'answering' && this.options.isCurrent();
+  }
 
   private excluded(now = Date.now()): number {
     return this.excludedMs + (this.hiddenSince === undefined ? 0 : Math.max(0, now - this.hiddenSince));
   }
   checkpoint(): void {
-    if (!this.canAnswer) return;
+    if (!this.options.isCurrent() || (this.state !== 'answering' && this.state !== 'saved')) return;
     const now = Date.now();
     const session = this.options.session;
+    const sessionElapsedMs = elapsedForSession(session, this.excluded(now), now);
+    if (this.state === 'saved') {
+      this.options.onCheckpoint?.(advanceSession(session, this.attempt, sessionElapsedMs));
+      return;
+    }
     this.options.onCheckpoint?.({
-      ...session, currentElapsedMs: elapsedForCurrent(session, this.excluded(now)),
-      currentStartedAt: now, currentHiddenTimeExcludedMs: session.currentHiddenTimeExcludedMs + this.excluded(now)
+      ...session,
+      sessionElapsedMs,
+      sessionSegmentStartedAt: now,
+      currentElapsedMs: elapsedForCurrent(session, this.excluded(now)),
+      currentStartedAt: now,
+      currentHiddenTimeExcludedMs: session.currentHiddenTimeExcludedMs + this.excluded(now)
     });
   }
   setHidden(hidden: boolean): void {
-    if (!this.canAnswer) return;
+    if (!this.options.isCurrent() || this.state === 'advanced' || this.state === 'disposed') return;
     const now = Date.now();
     if (hidden) {
       this.checkpoint();
@@ -51,7 +64,7 @@ export class QuizController {
     }
   }
   excludeSuspension(elapsed: number): void {
-    if (!this.canAnswer) return;
+    if (!this.options.isCurrent() || this.state === 'advanced' || this.state === 'disposed') return;
     this.excludedMs += elapsed;
     this.checkpoint();
   }
@@ -60,8 +73,16 @@ export class QuizController {
     const { question, session, answerMode } = this.options;
     const nearMiss = !revealed && typeof input === 'string' && question.type !== 'multi_select' && isNearMissAnswer(question, input);
     const result = revealed ? 'revealed' : judgeQuestion(question, input) ? 'correct' : 'wrong';
-    this.attempt = buildQuizAttempt(question, result, revealed ? '' : Array.isArray(input) ? [...input] : input,
-      elapsedForCurrent(session, this.excluded()), session.mode, answerMode, session.currentHiddenTimeExcludedMs + this.excluded(), nearMiss);
+    this.attempt = buildQuizAttempt(
+      question,
+      result,
+      revealed ? '' : Array.isArray(input) ? [...input] : input,
+      elapsedForCurrent(session, this.excluded()),
+      session.mode,
+      answerMode,
+      session.currentHiddenTimeExcludedMs + this.excluded(),
+      nearMiss
+    );
     this.state = 'pending';
     return this.attempt;
   }
@@ -79,18 +100,28 @@ export class QuizController {
     }
     if (this.phase === 'disposed' || !this.options.isCurrent()) return;
     this.state = 'saved';
-    try { this.options.onCheckpoint?.(advanceSession(this.options.session, this.attempt)); }
-    catch (error) { this.options.onCheckpointError(error); }
+    try {
+      this.checkpoint();
+    } catch (error) {
+      this.options.onCheckpointError(error);
+    }
     if (this.state !== 'saved' || !this.options.isCurrent()) return;
     this.options.onPersistenceChange('saved');
-    if (this.phase === 'saved' && this.options.isCurrent() && this.attempt.result === 'correct' && this.options.session.settings.autoNext) this.autoNext = setTimeout(() => this.advance(), 650);
+    if (this.phase === 'saved' && this.options.isCurrent() && this.attempt.result === 'correct' && this.options.session.settings.autoNext)
+      this.autoNext = setTimeout(() => this.advance(), 650);
   }
   advance(): void {
     if (this.state !== 'saved' || !this.options.isCurrent()) return;
     this.clearTimer();
     this.state = 'advanced';
-    this.options.onAdvance(advanceSession(this.options.session, this.attempt));
+    this.options.onAdvance(advanceSession(this.options.session, this.attempt, elapsedForSession(this.options.session, this.excluded())));
   }
-  private clearTimer(): void { if (this.autoNext !== undefined) clearTimeout(this.autoNext); this.autoNext = undefined; }
-  dispose(): void { this.clearTimer(); this.state = 'disposed'; }
+  private clearTimer(): void {
+    if (this.autoNext !== undefined) clearTimeout(this.autoNext);
+    this.autoNext = undefined;
+  }
+  dispose(): void {
+    this.clearTimer();
+    this.state = 'disposed';
+  }
 }

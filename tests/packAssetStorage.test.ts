@@ -15,7 +15,11 @@ function pack(packId: string): LoopDeckPack {
   };
 }
 
-function asset(packId: string, path: string, data = 'iVBORw0KGgo='): ImportedPackAsset {
+function asset(
+  packId: string,
+  path: string,
+  data = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+): ImportedPackAsset {
   return { packId, path, mimeType: 'image/png', dataUrl: `data:image/png;base64,${data}` };
 }
 
@@ -41,28 +45,43 @@ describe('imported pack asset storage', () => {
 
     await studyStore.saveImportedPackWithAssets(savedPack, [asset(packId, 'images/new.png')], 'upsert');
     expect(await studyStore.getPackAsset(packId, 'images/map.png')).toBeDefined();
-    expect(await studyStore.getPackAsset(packId, 'images/new.png')).toBeDefined();
+    expect(await studyStore.getPackAsset(packId, 'images/new.png')).toBeUndefined();
 
-    await studyStore.saveImportedPackWithAssets(savedPack, [asset(packId, 'images/new.png', 'bmV3')], 'replace');
+    const changed = { ...savedPack, questions: savedPack.questions.map((q) => ({ ...q, imageAsset: 'images/new.png' })) };
+    await studyStore.saveImportedPackWithAssets(
+      changed,
+      [asset(packId, 'images/new.png', 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+Xn9sAAAAASUVORK5CYII=')],
+      'replace'
+    );
     expect(await studyStore.getPackAsset(packId, 'images/map.png')).toBeUndefined();
-    expect((await studyStore.getPackAsset(packId, 'images/new.png'))?.dataUrl).toBe('data:image/png;base64,bmV3');
-    expect(await studyStore.getAttempts()).toContainEqual(attempt);
+    expect((await studyStore.getPackAsset(packId, 'images/new.png'))?.dataUrl).toBe(
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+Xn9sAAAAASUVORK5CYII='
+    );
+    expect(await studyStore.getAttempts()).not.toContainEqual(attempt);
+    expect((await studyStore.exportSnapshot()).attempts).toContainEqual({ ...attempt, contentRetired: true });
 
     await studyStore.deleteImportedPack(packId);
     expect(await studyStore.getPackAsset(packId, 'images/new.png')).toBeUndefined();
     expect((await studyStore.getImportedPacks()).some((item) => item.packId === packId)).toBe(false);
-    expect(await studyStore.getAttempts()).toContainEqual(attempt);
+    expect(await studyStore.getAttempts()).not.toContainEqual(attempt);
+    expect((await studyStore.exportSnapshot()).attempts).toContainEqual({ ...attempt, contentRetired: true });
   });
 
-  it('overwrites an existing same-path asset during upsert merge', async () => {
+  it('rejects an existing same-path asset collision atomically during upsert merge', async () => {
     const packId = 'storage-image-path-collision';
     const savedPack = pack(packId);
     await studyStore.deleteImportedPack(packId);
     await studyStore.saveImportedPackWithAssets(savedPack, [asset(packId, 'images/map.png', 'b2xk')], 'replace');
 
-    await studyStore.saveImportedPackWithAssets(savedPack, [asset(packId, 'images/map.png', 'bmV3')], 'upsert');
+    await expect(
+      studyStore.saveImportedPackWithAssets(
+        savedPack,
+        [asset(packId, 'images/map.png', 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+Xn9sAAAAASUVORK5CYII=')],
+        'upsert'
+      )
+    ).rejects.toBeTruthy();
 
-    expect((await studyStore.getPackAsset(packId, 'images/map.png'))?.dataUrl).toBe('data:image/png;base64,bmV3');
+    expect((await studyStore.getPackAsset(packId, 'images/map.png'))?.dataUrl).toBe('data:image/png;base64,b2xk');
     await studyStore.deleteImportedPack(packId);
   });
 });
