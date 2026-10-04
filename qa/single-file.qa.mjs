@@ -157,7 +157,7 @@ test('combined text image and visual references fit phone and desktop screens', 
   await page.getByLabel('回答形式').selectOption('flashcard');
   await page.getByRole('button', { name: '学習を始める', exact: true }).click();
   for (const question of questions) {
-    await expect(page.getByRole('button', { name: '知ってる →', exact: true })).toBeEnabled();
+    await expect(page.getByRole('button', { name: '知ってる', exact: true })).toBeEnabled();
     await expect(page.locator('.flashcard-front .flashcard-term')).toHaveText(question.prompt);
     const image = page.locator('.flashcard-front img.question-image');
     await image.evaluate(image => image.decode());
@@ -180,7 +180,7 @@ test('combined text image and visual references fit phone and desktop screens', 
       await page.screenshot({ path: info.outputPath(`flashcard-${question.id}-${width}.png`), fullPage: true });
       await content.evaluate(content => { content.scrollTop = 0; });
     }
-    await page.getByRole('button', { name: '知ってる →', exact: true }).click();
+    await page.getByRole('button', { name: '知ってる', exact: true }).click();
   }
   await expect(page.locator('.flashcard-donut-center')).toHaveText('100%KNOWN');
 });
@@ -206,12 +206,19 @@ for (const width of [412, 1280]) test(`flashcard tap swipe result retry and resu
   await expect(autoReveal).toBeDisabled(); await expect(autoReveal).toBeChecked();
   await expect(page.getByLabel('出題形式')).toBeEnabled();
   await page.getByLabel('出題形式').selectOption('front_to_back');
-  await expect(page.getByRole('button', { name: 'この設定で学習を始める →', exact: true })).toBeVisible();
+  await expect(page.locator('.flashcard-custom-start')).toHaveCount(0);
   await page.screenshot({ path: info.outputPath(`flashcard-module-${width}.png`), fullPage: true });
-  if (width === 412) await page.getByRole('button', { name: 'この設定で学習を始める →', exact: true }).click();
-  else await page.getByRole('button', { name: '学習を始める', exact: true }).click();
+  await page.getByRole('button', { name: '学習を始める', exact: true }).click();
   const wrap = page.locator('.flashcard-wrap');
   await expect(wrap).toBeVisible();
+  await expect(page.locator('.flashcard-header .flashcard-back-button')).toHaveCount(0);
+  await expect(page.locator('.flashcard-arrow-svg')).toHaveCount(2);
+  const bookmark = page.locator('.flashcard-header').getByRole('button', { name: 'ブックマーク', exact: true });
+  await expect(bookmark).toBeVisible();
+  await bookmark.click();
+  await expect(page.locator('.flashcard-header').getByRole('button', { name: 'ブックマーク済み', exact: true })).toBeVisible();
+  await page.locator('.flashcard-header').getByRole('button', { name: 'ブックマーク済み', exact: true }).click();
+  await expect(page.locator('.flashcard-header').getByRole('button', { name: 'ブックマーク', exact: true })).toBeVisible();
   await expect(page.locator('.flashcard-front .flashcard-term')).toHaveText('strict');
   await expect(page.locator('.flashcard-back .flashcard-term')).toHaveText('厳しい');
   await expect(page.locator('.flashcard-session select')).toHaveCount(0);
@@ -274,6 +281,7 @@ for (const width of [412, 1280]) test(`flashcard tap swipe result retry and resu
   await expect(wrap).not.toHaveClass(/is-flipped/);
   await swipe(-130);
   await expect(page.getByRole('heading', { name: 'おつかれさま。', exact: true })).toBeVisible();
+  await expect(page.locator('.flashcard-header').getByRole('button')).toHaveCount(0);
   await expect(page.locator('.flashcard-donut-center')).toHaveText('50%KNOWN');
   await expect(page.locator('.flashcard-stat')).toHaveCount(2);
   await expect(page.locator('.flashcard-missed-chip')).toHaveText('agree');
