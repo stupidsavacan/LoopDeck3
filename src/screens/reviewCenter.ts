@@ -1,3 +1,6 @@
+import { buildQuizAnswerSources } from '../core/reviewPersistence';
+import { presentQuestionForStudy } from '../core/questionPresentation';
+import { buildSrsReviewQueue } from '../core/scheduler';
 import type { ScreenContext } from '../app/context';
 import type { ModuleInfo, Question, ReviewCard, StudySettings } from '../core/models';
 import { DEFAULT_REVIEW_LOOKBACK_DAYS } from '../core/reviewEngine';
@@ -14,7 +17,10 @@ const percent = (value: number): string => `${Math.round(value * 100)}%`;
 const seconds = (value: number): string => `${Math.round(value / 100) / 10}秒`;
 
 function questionsForCards(cards: ReviewCard[], questionsById: Map<string, Question>): Question[] {
-  return cards.map((card) => questionsById.get(card.questionId)).filter((question): question is Question => Boolean(question));
+  return cards.flatMap((card) => {
+    const question = questionsById.get(card.questionId);
+    return question ? [presentQuestionForStudy(question, card.questionMode ?? 'as_stored')] : [];
+  });
 }
 
 function stat(label: string, value: string | number): HTMLElement {
@@ -60,7 +66,11 @@ export async function renderReviewCenter(context: ScreenContext): Promise<void> 
   const attempts = await studyStore.getAttempts();
   const reviewCards = await studyStore.getReviewCards();
   if (!isCurrent()) return;
+  const assets = await studyStore.getImportedPackAssets();
+  const revisions = await studyStore.getImportedPackRevisions();
+  if (!isCurrent()) return;
   const questions = getActiveQuestions(packView);
+  const sourceByQuestionId = buildQuizAnswerSources(questions, packView.modulePackIdById, assets, revisions);
   const modules = packView.moduleById;
   const scope = readReviewScope();
   const { questionsById, activeModuleIds, queue, mistakes, analyses, weak, schedule, buckets, srsQueue, hiddenDueCount } =
@@ -135,8 +145,22 @@ export async function renderReviewCenter(context: ScreenContext): Promise<void> 
       showCategory: true
     };
     const session = createSession(reviewModule, items, settings, 'review', questions);
-    const update = (next: QuizSession) => renderInlineQuiz(mount, next, { onSessionChange: update, onComplete: rerender }, { store: studyStore, isCurrent, resolveImageAsset: resolveImage });
-    renderInlineQuiz(mount, session, { onSessionChange: update, onComplete: rerender }, { store: studyStore, isCurrent, resolveImageAsset: resolveImage });
+    session.sourceByQuestionId = sourceByQuestionId;
+    if (items.some((question) => question.activeStudyMode !== undefined))
+      session.queue = session.queue.map((question, index) => items[index] ?? question);
+    const update = (next: QuizSession) =>
+      renderInlineQuiz(
+        mount,
+        next,
+        { onSessionChange: update, onComplete: rerender },
+        { store: studyStore, isCurrent, resolveImageAsset: resolveImage }
+      );
+    renderInlineQuiz(
+      mount,
+      session,
+      { onSessionChange: update, onComplete: rerender },
+      { store: studyStore, isCurrent, resolveImageAsset: resolveImage }
+    );
   }
 
   const srsCard = el('section', 'card action-card');
@@ -163,7 +187,8 @@ export async function renderReviewCenter(context: ScreenContext): Promise<void> 
   const overdue = button('期限切れだけ復習', 'btn');
   overdue.onclick = () => startReviewSession(questionsForCards(buckets.overdue, questionsById), '期限切れ復習', 'srs-overdue', 30, false);
   const leech = button('重点復習だけ', 'btn');
-  leech.onclick = () => startReviewSession(questionsForCards(buckets.leech, questionsById), '重点復習', 'srs-leech', 30, false);
+  leech.onclick = () =>
+    startReviewSession(questionsForCards(buildSrsReviewQueue(buckets.leech), questionsById), '重点復習', 'srs-leech', 30, false);
   const reset = button('SRS予定だけリセット', 'btn ghost danger');
   reset.onclick = async () => {
     if (!window.confirm('SRSの次回予定・状態・ReviewLogだけ削除します。回答履歴は残るため、履歴ベースの弱点候補は残ります。')) return;
@@ -235,7 +260,13 @@ export async function renderReviewCenter(context: ScreenContext): Promise<void> 
     );
     const one = button('この問題を復習', 'btn');
     one.onclick = () =>
-      startReviewSession([question], modules.get(card.moduleId)?.title ?? '問題別復習', `srs-${card.questionId}`, 1, false);
+      startReviewSession(
+        [presentQuestionForStudy(question, card.questionMode ?? 'as_stored')],
+        modules.get(card.moduleId)?.title ?? '問題別復習',
+        `srs-${card.questionId}`,
+        1,
+        false
+      );
     row.append(meta, one);
     srsList.append(row);
   }

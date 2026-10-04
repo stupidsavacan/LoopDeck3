@@ -27,13 +27,18 @@ async function zipFile(questions: ReturnType<typeof question>[], images: Record<
 describe('ZIP image asset import', () => {
   it('imports referenced PNG assets and ignores unreferenced images', async () => {
     const result = await importLoopDeckZip(
-      await zipFile([question('q1', 'images/map.png')], { 'images/map.png': 'iVBORw0KGgo=', 'images/unused.png': 'iVBORw0KGgo=' })
+      await zipFile([question('q1', 'images/map.png')], {
+        'images/map.png': 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+        'images/unused.png': 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+      })
     );
 
     expect(result.ok).toBe(true);
     expect(result.assets).toHaveLength(1);
     expect(result.assets?.[0]).toMatchObject({ packId: 'image-pack', path: 'images/map.png', mimeType: 'image/png' });
-    expect(result.assets?.[0]?.dataUrl).toBe('data:image/png;base64,iVBORw0KGgo=');
+    expect(result.assets?.[0]?.dataUrl).toBe(
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+    );
   });
 
   it('warns when a referenced image is missing', async () => {
@@ -51,7 +56,11 @@ describe('ZIP image asset import', () => {
   });
 
   it('returns assets explicitly without hidden staging state', async () => {
-    const result = await importLoopDeckZip(await zipFile([question('q1', 'images/map.png')], { 'images/map.png': 'iVBORw0KGgo=' }));
+    const result = await importLoopDeckZip(
+      await zipFile([question('q1', 'images/map.png')], {
+        'images/map.png': 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+      })
+    );
     expect(result.assets).toHaveLength(1);
     expect(result.assets?.[0]).toMatchObject({ packId: 'image-pack', path: 'images/map.png' });
   });

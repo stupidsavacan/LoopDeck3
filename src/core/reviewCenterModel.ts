@@ -1,4 +1,5 @@
 import type { Attempt, Question, ReviewCard } from './models';
+import { getSupportedStudyQuestionModes } from './questionPresentation';
 import {
   aggregateReviewAttempts,
   analyzeProblems,
@@ -48,7 +49,12 @@ export function buildReviewCenterModel(
   const scopedAttempts = scope === 'recent' ? recentAttempts : attempts;
   const activeModuleIds = new Set(scopedAttempts.map((attempt) => attempt.moduleId));
   const recentQuestionIds = new Set(recentAttempts.map((attempt) => attempt.questionId));
-  const scopedReviewCards = scope === 'recent' ? reviewCards.filter((card) => recentQuestionIds.has(card.questionId)) : reviewCards;
+  const validReviewCards = reviewCards.filter((card) => {
+    const question = questionsById.get(card.questionId);
+    return question?.moduleId === card.moduleId && getSupportedStudyQuestionModes(question).includes(card.questionMode ?? 'as_stored');
+  });
+  const scopedReviewCards =
+    scope === 'recent' ? validReviewCards.filter((card) => recentQuestionIds.has(card.questionId)) : validReviewCards;
   const scoreOptions = scope === 'recent' ? { now, halfLifeDays: DEFAULT_REVIEW_SCORE_HALF_LIFE_DAYS } : {};
   const aggregation = aggregateReviewAttempts(scopedAttempts);
   const queue = buildReviewQueue(scopedAttempts, questions, scoreOptions, aggregation);
@@ -58,7 +64,7 @@ export function buildReviewCenterModel(
     .slice(0, 8);
   const weak = summarizeWeakModules(scopedAttempts, aggregation);
   const schedule = summarizeReviewSchedule(scopedReviewCards, now);
-  const allSchedule = summarizeReviewSchedule(reviewCards, now);
+  const allSchedule = summarizeReviewSchedule(validReviewCards, now);
   const buckets = bucketReviewCards(scopedReviewCards, now);
   const srsQueue = buildSrsReviewQueue(scopedReviewCards, now, 30);
 

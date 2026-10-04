@@ -162,8 +162,7 @@ describe('settings and aggregation contracts', () => {
     data.questions.push({ ...q, id: 'q2', moduleId: 'unfiled' });
     const root = document.createElement('div');
     const render = () =>
-      renderHomeScreen(screenContext({ root: root, catalog: resolveActivePacks([data]), navigation: { module: () => {} } })
-      );
+      renderHomeScreen(screenContext({ root: root, catalog: resolveActivePacks([data]), navigation: { module: () => {} } }));
     render();
     root.querySelector<HTMLButtonElement>('.folder-head')!.click();
     render();
@@ -209,7 +208,12 @@ describe('settings and aggregation contracts', () => {
   });
   it('shows an imported reverse-style module ID on Home', () => {
     const root = document.createElement('div');
-    renderHomeScreen(screenContext({ root: root, catalog: resolveActivePacks([pack({ ...q, moduleId: 'english_reverse' })]), navigation: { module: () => {} } })
+    renderHomeScreen(
+      screenContext({
+        root: root,
+        catalog: resolveActivePacks([pack({ ...q, moduleId: 'english_reverse' })]),
+        navigation: { module: () => {} }
+      })
     );
     expect(root.querySelector('.module-card')).not.toBeNull();
   });
@@ -240,10 +244,15 @@ describe('quiz asynchronous ownership', () => {
     const read = deferred<boolean>();
     vi.spyOn(studyStore, 'hasBookmark').mockReturnValueOnce(read.promise);
     const { container } = quiz();
-    renderInlineQuiz(container, createSession(pack().modules[0], [{ ...q, id: 'new' }], settings), {
-      onSessionChange() {},
-      onComplete() {}
-    }, { store: studyStore });
+    renderInlineQuiz(
+      container,
+      createSession(pack().modules[0], [{ ...q, id: 'new' }], settings),
+      {
+        onSessionChange() {},
+        onComplete() {}
+      },
+      { store: studyStore }
+    );
     await vi.waitFor(() => expect(container.querySelector<HTMLButtonElement>('.bookmark-btn')!.disabled).toBe(false));
     read.resolve(true);
     await read.promise;
@@ -256,9 +265,11 @@ describe('quiz asynchronous ownership', () => {
     await vi.waitFor(() => expect(callbacks.onSessionCheckpoint).toHaveBeenCalledTimes(1));
     disposeInlineQuizzes(container);
     container.remove();
+    // Disposal records visible feedback time once; detached events do not save again.
+    expect(callbacks.onSessionCheckpoint).toHaveBeenCalledTimes(2);
     window.dispatchEvent(new Event('pagehide'));
     await new Promise((resolve) => setTimeout(resolve, 750));
-    expect(callbacks.onSessionCheckpoint).toHaveBeenCalledTimes(1);
+    expect(callbacks.onSessionCheckpoint).toHaveBeenCalledTimes(2);
     expect(callbacks.onSessionChange).not.toHaveBeenCalled();
   });
   it('disables bookmark toggles until the initial read completes and rolls back failed writes', async () => {

@@ -9,6 +9,7 @@ import {
   presentQuestionForStudy
 } from '../src/core/questionPresentation';
 import { createSession, selectSessionQuestions } from '../src/core/sessionEngine';
+import { judgeInputAnswer } from '../src/core/answerJudge';
 
 const moduleInfo: ModuleInfo = {
   id: 'english-module',
@@ -34,6 +35,50 @@ function inputQuestion(overrides: Partial<InputQuestion> = {}): InputQuestion {
 }
 
 describe('question presentation fallback reverse study', () => {
+  it('preserves raw circled numbers and the effective accepted-answer set across presentation', () => {
+    const question = inputQuestion({
+      prompt: 'agree',
+      answer: '①賛成する②同意する',
+      acceptedAnswers: ['①支持する②同意する'],
+      acceptableAnswers: ['①承認する②同意する']
+    });
+    for (const mode of ['as_stored', 'front_to_back'] as const) {
+      const presented = presentQuestionForStudy(question, mode) as InputQuestion;
+      expect(presented.answer).toBe(question.answer);
+      expect(judgeInputAnswer(presented, '賛成する、同意する')).toBe(true);
+      expect(judgeInputAnswer(presented, '支持する、同意する')).toBe(true);
+      expect(judgeInputAnswer(presented, '承認する、同意する')).toBe(false);
+    }
+    const pair = getQuestionStudyPair(question);
+    expect(pair?.back.text).toBe(question.answer);
+    expect(pair?.back.acceptableAnswers).toEqual(question.acceptedAnswers);
+    const reverse = presentQuestionForStudy(question, 'back_to_front') as InputQuestion;
+    expect(reverse.prompt).toBe('①賛成する②同意する・①支持する②同意する');
+    expect(judgeInputAnswer(reverse, 'agree')).toBe(true);
+  });
+
+  it('keeps circled and ordinary digits distinct in candidate identity keys', () => {
+    const question = inputQuestion({ answer: '①賛成する', acceptableAnswers: ['1賛成する'] });
+    const presented = presentQuestionForStudy(question, 'front_to_back') as InputQuestion;
+    expect(presented.acceptedAnswers).toEqual(['①賛成する', '1賛成する']);
+    expect(getQuestionStudyPair(question)?.back.acceptableAnswers).toEqual(['1賛成する']);
+  });
+
+  it('judges the transformed language pair for explicit sides and mixed sessions', () => {
+    const question = inputQuestion({
+      sides: { front: { label: '英語', text: 'agree' }, back: { label: '日本語', text: '①賛成する②同意する' } },
+      supportedStudyModes: ['front_to_back', 'back_to_front']
+    });
+    const forward = presentQuestionForStudy(question, 'front_to_back') as InputQuestion;
+    expect(judgeInputAnswer(forward, '賛成する、同意する')).toBe(true);
+    const reverse = presentQuestionForStudy(question, 'back_to_front') as InputQuestion;
+    expect(reverse.prompt).toBe('①賛成する②同意する');
+    expect(judgeInputAnswer(reverse, 'agree')).toBe(true);
+    const session = createSession(moduleInfo, [question], { shuffle: false, autoNext: false, questionLimit: 'all', questionMode: 'mixed' });
+    const active = session.queue[0] as InputQuestion;
+    expect(judgeInputAnswer(active, active.prompt === 'agree' ? '賛成する、同意する' : 'agree')).toBe(true);
+  });
+
   it('auto-reverses English prompt / Japanese answers into Japanese to English study', () => {
     const question = inputQuestion();
     const presented = presentQuestionForStudy(question, 'back_to_front') as InputQuestion;

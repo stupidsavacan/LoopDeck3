@@ -1,18 +1,7 @@
-# Code quality guardrails
+# Code quality checks
 
-LoopDeck uses TypeScript and behavior checks for correctness. Source layout is free: there are no file/function size limits or mandatory expansion/compression rules. Prefer changes that can be located, compared and verified mechanically.
+Source layout and implementation style are unrestricted: there are no mandatory compression, file/function size, import allowlist, non-null assertion, explicit-any or console rules.
 
-## Local commands
+`npm run verify` checks TypeScript diagnostics, behavior tests and the production build. `npm run format:check` checks changed-file formatting when requested. Functional tests, data integrity checks, input resource limits and browser QA remain in place.
 
-- `npm run lint` — runs stricter TypeScript checks plus source AST checks for discarded Promises, unsafe escapes, and debug leftovers.
-- `npm run format` — optional formatting of changed TypeScript, CSS, JSON, and Markdown with `prettier@3.9.9`.
-- `npm run format:check` — optional style check; it is not a CI or `check` gate.
-- `npm run readability` — prints a file/function navigation list, with no size warnings.
-- `npm run code:map` — writes the generated, ignored `.codex-code-map.json` for machine queries.
-- `npm run check` — runs lint, typecheck, dependency architecture, dead-code, code-map generation and behavior tests.
-
-The code map contains imports (including re-exports/dynamic imports), exported names, function locations and body hashes. Body hashes ignore whitespace/comments and normalize literal spelling, so mechanically moved functions can be compared across paths. File content hashes allow an agent to detect an outdated index. Regenerate the index after edits; it is not authoritative application source.
-
-Generated, archive, Android, QA-output, and built single-file artifacts are excluded through `.prettierignore`.
-
-Keep public entry points and persistence formats stable during structural refactoring. Functions may be moved, combined, expanded or compressed when it improves debugging; correctness checks, dependency-cycle checks and regression tests remain mandatory.
+Architecture, dead-code and source navigation scripts are optional diagnostics. They are not part of `check`, `verify`, lint or CI, and their recommendations do not require restructuring otherwise correct code. `npm run check:architecture`, `npm run deadcode`, `npm run code:map` and `npm run readability` remain available for manual investigation.

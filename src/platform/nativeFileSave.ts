@@ -57,10 +57,13 @@ function createNativeSaveWaiter(
 ): {
   promise: Promise<NativeSaveResult>;
   cancel: () => void;
+  pauseTimeout: () => void;
+  abort: () => void;
 } {
   let timeoutId = 0;
   let handler: (event: Event) => void = () => undefined;
   let active = true;
+  let rejectWaiting: (error: Error) => void = () => undefined;
   const cleanup = () => {
     if (!active) return;
     active = false;
@@ -69,6 +72,7 @@ function createNativeSaveWaiter(
   };
 
   const promise = new Promise<NativeSaveResult>((resolve, reject) => {
+    rejectWaiting = reject;
     handler = (event: Event) => {
       const detail = (event as CustomEvent<NativeSaveResult>).detail;
       if (!detail || detail.id !== saveId) return;
@@ -83,7 +87,16 @@ function createNativeSaveWaiter(
     }, timeoutMs);
   });
 
-  return { promise, cancel: cleanup };
+  return {
+    promise,
+    cancel: cleanup,
+    pauseTimeout: () => window.clearTimeout(timeoutId),
+    abort: () => {
+      if (!active) return;
+      cleanup();
+      rejectWaiting(exportError('SAV-A004', '保存がキャンセルされました。'));
+    }
+  };
 }
 
 export function waitForNativeSave(saveId: string, timeoutMs = NATIVE_SAVE_TIMEOUT_MS): Promise<NativeSaveResult> {
@@ -114,6 +127,7 @@ function nativeBridge(): LoopDeck3HostBridge | undefined {
 
 export interface SaveBlobOptions {
   onNativeProgress?: (progress: NativeSaveProgress) => void;
+  signal?: AbortSignal;
 }
 
 export interface SaveBlobResult {
@@ -138,8 +152,17 @@ export async function saveBlob(blob: Blob, filename: string, options: SaveBlobOp
   const mimeType = blob.type || 'application/octet-stream';
   const waiter = createNativeSaveWaiter(saveId);
   let sessionStarted = false;
+  const abort = () => waiter.abort();
+  window.addEventListener('pagehide', abort);
+  options.signal?.addEventListener('abort', abort);
+  const interruptedTransfer = waiter.promise.then(() => {
+    throw exportError('SAV-A033', 'Android保存結果をデータ送信完了前に受信しました。');
+  });
+  // The result may arrive before the transfer starts awaiting it.
+  void interruptedTransfer.catch(() => undefined);
 
   try {
+    if (options.signal?.aborted) throw exportError('SAV-A004', '保存がキャンセルされました。');
     options.onNativeProgress?.({ phase: 'begin', saveId, chunkCount, bytes: blob.size });
     if (!bridge.beginSaveFile(saveId, filename, mimeType, blob.size, chunkCount)) {
       throw exportError('SAV-A011', 'Android保存セッションの開始に失敗しました。');
@@ -149,7 +172,7 @@ export async function saveBlob(blob: Blob, filename: string, options: SaveBlobOp
     for (let index = 0; index < chunkCount; index += 1) {
       const start = index * ANDROID_SAVE_RAW_CHUNK_SIZE;
       const chunk = blob.slice(start, Math.min(blob.size, start + ANDROID_SAVE_RAW_CHUNK_SIZE));
-      const base64Chunk = await blobChunkToBase64(chunk);
+      const base64Chunk = await Promise.race([blobChunkToBase64(chunk), interruptedTransfer]);
       if (!bridge.appendSaveFileChunk(saveId, index, base64Chunk)) {
         throw exportError('SAV-A012', `Android保存チャンク送信に失敗しました。chunk=${index + 1}/${chunkCount}`);
       }
@@ -164,7 +187,9 @@ export async function saveBlob(blob: Blob, filename: string, options: SaveBlobOp
 
     options.onNativeProgress?.({ phase: 'picker', saveId, chunkCount, bytes: blob.size });
     if (!bridge.finishSaveFile(saveId)) throw exportError('SAV-A031', 'Android保存処理の開始に失敗しました。');
-    sessionStarted = false;
+    // A document picker belongs to the user and may remain open indefinitely.
+    // Keep the native session cancellable until its final result arrives.
+    waiter.pauseTimeout();
 
     const nativeResult = await waiter.promise;
     options.onNativeProgress?.({ phase: 'complete', saveId, chunkCount, bytes: nativeResult.bytes ?? blob.size });
@@ -179,5 +204,9 @@ export async function saveBlob(blob: Blob, filename: string, options: SaveBlobOp
       }
     }
     throw error;
+  } finally {
+    waiter.cancel();
+    window.removeEventListener('pagehide', abort);
+    options.signal?.removeEventListener('abort', abort);
   }
 }

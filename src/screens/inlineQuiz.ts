@@ -97,12 +97,24 @@ export function renderInlineQuiz(
   }
 
   const controller = new QuizController({
-    session, question: activeQuestion, answerMode, isCurrent: isCurrentRender,
-    persist: attempt => studyStore.recordAnswer(attempt),
-    onAdvance: next => { cleanup(); callbacks.onSessionChange(next); },
+    session,
+    question: activeQuestion,
+    answerMode,
+    isCurrent: isCurrentRender,
+    persist: (attempt) => studyStore.recordAnswer(attempt, session.sourceByQuestionId?.get(attempt.questionId)),
+    onAdvance: (next) => {
+      cleanup();
+      callbacks.onSessionChange(next);
+    },
     onCheckpoint: callbacks.onSessionCheckpoint,
-    onCheckpointError: error => {
-      writeDebugLog({ level: 'warn', area: 'quizPersistence', code: 'SESSION-CHECKPOINT-FAILED', userMessage: '再開位置を保存できませんでした。', detail: String(error) });
+    onCheckpointError: (error) => {
+      writeDebugLog({
+        level: 'warn',
+        area: 'quizPersistence',
+        code: 'SESSION-CHECKPOINT-FAILED',
+        userMessage: '再開位置を保存できませんでした。',
+        detail: String(error)
+      });
       toast('回答は保存済みですが、再開位置を保存できませんでした。');
     },
     onPersistenceChange: handlePersistenceChange
@@ -116,6 +128,17 @@ export function renderInlineQuiz(
   }
 
   function cleanup(): void {
+    try {
+      controller.checkpoint();
+    } catch (error) {
+      writeDebugLog({
+        level: 'warn',
+        area: 'quizPersistence',
+        code: 'SESSION-CHECKPOINT-FAILED',
+        userMessage: '再開位置を保存できませんでした。',
+        detail: String(error)
+      });
+    }
     stopObserving();
     controller.dispose();
     if (renderTokenByContainer.get(container) === renderToken) {
@@ -129,11 +152,12 @@ export function renderInlineQuiz(
   }
 
   function handleVisibilityChange(): void {
-    if (!controller.canAnswer) return;
     controller.setHidden(document.hidden);
     idleController?.setVisible(!document.hidden);
   }
-  function handlePageHide(): void { controller.checkpoint(); }
+  function handlePageHide(): void {
+    controller.checkpoint();
+  }
 
   function lockAnswerControls(): void {
     answerArea.querySelectorAll<HTMLInputElement | HTMLButtonElement>('input, button').forEach((control) => {
@@ -142,19 +166,33 @@ export function renderInlineQuiz(
     });
   }
 
-  function nextQuestion(): void { controller.advance(); }
+  function nextQuestion(): void {
+    controller.advance();
+  }
   function handlePersistenceChange(phase: Extract<QuizPhase, 'saving' | 'saved' | 'failed'>, error?: unknown): void {
-    if (phase === 'saving') { resultArea.querySelector('.persistence-error')?.remove(); return; }
+    if (phase === 'saving') {
+      resultArea.querySelector('.persistence-error')?.remove();
+      return;
+    }
     if (phase === 'saved') {
-      if (nextButton) { nextButton.disabled = false; nextButton.hidden = false; }
+      if (nextButton) {
+        nextButton.disabled = false;
+        nextButton.hidden = false;
+      }
       return;
     }
     console.error('Failed to persist answer/SRS state', error);
     const attempt = answerAttempt;
     writeDebugLog({
-      level: 'error', area: 'quizPersistence', code: 'ANSWER-PERSIST-FAILED', userMessage: '回答の保存に失敗しました。',
-      detail: error instanceof Error ? error.message : String(error), stack: error instanceof Error ? error.stack : undefined,
-      context: attempt ? { attemptId: attempt.attemptId, questionId: attempt.questionId, moduleId: attempt.moduleId, result: attempt.result } : undefined
+      level: 'error',
+      area: 'quizPersistence',
+      code: 'ANSWER-PERSIST-FAILED',
+      userMessage: '回答の保存に失敗しました。',
+      detail: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      context: attempt
+        ? { attemptId: attempt.attemptId, questionId: attempt.questionId, moduleId: attempt.moduleId, result: attempt.result }
+        : undefined
     });
     toast('回答の保存に失敗しました。再試行してください。');
     const errorBox = el('div', 'issue error persistence-error');
@@ -169,7 +207,8 @@ export function renderInlineQuiz(
     const attempt = controller.answer(answer, revealed);
     if (!attempt) return;
     answerAttempt = attempt;
-    stopObserving();
+    idleController?.dispose();
+    idleController = undefined;
     lockAnswerControls();
     const { result, elapsedMs, nearMiss = false } = attempt;
 

@@ -1,4 +1,4 @@
-import type { AnswerFormat, AnswerResult, ReviewCard, ReviewLog, ReviewRating } from './models';
+import type { AnswerFormat, AnswerResult, ConcreteStudyQuestionMode, ReviewCard, ReviewLog, ReviewRating } from './models';
 import { endOfLocalCalendarDay, startOfLocalCalendarDay } from './calendarDay';
 
 const DEFAULT_EASE = 2.5;
@@ -56,7 +56,7 @@ function dueTime(card: ReviewCard): number | undefined {
 }
 
 function isSuspended(card: ReviewCard): boolean {
-  return card.suspended;
+  return card.suspended || card.state === 'suspended';
 }
 
 export function clampEase(ease: number): number {
@@ -71,10 +71,16 @@ export function inferReviewRating(result: AnswerResult, elapsedMs: number, answe
   return 'good';
 }
 
-export function createReviewCard(questionId: string, moduleId: string, now = new Date()): ReviewCard {
+export function createReviewCard(
+  questionId: string,
+  moduleId: string,
+  now = new Date(),
+  questionMode: ConcreteStudyQuestionMode = 'as_stored'
+): ReviewCard {
   const createdAt = iso(now);
   return {
     questionId,
+    questionMode,
     moduleId,
     state: 'new',
     dueAt: null,
@@ -163,9 +169,12 @@ export function applyReviewRating(
     next.state = 'mastered';
   }
 
+  if (next.suspended) next.state = 'suspended';
+
   const log: ReviewLog = {
     reviewLogId: reviewLogId(next.questionId, reviewedAt),
     questionId: next.questionId,
+    questionMode: next.questionMode ?? 'as_stored',
     moduleId: next.moduleId,
     reviewedAt,
     rating,
@@ -201,7 +210,7 @@ export function bucketReviewCards(cards: ReviewCard[], now = new Date()): Review
     const due = dueTime(card);
     if (due === undefined || due > todayEnd) continue;
 
-    if (card.state === 'relearning') buckets.relearning.push(card);
+    if (card.state === 'relearning' || card.state === 'learning') buckets.relearning.push(card);
     else if (card.state === 'leech') buckets.leech.push(card);
     else if (card.state === 'mastered') buckets.masteredDue.push(card);
     else if (due < todayStart) buckets.overdue.push(card);
@@ -218,7 +227,10 @@ export function bucketReviewCards(cards: ReviewCard[], now = new Date()): Review
 }
 
 export function buildSrsReviewQueue(cards: ReviewCard[], now = new Date(), limit = 30): ReviewCard[] {
-  const buckets = bucketReviewCards(cards, now);
+  const buckets = bucketReviewCards(
+    cards.filter((card) => (dueTime(card) ?? Infinity) <= now.getTime()),
+    now
+  );
   return [...buckets.relearning, ...buckets.overdue, ...buckets.dueToday, ...buckets.leech, ...buckets.masteredDue].slice(
     0,
     Math.max(0, limit)
@@ -234,7 +246,7 @@ export function summarizeReviewSchedule(cards: ReviewCard[], now = new Date()): 
     total: active.length,
     dueToday,
     overdue: buckets.overdue.length,
-    relearning: active.filter((card) => card.state === 'relearning').length,
+    relearning: active.filter((card) => card.state === 'relearning' || card.state === 'learning').length,
     leech: active.filter((card) => card.state === 'leech').length,
     mastered: active.filter((card) => card.state === 'mastered').length,
     estimatedMinutes: Math.ceil((dueToday * ESTIMATED_SECONDS_PER_CARD) / 60)

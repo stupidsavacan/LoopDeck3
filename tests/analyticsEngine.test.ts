@@ -79,6 +79,28 @@ const attempts: Attempt[] = [
 ];
 
 describe('analytics engine', () => {
+  it.each([
+    ['choice', 'A', 4500, 'quick_wrong'],
+    ['choice', 'A', 4501, undefined],
+    ['choice', 'A', 11999, undefined],
+    ['choice', 'A', 12000, 'slow_wrong'],
+    ['input', 'A', 7000, 'quick_wrong'],
+    ['input', 'A', 7001, undefined],
+    ['input', 'A', 19999, undefined],
+    ['input', 'A', 20000, 'slow_wrong'],
+    [undefined, ['A'], 6000, undefined],
+    [undefined, ['A'], 12000, 'slow_wrong'],
+    [undefined, 'A', 15000, undefined]
+  ] as const)('uses shared timing for %s at %s / %sms', (answerMode, input, elapsedMs, expected) => {
+    const attempt: Attempt = { ...attempts[0], answerMode, input: typeof input === 'string' ? input : [...input], elapsedMs };
+    const breakdown = buildMistakeBreakdown([attempt], questions);
+    expect(breakdown.filter((item) => item.id === 'quick_wrong' || item.id === 'slow_wrong').map((item) => item.id)).toEqual(
+      expected ? [expected] : []
+    );
+    expect(buildAnalyticsOverview([attempt], modules, questions).mistakeBreakdown).toEqual(breakdown);
+    const correct: Attempt = { ...attempt, result: 'correct' };
+    expect(buildMistakeBreakdown([correct], questions).some((item) => item.id === 'slow_correct')).toBe(expected === 'slow_wrong');
+  });
   it('uses the device-local calendar day for analytics boundaries', () => {
     const localMidnightAttempt: Attempt = {
       ...attempts[0],

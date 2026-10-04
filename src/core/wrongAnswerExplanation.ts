@@ -1,5 +1,5 @@
 import type { ConcreteStudyQuestionMode, Question, StudyQuestionMode } from './models';
-import { removeAnswerPunctuation } from './answerJudge';
+import { getAcceptedAnswers, normalizeAnswer, normalizeAnswerForQuestion, removeAnswerPunctuation } from './answerJudge';
 import { getQuestionStudyPair, getSupportedStudyQuestionModes, presentQuestionForStudy, type StudyPair } from './questionPresentation';
 
 export type WrongAnswerExplanationSource = 'choice' | 'input';
@@ -228,9 +228,11 @@ export function buildWrongAnswerFeedback(
     const presented = question ? presentQuestionForStudy(question, origin.studyMode) : undefined;
     const valueMatches =
       presented &&
-      collectAnswerMatches(presented).some(
-        (match) => normalizeWrongAnswerLookup(match.matchedAnswer) === normalizeWrongAnswerLookup(value)
-      );
+      (presented.type === 'multi_select'
+        ? presented.correctChoices.some((answer) => normalizeAnswer(answer) === normalizeAnswer(value))
+        : getAcceptedAnswers(presented).some(
+            (answer) => normalizeAnswerForQuestion(presented, answer) === normalizeAnswerForQuestion(presented, value)
+          ));
     if (question && question.id !== currentQuestion.id && presented?.activeStudyMode === origin.studyMode && valueMatches) {
       const pair = getQuestionStudyPair(question);
       return {

@@ -74,9 +74,9 @@ function uniqueStrings(values: unknown[]): string[] {
   const result: string[] = [];
   const seen = new Set<string>();
   for (const value of values) {
-    const text = normalizeTextForLang(value);
+    const text = typeof value === 'string' ? value.trim() : '';
     if (!text) continue;
-    const key = text.toLocaleLowerCase();
+    const key = rawTextKey(text);
     if (seen.has(key)) continue;
     seen.add(key);
     result.push(text);
@@ -84,13 +84,21 @@ function uniqueStrings(values: unknown[]): string[] {
   return result;
 }
 
+function rawTextKey(text: string): string {
+  return text
+    .replace(/[①-⑳㉑-㉟㊱-㊿]/g, (digit) => `circled-${digit.codePointAt(0)}`)
+    .normalize('NFKC')
+    .toLocaleLowerCase();
+}
+
 function answerCandidates(question: InputQuestion): string[] {
-  return uniqueStrings([question.answer, ...(question.acceptableAnswers ?? []), ...(question.acceptedAnswers ?? [])]);
+  const aliases = question.acceptedAnswers?.length ? question.acceptedAnswers : (question.acceptableAnswers ?? []);
+  return uniqueStrings([question.answer, ...aliases]);
 }
 
 function autoLanguageStudyData(question: Question): AutoLanguageStudyData | undefined {
   if (question.type !== 'input' || question.imageAsset) return undefined;
-  const prompt = normalizeTextForLang(question.prompt);
+  const prompt = question.prompt.trim();
   if (!prompt || hasHtml(question.prompt)) return undefined;
 
   const candidates = answerCandidates(question);
@@ -123,11 +131,11 @@ export function canAutoReverseQuestion(question: Question): boolean {
 }
 
 function sideWithAliases(label: string, text: string, aliases: string[]): StudyPairSide {
-  const normalizedText = normalizeTextForLang(text).toLocaleLowerCase();
-  const acceptableAnswers = uniqueStrings(aliases).filter((value) => value.toLocaleLowerCase() !== normalizedText);
+  const normalizedText = rawTextKey(text.trim());
+  const acceptableAnswers = uniqueStrings(aliases).filter((value) => rawTextKey(value) !== normalizedText);
   return {
     label,
-    text: normalizeTextForLang(text),
+    text: text.trim(),
     ...(acceptableAnswers.length ? { acceptableAnswers } : {})
   };
 }
@@ -159,7 +167,7 @@ export function getQuestionStudyPair(question: Question): StudyPair | undefined 
   }
 
   if (question.type === 'input' || question.type === 'choice') {
-    const aliases = uniqueStrings([...(question.acceptableAnswers ?? []), ...(question.acceptedAnswers ?? [])]);
+    const aliases = uniqueStrings(question.acceptedAnswers?.length ? question.acceptedAnswers : (question.acceptableAnswers ?? []));
     return {
       front: sideWithAliases('\u554f\u984c', question.prompt, []),
       back: sideWithAliases('\u7b54\u3048', question.answer, aliases)

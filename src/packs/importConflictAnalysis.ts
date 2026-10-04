@@ -3,6 +3,7 @@ import type { LoopDeckPack, ModuleInfo, Question } from '../core/models';
 export interface ImportConflictAnalysis {
   existingImportedPack?: LoopDeckPack;
   moduleMergeTarget?: LoopDeckPack;
+  ambiguousModuleMerge: boolean;
   duplicateImportedPackId: boolean;
   duplicateActivePackId: boolean;
   duplicateModuleIds: string[];
@@ -30,13 +31,16 @@ export function analyzeImportConflicts(
   const activeModuleIds = new Set(activeModules.map((module) => module.id));
   const activeQuestionIds = new Set(activeQuestions.map((question) => question.id));
   const incomingModuleIds = new Set(pack.modules.map((module) => module.id));
-  const moduleMergeTarget = existingImportedPack
-    ? undefined
-    : activePacks.find((activePack) => activePack.modules.some((module) => incomingModuleIds.has(module.id)));
+  const moduleOwners = activePacks.filter((activePack) =>
+    activePack.modules.some((module) => incomingModuleIds.has(module.id) && activeModules.some((activeModule) => activeModule === module))
+  );
+  const ambiguousModuleMerge = moduleOwners.length > 1;
+  const moduleMergeTarget = existingImportedPack || ambiguousModuleMerge ? undefined : moduleOwners[0];
 
   return {
     existingImportedPack,
     moduleMergeTarget,
+    ambiguousModuleMerge,
     duplicateImportedPackId: Boolean(existingImportedPack),
     duplicateActivePackId: activePackIds.has(pack.packId),
     duplicateModuleIds: unique(pack.modules.map((module) => module.id).filter((moduleId) => activeModuleIds.has(moduleId))),

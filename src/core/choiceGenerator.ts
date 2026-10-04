@@ -1,5 +1,5 @@
-import { getAcceptedAnswers, judgeInputAnswer, normalizeAnswer } from './answerJudge';
-import type { ConcreteStudyQuestionMode, InputQuestion, Question } from './models';
+import { getAcceptedAnswers, judgeInputAnswer, normalizeAnswer, normalizeAnswerForQuestion } from './answerJudge';
+import type { ChoiceQuestion, ConcreteStudyQuestionMode, InputQuestion, Question } from './models';
 import { presentQuestionForStudy } from './questionPresentation';
 
 type RandomSource = () => number;
@@ -44,13 +44,13 @@ function candidateAnswer(question: Question): string | undefined {
   return answer || undefined;
 }
 
-function uniqueAnswers(values: string[]): string[] {
+function uniqueAnswers(question: InputQuestion | ChoiceQuestion, values: string[]): string[] {
   const result: string[] = [];
   const seen = new Set<string>();
   for (const value of values) {
     const trimmed = value.trim();
     if (!trimmed) continue;
-    const normalized = normalizeAnswer(trimmed);
+    const normalized = normalizeAnswerForQuestion(question, trimmed);
     if (!normalized || seen.has(normalized)) continue;
     seen.add(normalized);
     result.push(trimmed);
@@ -67,13 +67,13 @@ export function getManualChoiceCandidates(question: Question, optionCount = 4): 
       : question.choiceCandidates;
   if (!manual || manual.mode !== 'manual') return undefined;
 
-  const choices = uniqueAnswers(manual.choices);
-  const accepted = new Set(getAcceptedAnswers(question).map(normalizeAnswer));
-  const correct = normalizeAnswer(question.answer);
-  if (!choices.some((choice) => normalizeAnswer(choice) === correct)) return undefined;
+  const choices = uniqueAnswers(question, manual.choices);
+  const accepted = new Set(getAcceptedAnswers(question).map((answer) => normalizeAnswerForQuestion(question, answer)));
+  const correct = normalizeAnswerForQuestion(question, question.answer);
+  if (!choices.some((choice) => normalizeAnswerForQuestion(question, choice) === correct)) return undefined;
 
   const wrongChoices = choices.filter((choice) => {
-    const normalized = normalizeAnswer(choice);
+    const normalized = normalizeAnswerForQuestion(question, choice);
     return normalized === correct || (!accepted.has(normalized) && !judgeInputAnswer(question, choice));
   });
 
@@ -127,8 +127,8 @@ export function buildGeneratedChoiceOptions(
 
   const manualChoices = getManualChoiceCandidates(question, optionCount);
   if (manualChoices) {
-    const correctKey = normalizeAnswer(correct);
-    const distractors = manualChoices.filter((choice) => normalizeAnswer(choice) !== correctKey);
+    const correctKey = normalizeAnswerForQuestion(question, correct);
+    const distractors = manualChoices.filter((choice) => normalizeAnswerForQuestion(question, choice) !== correctKey);
     if (distractors.length >= optionCount - 1) {
       const manualOptions = shuffle(distractors, random)
         .slice(0, optionCount - 1)
@@ -138,7 +138,7 @@ export function buildGeneratedChoiceOptions(
   }
 
   const activeMode = question.activeStudyMode ?? 'as_stored';
-  const accepted = new Set(getAcceptedAnswers(question).map(normalizeAnswer));
+  const accepted = new Set(getAcceptedAnswers(question).map((answer) => normalizeAnswerForQuestion(question, answer)));
   const seen = new Set(accepted);
   const distractors: GeneratedChoiceOption[] = [];
   const indexedCandidates = candidateIndex?.get(activeMode) ?? buildChoiceCandidateIndex(pool).get(activeMode) ?? [];
@@ -151,8 +151,9 @@ export function buildGeneratedChoiceOptions(
     });
 
     for (const candidate of shuffle([...candidates], random)) {
-      if (seen.has(candidate.normalizedAnswer) || judgeInputAnswer(question, candidate.answer)) continue;
-      seen.add(candidate.normalizedAnswer);
+      const key = normalizeAnswerForQuestion(question, candidate.answer);
+      if (!key || seen.has(key) || judgeInputAnswer(question, candidate.answer)) continue;
+      seen.add(key);
       distractors.push({
         text: candidate.answer,
         kind: 'generated_distractor',

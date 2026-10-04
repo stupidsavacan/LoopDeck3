@@ -1,4 +1,5 @@
 import type { AnswerJudgingRule, ChoiceQuestion, InputQuestion, MultiSelectQuestion, Question } from './models';
+import { normalizeJapaneseMeaningSeparators, usesJapaneseVocabularyAnswers } from './japaneseVocabulary';
 
 const JAPANESE_TEXT = /[\u3040-\u30ff\u3400-\u9fff]/;
 const EDGE_CHARS = new Set([
@@ -137,7 +138,8 @@ function inputCandidates(question: InputQuestion | ChoiceQuestion): string[] {
 export function normalizeAnswerForQuestion(question: InputQuestion | ChoiceQuestion, rawInput: string): string {
   const rule = question.answerJudging ?? {};
   const mode = rule.mode ?? 'single';
-  return normalizeForRule(rawInput, {
+  const input = usesJapaneseVocabularyAnswers(question) ? normalizeJapaneseMeaningSeparators(rawInput) : rawInput;
+  return normalizeForRule(input, {
     allowJapaneseSentenceEdges: rule.allowJapaneseSentenceEdges ?? mode !== 'exact_phrase',
     ...rule
   });
@@ -169,6 +171,13 @@ export function judgeAnswerWithRule(question: InputQuestion | ChoiceQuestion, ra
   const normalizedInput = normalizeAnswerForQuestion(question, rawInput);
 
   if (!normalizedInput) return false;
+  if (
+    usesJapaneseVocabularyAnswers(question) &&
+    normalizeJapaneseMeaningSeparators(rawInput)
+      .split('、')
+      .some((part) => !part.trim())
+  )
+    return false;
 
   if (mode === 'all_of') {
     const requiredParts = rule.requiredParts?.map((part) => normalizeAnswerForQuestion(question, part)) ?? [];

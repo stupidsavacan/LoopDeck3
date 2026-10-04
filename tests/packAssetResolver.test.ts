@@ -10,19 +10,31 @@ function imageQuestion(prompt: string, imageAsset = 'images/map.png'): Question 
 
 function pack(packId: string, question: Question): LoopDeckPack {
   return {
-    packVersion: 1, packId, title: packId, folders: [{ id: 'f', title: 'Folder' }],
-    modules: [{ id: 'm', folderId: 'f', title: 'Module', subject: 'demo', questionIds: [question.id] }], questions: [question]
+    packVersion: 1,
+    packId,
+    title: packId,
+    folders: [{ id: 'f', title: 'Folder' }],
+    modules: [{ id: 'm', folderId: 'f', title: 'Module', subject: 'demo', questionIds: [question.id] }],
+    questions: [question]
   };
 }
 
 describe('pack image asset resolution', () => {
   it('tracks the pack that owns the active question after overrides', async () => {
     const view = resolveActivePacks([pack('old-pack', imageQuestion('old')), pack('new-pack', imageQuestion('new'))]);
-    const getPackAsset = vi.fn(async (packId: string, path: string) => ({ assetId: `${packId}:${path}`, packId, path, mimeType: 'image/png', dataUrl: 'data:image/png;base64,iVBORw0KGgo=' }));
+    const getPackAsset = vi.fn(async (packId: string, path: string) => ({
+      assetId: `${packId}:${path}`,
+      packId,
+      path,
+      mimeType: 'image/png',
+      dataUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+    }));
     const resolver = createQuestionImageAssetResolver(view, { getPackAsset });
 
     expect(getQuestionPackId(view, 'q')).toBe('new-pack');
-    expect(await resolver(view.questionById.get('q')!)).toBe('data:image/png;base64,iVBORw0KGgo=');
+    expect(await resolver(view.questionById.get('q')!)).toBe(
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+    );
     expect(getPackAsset).toHaveBeenCalledWith('new-pack', 'images/map.png');
   });
 
@@ -43,12 +55,18 @@ describe('pack image asset resolution', () => {
       __LOOPDECK_EMBEDDED_ASSETS__?: Record<string, string>;
     };
     globalWithAssets.__LOOPDECK_EMBEDDED_ASSETS__ = {
-      'images/map.png': 'data:image/png;base64,iVBORw0KGgo='
+      'images/map.png': 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
     };
 
     try {
-      const resolver = createQuestionImageAssetResolver(view, { async getPackAsset() { return undefined; } });
-      expect(await resolver(question)).toBe('data:image/png;base64,iVBORw0KGgo=');
+      const resolver = createQuestionImageAssetResolver(view, {
+        async getPackAsset() {
+          return undefined;
+        }
+      });
+      expect(await resolver(question)).toBe(
+        'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+      );
     } finally {
       delete globalWithAssets.__LOOPDECK_EMBEDDED_ASSETS__;
     }
@@ -69,8 +87,14 @@ describe('pack image asset resolution', () => {
     const merged = mergeLoopDeckPacks(existing, incoming).pack;
     const view = resolveActivePacks([merged]);
     const assets = new Map([
-      ['shared-pack:images/old.png', 'data:image/png;base64,b2xk'],
-      ['shared-pack:images/new.png', 'data:image/png;base64,bmV3']
+      [
+        'shared-pack:images/old.png',
+        'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+      ],
+      [
+        'shared-pack:images/new.png',
+        'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl6TMsAAAAASUVORK5CYII='
+      ]
     ]);
     const resolver = createQuestionImageAssetResolver(view, {
       async getPackAsset(packId, path) {
@@ -79,7 +103,11 @@ describe('pack image asset resolution', () => {
       }
     });
 
-    expect(await resolver(view.questionById.get('q')!)).toBe('data:image/png;base64,b2xk');
-    expect(await resolver(view.questionById.get('q__merge_1')!)).toBe('data:image/png;base64,bmV3');
+    expect(await resolver(view.questionById.get('q')!)).toBe(
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+    );
+    expect(await resolver(view.questionById.get('q__merge_1')!)).toBe(
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl6TMsAAAAASUVORK5CYII='
+    );
   });
 });

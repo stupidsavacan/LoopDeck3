@@ -9,7 +9,13 @@ export type ImportFileResult = { kind: 'backup'; backup: StudyBackup } | { kind:
 export async function readImportFile(file: File): Promise<ImportFileResult> {
   const issues = validateImportFileSize(file);
   if (issues.length) return { kind: 'pack', result: { ok: false, issues } };
-  if (file.name.endsWith('.zip')) return { kind: 'pack', result: await importLoopDeckZip(file) };
+  const name = file.name.toLowerCase();
+  if (name.endsWith('.zip')) return { kind: 'pack', result: await importLoopDeckZip(file) };
+  if (!name.endsWith('.json'))
+    return {
+      kind: 'pack',
+      result: { ok: false, issues: [{ level: 'error', message: 'Only JSON and ZIP files are supported.', path: file.name }] }
+    };
   const text = await file.text();
   let parsed: unknown;
   try {

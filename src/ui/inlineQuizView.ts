@@ -1,6 +1,6 @@
 import { getCorrectAnswer } from '../core/answerJudge';
 import type { Attempt, Question } from '../core/models';
-import type { QuizSession } from '../core/sessionEngine';
+import { elapsedForSession, type QuizSession } from '../core/sessionEngine';
 import type { WrongAnswerExplanation } from '../core/wrongAnswerExplanation';
 import { isSafeImageAssetRef, isSafeImageDataUrl } from '../packs/assetSafety';
 import type { QuestionImageAssetResolver } from '../packs/packAssetResolver';
@@ -167,7 +167,7 @@ export function renderSessionSummary(session: QuizSession, now = Date.now()): HT
   const nearMiss = attempts.filter((attempt) => attempt.nearMiss).length;
   const answered = attempts.length;
   const accuracy = answered > 0 ? Math.round((correct / answered) * 100) : 0;
-  const elapsed = Math.max(0, now - session.startedAt);
+  const elapsed = elapsedForSession(session, 0, now);
   const average = answered > 0 ? attempts.reduce((sum, attempt) => sum + attempt.elapsedMs, 0) / answered : 0;
 
   const summary = el('div', 'session-summary');
