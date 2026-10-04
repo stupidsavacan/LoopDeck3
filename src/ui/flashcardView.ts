@@ -8,7 +8,9 @@ import { renderQuestionVisualReferences } from './questionVisualReferences';
 
 export function renderFlashcardHeader(session: QuizSession, onComplete: () => void): HTMLElement {
   const header = el('header', 'flashcard-header');
-  const back = button('← 教材', 'btn ghost');
+  const back = button('', 'btn ghost flashcard-back-button');
+  back.setAttribute('aria-label', '教材へ戻る');
+  back.append(el('b', '', '←'), el('span', '', '教材へ'));
   back.onclick = onComplete;
   const sample = session.choicePool.find((question) => question.id === session.queue[0]?.id) ?? session.queue[0];
   header.append(
@@ -21,14 +23,15 @@ export function renderFlashcardHeader(session: QuizSession, onComplete: () => vo
 
 export function renderFlashcardProgress(session: QuizSession): HTMLElement {
   const section = el('div', 'flashcard-progress-section');
-  section.append(el('p', 'eyebrow', 'FLASHCARD SESSION'));
   const row = el('div', 'flashcard-progress-row');
   const known = session.attempts.filter((attempt) => attempt.result === 'correct').length;
   const again = session.attempts.filter((attempt) => attempt.result === 'wrong').length;
-  row.append(
-    el('strong', 'flashcard-position', `${Math.min(session.index + 1, session.queue.length)} / ${session.queue.length}`),
-    el('span', 'flashcard-counts', `KNOWN ${known} · AGAIN ${again}`)
+  const position = el('div', 'flashcard-progress-heading');
+  position.append(
+    el('p', 'eyebrow', 'FLASHCARD SESSION'),
+    el('strong', 'flashcard-position', `${Math.min(session.index + 1, session.queue.length)} / ${session.queue.length}`)
   );
+  row.append(position, el('span', 'flashcard-counts', `KNOWN ${known} · AGAIN ${again}`));
   const progress = el('div', 'flashcard-progress');
   progress.setAttribute('role', 'progressbar');
   progress.setAttribute('aria-label', 'カード学習進捗');
@@ -77,7 +80,9 @@ export function renderFlashcardFace(
     if (question.explanation) content.append(el('p', 'flashcard-explanation', question.explanation));
     if (session.settings.showExample && question.example) content.append(el('p', 'flashcard-example', question.example));
   }
-  face.append(content, el('span', 'flashcard-flip-hint', 'TAP TO FLIP'));
+  const hint = el('span', 'flashcard-flip-hint');
+  hint.append(el('i', 'flashcard-tap-dot'), document.createTextNode('TAP TO FLIP'));
+  face.append(content, hint);
   return face;
 }
 
@@ -111,7 +116,9 @@ export function renderFlashcardResult(session: QuizSession, onAgain: () => void,
     stat.append(el('span', '', type), el('strong', '', String(count)), el('span', '', label));
     stats.append(stat);
   }
-  grid.append(donutCard, stats);
+  const panel = el('section', 'flashcard-result-panel');
+  panel.append(stats);
+  grid.append(donutCard, panel);
   const missedSection = el('section', 'flashcard-missed');
   missedSection.append(el('h2', '', 'もう一度見るカード'));
   const chips = el('div', 'flashcard-missed-chips');
@@ -133,6 +140,7 @@ export function renderFlashcardResult(session: QuizSession, onAgain: () => void,
   const back = button('教材へ戻る', 'btn ghost');
   back.onclick = onComplete;
   actions.append(again, all, back);
-  result.append(grid, missedSection, actions);
+  panel.append(missedSection, actions);
+  result.append(grid);
   return result;
 }

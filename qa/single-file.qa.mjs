@@ -204,13 +204,31 @@ for (const width of [412, 1280]) test(`flashcard tap swipe result retry and resu
   await expect(autoReveal).toBeDisabled(); await expect(autoReveal).toBeChecked();
   await expect(page.getByLabel('出題形式')).toBeEnabled();
   await page.getByLabel('出題形式').selectOption('front_to_back');
-  await page.getByRole('button', { name: '学習を始める', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'この設定で学習を始める →', exact: true })).toBeVisible();
+  await page.screenshot({ path: info.outputPath(`flashcard-module-${width}.png`), fullPage: true });
+  if (width === 412) await page.getByRole('button', { name: 'この設定で学習を始める →', exact: true }).click();
+  else await page.getByRole('button', { name: '学習を始める', exact: true }).click();
   const wrap = page.locator('.flashcard-wrap');
   await expect(wrap).toBeVisible();
   await expect(page.locator('.flashcard-front .flashcard-term')).toHaveText('strict');
   await expect(page.locator('.flashcard-back .flashcard-term')).toHaveText('厳しい');
   await expect(page.locator('.flashcard-session select')).toHaveCount(0);
   await expect(page.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '0');
+  await wrap.evaluate(async card => {
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    await Promise.all(card.getAnimations().map(animation => animation.finished));
+  });
+  const stageLayout = await page.locator('.flashcard-stage').evaluate(stage => {
+    const stageRect = stage.getBoundingClientRect();
+    const card = stage.querySelector('.flashcard-wrap').getBoundingClientRect();
+    const controls = document.querySelector('.flashcard-controls');
+    return { centerOffset: Math.abs((card.top + card.bottom) / 2 - (stageRect.top + stageRect.bottom) / 2),
+      stageMinHeight: parseFloat(getComputedStyle(stage).minHeight),
+      buttonBackground: getComputedStyle(controls.querySelector('.flashcard-known')).backgroundColor };
+  });
+  expect(stageLayout.centerOffset).toBeLessThanOrEqual(10);
+  expect(stageLayout.stageMinHeight).toBe(width <= 640 ? 430 : 480);
+  expect(stageLayout.buttonBackground).toBe('rgba(0, 0, 0, 0)');
   await layout(page, info, `flashcard-front-${width}`);
   await page.screenshot({ path: info.outputPath(`flashcard-front-${width}.png`), fullPage: true });
   await page.evaluate(() => {
@@ -240,6 +258,7 @@ for (const width of [412, 1280]) test(`flashcard tap swipe result retry and resu
     const x = bounds.x + bounds.width / 2, y = bounds.y + bounds.height / 2;
     await page.mouse.move(x, y); await page.mouse.down(); await page.mouse.move(x + dx, y, { steps: 8 });
     await expect(page.locator(`.flashcard-judge-label.${dx > 0 ? 'known' : 'again'}`)).toHaveClass(/show/);
+    await layout(page, info, `flashcard-drag-${width}`);
     await page.mouse.up();
   }
   await swipe(130);
@@ -257,6 +276,14 @@ for (const width of [412, 1280]) test(`flashcard tap swipe result retry and resu
   await expect(page.locator('.flashcard-stat')).toHaveCount(2);
   await expect(page.locator('.flashcard-missed-chip')).toHaveText('agree');
   await expect(page.locator('.flashcard-result-actions button')).toHaveText(['AGAINだけもう一度', '全部やり直す', '教材へ戻る']);
+  const resultLayout = await page.locator('.flashcard-result-panel').evaluate(panel => {
+    const stats = [...panel.querySelectorAll('.flashcard-stat')].map(stat => stat.getBoundingClientRect());
+    return { sameRow: stats[0].top === stats[1].top, missedInPanel: !!panel.querySelector('.flashcard-missed'),
+      actionsInPanel: !!panel.querySelector('.flashcard-result-actions'),
+      actionBackground: getComputedStyle(panel.querySelector('.btn.primary')).backgroundColor };
+  });
+  expect(resultLayout).toEqual({ sameRow: true, missedInPanel: true, actionsInPanel: true, actionBackground: 'rgb(10, 16, 32)' });
+  await page.locator('.flashcard-result').evaluate(result => Promise.all(result.getAnimations().map(animation => animation.finished)));
   await layout(page, info, `flashcard-result-${width}`);
   await page.screenshot({ path: info.outputPath(`flashcard-result-${width}.png`), fullPage: true });
   const records = await page.evaluate(() => new Promise((resolve, reject) => {
@@ -281,7 +308,7 @@ for (const width of [412, 1280]) test(`flashcard tap swipe result retry and resu
   await expect(page.locator('.flashcard-donut-center')).toHaveText('100%KNOWN');
   await expect(page.getByRole('button', { name: 'AGAINだけもう一度', exact: true })).toBeDisabled();
   await expect(page.locator('.flashcard-missed-chips')).toHaveText('なし');
-  await page.getByRole('button', { name: '教材へ戻る', exact: true }).click();
+  await page.locator('.flashcard-result-actions').getByRole('button', { name: '教材へ戻る', exact: true }).click();
   await expect(page.locator('.module-screen')).toBeVisible();
   await expect(page.locator('.flashcard-session')).toHaveCount(0);
 });
