@@ -1,6 +1,8 @@
 name: Build Android Debug APK
 
 on:
+  push:
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
@@ -75,22 +77,16 @@ jobs:
       - name: Collect debug APK artifacts
         run: |
           set -euo pipefail
-          rm -rf artifacts/debug-apk
           mkdir -p artifacts/debug-apk
-          find android/app/build/outputs -type f -name "*.apk" -exec cp {} artifacts/debug-apk/ \;
-          echo "Collected APK artifacts:"
-          find artifacts/debug-apk -type f -name "*.apk" -print
-          apk_count="$(find artifacts/debug-apk -type f -name "*.apk" | wc -l | tr -d ' ')"
-          if [ "$apk_count" -eq 0 ]; then
-            echo "::error::No debug APKs were collected from android/app/build/outputs."
-            exit 1
-          fi
+          test -s android/app/build/outputs/apk/debug/app-debug.apk
+          cp android/app/build/outputs/apk/debug/app-debug.apk artifacts/debug-apk/LoopDeck3-debug.apk
+          cp LoopDeck3.html artifacts/debug-apk/LoopDeck3.html
 
       - name: Upload debug APK
         if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v7
         with:
           name: LoopDeck3-debug-apk
-          path: artifacts/debug-apk/*.apk
+          path: artifacts/debug-apk/
           if-no-files-found: error
           retention-days: 7

@@ -1,5 +1,7 @@
-import { appendFileSync } from 'node:fs';
+import { appendFileSync, readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
+
+const version = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
 
 export function androidBuildVersion(runNumber, runAttempt, sha) {
   const run = Number(runNumber);
@@ -10,7 +12,7 @@ export function androidBuildVersion(runNumber, runAttempt, sha) {
   const versionCode = 3000 + run * 100 + attempt;
   if (versionCode > 2_100_000_000) throw new Error('Android versionCode exceeds the supported maximum.');
   if (!/^[a-f0-9]{40}$/i.test(sha ?? '')) throw new Error('Android version requires a full Git commit SHA.');
-  return { versionCode, versionName: `0.3.0+${run}.${attempt}.${sha.slice(0, 7)}` };
+  return { versionCode, versionName: `${version}+${run}.${attempt}.${sha.slice(0, 7)}` };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
