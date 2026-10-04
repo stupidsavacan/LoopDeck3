@@ -180,6 +180,10 @@ describe('module screen study preferences', () => {
     expect(autoReveal.checked).toBe(true);
     expect(fieldSelect(root, '出題形式').disabled).toBe(false);
     expect(root.querySelector<HTMLElement>('.flashcard-toggle-notice')?.hidden).toBe(false);
+    expect(root.querySelector('.flashcard-custom-start')).toBeNull();
+    expect(
+      [...root.querySelectorAll<HTMLButtonElement>('button')].filter((button) => button.textContent?.includes('学習を始める'))
+    ).toHaveLength(1);
     format.value = 'input';
     change(format);
     expect(autoNext.disabled).toBe(false);
