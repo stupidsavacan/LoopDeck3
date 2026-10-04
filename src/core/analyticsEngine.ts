@@ -43,6 +43,10 @@ export interface AnalyticsOverview {
   mistakeBreakdown: MistakeBreakdownItem[];
 }
 
+function isObjectiveAttempt(attempt: Attempt): boolean {
+  return attempt.answerMode !== 'flashcard';
+}
+
 function parseAttemptDay(attempt: Attempt): string | undefined {
   const date = new Date(attempt.answeredAt);
   if (Number.isNaN(date.getTime())) return undefined;
@@ -62,6 +66,7 @@ export function buildDailyStudyStats(attempts: Attempt[], days = 28, now = new D
   }
 
   for (const attempt of attempts) {
+    if (!isObjectiveAttempt(attempt)) continue;
     const date = parseAttemptDay(attempt);
     const item = date ? byDay.get(date) : undefined;
     if (!item) continue;
@@ -83,6 +88,7 @@ export function buildModuleStudyStats(attempts: Attempt[], modules: ModuleInfo[]
   const byModule = new Map<string, ModuleStudyStat & { elapsedTotal: number }>();
 
   for (const attempt of attempts) {
+    if (!isObjectiveAttempt(attempt)) continue;
     const current = byModule.get(attempt.moduleId) ?? {
       moduleId: attempt.moduleId,
       title: moduleTitles.get(attempt.moduleId) ?? attempt.moduleId,
@@ -115,7 +121,7 @@ export function buildModuleStudyStats(attempts: Attempt[], modules: ModuleInfo[]
 export function buildMistakeTrend(attempts: Attempt[], days = 14, now = new Date()): MistakeTrendPoint[] {
   const byDay = new Map(recentLocalCalendarDayKeys(days, now).map((date) => [date, 0]));
   for (const attempt of attempts) {
-    if (attempt.result === 'correct') continue;
+    if (!isObjectiveAttempt(attempt) || attempt.result === 'correct') continue;
     const date = parseAttemptDay(attempt);
     if (!date || !byDay.has(date)) continue;
     byDay.set(date, (byDay.get(date) ?? 0) + 1);
@@ -128,7 +134,8 @@ export function buildMistakeBreakdown(attempts: Attempt[], questions: Question[]
   const counts = new Map<string, MistakeBreakdownItem>();
   const wrongByQuestion = new Map<string, number>();
 
-  for (const attempt of attempts) {
+  const objectiveAttempts = attempts.filter(isObjectiveAttempt);
+  for (const attempt of objectiveAttempts) {
     const question = questionsById.get(attempt.questionId);
 
     if (attempt.result === 'wrong') {
@@ -155,7 +162,7 @@ export function buildMistakeBreakdown(attempts: Attempt[], questions: Question[]
   const repeated = [...wrongByQuestion.values()].filter((count) => count >= 2).length;
   if (repeated) bump(counts, 'repeated', '繰り返しミス', repeated);
 
-  const analyses = analyzeProblems(attempts, questions);
+  const analyses = analyzeProblems(objectiveAttempts, questions);
   const repeatedSameWrong = analyses.filter((item) => item.wrongAnswerPatterns.some((pattern) => pattern.count >= 2)).length;
   if (repeatedSameWrong) bump(counts, 'repeated_same_wrong', '同じ誤答を反復', repeatedSameWrong);
   const relapse = analyses.filter((item) => item.mistakeTags.includes('正解後に再失敗')).length;
@@ -190,10 +197,11 @@ export function buildAnalyticsOverview(
   const reviewByQuestion = new Map<string, Attempt[]>();
   const reviewWrongQuestionIds = new Set<string>();
   const reviewWeakModules: Record<string, number> = Object.create(null);
+  const objectiveAttempts = attempts.filter(isObjectiveAttempt);
   let correct = 0;
   let mistakes = 0;
 
-  for (const attempt of attempts) {
+  for (const attempt of objectiveAttempts) {
     if (attempt.result === 'correct') correct += 1;
     else mistakes += 1;
     const reviewRecords = reviewByQuestion.get(attempt.questionId) ?? [];
@@ -258,14 +266,14 @@ export function buildAnalyticsOverview(
     wrongQuestionIds: reviewWrongQuestionIds,
     weakModules: reviewWeakModules
   };
-  const analyses = analyzeProblems(attempts, questions, {}, reviewAggregation);
+  const analyses = analyzeProblems(objectiveAttempts, questions, {}, reviewAggregation);
   const repeatedSameWrong = analyses.filter((item) => item.wrongAnswerPatterns.some((pattern) => pattern.count >= 2)).length;
   if (repeatedSameWrong) bump(breakdownCounts, 'repeated_same_wrong', '同じ誤答を反復', repeatedSameWrong);
   const relapse = analyses.filter((item) => item.mistakeTags.includes('正解後に再失敗')).length;
   if (relapse) bump(breakdownCounts, 'failed_after_correct', '正解後に再失敗', relapse);
 
   return {
-    totalAttempts: attempts.length,
+    totalAttempts: objectiveAttempts.length,
     correct,
     mistakes,
     dailyStudyStats: [...dailyByDay.values()].map((item) => ({
