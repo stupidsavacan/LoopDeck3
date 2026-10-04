@@ -41,6 +41,48 @@ async function start(page) {
   await expect(page.locator('.question-prompt')).toBeVisible();
 }
 const sizes = [[320,568],[360,800],[390,844],[412,915],[600,960],[744,1133],[768,1024],[810,1080],[820,1180],[834,1194],[1024,768],[1180,820],[1194,834],[1024,600],[1280,720],[1366,768],[1440,900],[1920,1080],[2560,1080], ...[359,361,419,420,421,759,760,761,899,900,901,999,1000,1001].map(w => [w,800])];
+test('visual references import and render offline with all patterns', async ({ page }, info) => {
+  const references = [
+    { type: 'color', color: '#EDB0AA', label: 'うすい赤の面塗り' },
+    ...[90, 0, 45].map(angle => ({ type: 'stripe', color: '#EF8A84', backgroundColor: '#FFFFFF', angle, spacing: 11, lineWidth: 4, label: `縞 ${angle}度` })),
+    { type: 'grid', color: '#15803D', spacing: 16, lineWidth: 2, label: '緑の格子' },
+    { type: 'crosshatch', color: '#7C3AED', angle: 45, spacing: 12, lineWidth: 2, label: '紫の交差線' },
+    { type: 'dots', color: '#2563EB', backgroundColor: '#EFF6FF', spacing: 12, lineWidth: 4, shape: 'circle', label: '青の水玉' },
+    { type: 'checker', color: '#000000', backgroundColor: '#FFFFFF', spacing: 10, label: '市松' },
+    { type: 'color', color: '#EDB0AA', label: '<img src=x onerror=alert(1)>' }
+  ];
+  const pack = {
+    packVersion: 1, packId: 'visual-qa', title: '色と模様', folders: [],
+    modules: [{ id: 'visual-qa', title: '色と模様', questionIds: ['visual-q', 'visual-next'] }],
+    questions: [
+      { id: 'visual-q', moduleId: 'visual-qa', type: 'input', prompt: 'この問題だけの模様を確認してください', answer: '確認', visualReferences: references },
+      { id: 'visual-next', moduleId: 'visual-qa', type: 'input', prompt: '次の問題', answer: '確認' }
+    ]
+  };
+  await go(page, 'import');
+  await page.locator('input[type=file]').setInputFiles({ name: 'visual.loopdeck.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(pack)) });
+  await page.getByRole('button', { name: 'この教材を取り込む', exact: true }).click();
+  await expect(page.locator('.home-screen')).toBeVisible();
+  await go(page, 'module/visual-qa');
+  await start(page);
+  const swatches = page.locator('.visual-reference-swatch');
+  await expect(swatches).toHaveCount(references.length);
+  await expect(page.locator('.visual-reference-label').last()).toHaveText('<img src=x onerror=alert(1)>');
+  await expect(page.locator('.question-visual-references img')).toHaveCount(0);
+  const styles = await swatches.evaluateAll(nodes => nodes.map(node => ({ type: node.dataset.type, background: getComputedStyle(node).backgroundImage })));
+  for (const style of styles.filter(style => style.type !== 'color')) expect(style.background).not.toBe('none');
+  for (const width of [320, 1280]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await layout(page, info, `visual-references-${width}`);
+    await page.screenshot({ path: info.outputPath(`visual-references-${width}.png`), fullPage: true });
+  }
+  await page.getByPlaceholder('答えを入力').fill('確認');
+  await page.getByRole('button', { name: '回答する', exact: true }).click();
+  await page.getByRole('button', { name: '次へ', exact: true }).click();
+  await expect(page.locator('.question-prompt')).toHaveText('次の問題');
+  await expect(page.locator('.question-visual-references')).toHaveCount(0);
+});
+
 test('invalid hash normalization preserves browser back navigation', async ({ page }) => {
   await go(page, 'home');
   const before = await page.evaluate(() => history.length);

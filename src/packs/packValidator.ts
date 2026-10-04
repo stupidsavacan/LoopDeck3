@@ -15,6 +15,7 @@ import type {
 import { extensionOf, isSafeImageAssetRef, isSafePackPath } from './assetSafety';
 import { judgeInputAnswer, normalizeAnswer, normalizeAnswerForQuestion } from '../core/answerJudge';
 import { presentQuestionForStudy } from '../core/questionPresentation';
+import { parseVisualReferences } from '../core/visualReferences';
 import { FORBIDDEN_EXTENSIONS, type PackValidationIssue, type PackValidationResult } from './packTypes';
 
 const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
@@ -234,6 +235,8 @@ function parseQuestion(raw: unknown, index: number, ids: Set<string>, issues: Pa
     return undefined;
 
   const explanation = optionalString(raw, 'explanation', path, issues);
+  const visualReferences = parseVisualReferences(raw.visualReferences, `${path}.visualReferences`);
+  issues.push(...visualReferences.errors.map((message) => issue(message)));
   const imageAsset = optionalString(raw, 'imageAsset', path, issues);
   if (imageAsset !== undefined && !isSafeImageAssetRef(imageAsset))
     issues.push(issue(`${path}.imageAsset must be a safe local supported image path.`, imageAsset));
@@ -268,6 +271,7 @@ function parseQuestion(raw: unknown, index: number, ids: Set<string>, issues: Pa
     type,
     prompt,
     ...(explanation !== undefined ? { explanation } : {}),
+    ...(visualReferences.references !== undefined ? { visualReferences: visualReferences.references } : {}),
     ...(imageAsset !== undefined && isSafeImageAssetRef(imageAsset) ? { imageAsset } : {}),
     ...(category !== undefined ? { category } : {}),
     ...(number !== undefined ? { number } : {}),

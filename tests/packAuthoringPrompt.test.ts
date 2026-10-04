@@ -15,7 +15,7 @@ describe('pack authoring prompt', () => {
 
   it('ships the current Sol-oriented authoring contract with semantic drift guards', () => {
     expect(packAuthoringPrompt.length).toBeGreaterThan(8000);
-    expect(packAuthoringPrompt).toContain('Authoring contract revision: 2026-10-01');
+    expect(packAuthoringPrompt).toContain('Authoring contract revision: 2026-10-04');
     expect(packAuthoringPrompt).toContain('Target LoopDeck packVersion: 1');
     expect(packAuthoringPrompt).toContain('Prompt target: modern reasoning models including GPT-5.6 Sol');
 

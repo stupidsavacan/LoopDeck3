@@ -1,0 +1,40 @@
+.question-visual-references {
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.visual-reference-title {
+  margin: 0 0 10px;
+  font-size: 1rem;
+}
+.visual-reference-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 10px;
+}
+.visual-reference-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.visual-reference-swatch {
+  display: block;
+  flex: 0 0 96px;
+  height: 40px;
+  border: 1px solid #9ca3af;
+  border-radius: 6px;
+}
+.visual-reference-circle {
+  flex-basis: 40px;
+  border-radius: 50%;
+}
+.visual-reference-label {
+  flex: 1 1 120px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+

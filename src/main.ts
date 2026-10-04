@@ -2,6 +2,7 @@ import './styles.css';
 import './homeFeatures.css';
 import './mobileUxFixes.css';
 import './editorialUi.css';
+import './questionVisualReferences.css';
 import { registerGlobalErrorLogging } from './debug/debugLog';
 import { StudyApplication } from './app/application';
 const root = document.querySelector<HTMLElement>('#app');
