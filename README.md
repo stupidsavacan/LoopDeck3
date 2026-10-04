@@ -32,4 +32,6 @@ npm run code:map
 
 `package.json` のバージョンを更新して `v<version>` タグをpushします。手動実行もできます。公開前に型・静的検査・単体テスト・ブラウザQA・署名検証・APK内HTMLとの完全一致を確認します。失敗したビルドは公開しません。
 
+mainへのマージでは、Actionsの `Build Android Debug APK` がHTMLとデバッグAPKを生成し、`LoopDeck3-debug-apk` 成果物としてまとめて保存します。Releaseに載る署名付きAPKとHTMLは、バージョンタグによるリリース手順で生成します。
+
 署名鍵の扱いは [android/README_SIGNING.md](android/README_SIGNING.md)。Androidの実機でのファイル選択・保存・復帰はブラウザQAとは別に確認が必要です。
