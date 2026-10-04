@@ -151,6 +151,8 @@ test('combined text image and visual references fit phone and desktop screens', 
   }
   await info.attach('combined-layout-measurements', { body: JSON.stringify(measurements, null, 2), contentType: 'application/json' });
   await page.getByRole('button', { name: '教材詳細に戻る', exact: true }).click();
+  // Returning reloads the module asynchronously; do not toggle the departing screen's details.
+  await expect(page.locator('.quiz-mount .quiz-card.done')).toHaveCount(0);
   await page.locator('.v2-customize > summary').click();
   await page.getByLabel('回答形式').selectOption('flashcard');
   await page.getByRole('button', { name: '学習を始める', exact: true }).click();
