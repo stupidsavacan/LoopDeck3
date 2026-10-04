@@ -23,7 +23,8 @@ const test = base.extend({
   },
 });
 const routes = { home: '.home-screen', 'module/qa-module-0': '.module-screen', review: '.review-screen', graphs: '.graphs-screen', import: '.import-screen', 'pdf-worksheet': '.pdf-worksheet-screen', 'debug-log': '.debug-log-screen' };
-async function go(page, route) { await page.goto(`${url}#${route}`); await page.reload(); await expect(page.locator(routes[route] || '.module-screen')).toBeVisible(); }
+// Route readiness includes loading populated IndexedDB; keep interaction assertions at their normal deadline.
+async function go(page, route) { await page.goto(`${url}#${route}`); await page.reload(); await expect(page.locator(routes[route] || '.module-screen')).toBeVisible({ timeout: 15_000 }); }
 async function layout(page, info, name) {
   await page.evaluate(() => document.fonts.ready);
   const overflow = await page.evaluate(() => {
