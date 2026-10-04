@@ -410,7 +410,8 @@ function parseModules(value: unknown, issues: PackValidationIssue[]): ModuleInfo
       preferredAnswerFormat !== undefined &&
       preferredAnswerFormat !== 'auto' &&
       preferredAnswerFormat !== 'choice' &&
-      preferredAnswerFormat !== 'input'
+      preferredAnswerFormat !== 'input' &&
+      preferredAnswerFormat !== 'flashcard'
     ) {
       issues.push(issue(`${path}.preferredAnswerFormat is unsupported.`));
     }
@@ -425,7 +426,10 @@ function parseModules(value: unknown, issues: PackValidationIssue[]): ModuleInfo
       title: titleValue && nonEmpty(titleValue) ? titleValue : raw.id,
       subject,
       ...(subtitle !== undefined ? { subtitle } : {}),
-      ...(preferredAnswerFormat === 'auto' || preferredAnswerFormat === 'choice' || preferredAnswerFormat === 'input'
+      ...(preferredAnswerFormat === 'auto' ||
+      preferredAnswerFormat === 'choice' ||
+      preferredAnswerFormat === 'input' ||
+      preferredAnswerFormat === 'flashcard'
         ? { preferredAnswerFormat }
         : {}),
       ...(color ? { color } : {}),

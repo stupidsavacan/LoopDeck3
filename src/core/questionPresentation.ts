@@ -1,4 +1,5 @@
 import type { ConcreteStudyQuestionMode, InputQuestion, Question, StudyQuestionMode } from './models';
+import { getCorrectAnswer } from './answerJudge';
 
 const JAPANESE_RE = /[\u3040-\u30ff\u3400-\u9fff]/;
 const LATIN_RE = /[A-Za-z]/;
@@ -22,6 +23,27 @@ export interface StudyPairSide {
 export interface StudyPair {
   front: StudyPairSide;
   back: StudyPairSide;
+}
+
+/** Use already-presented text; never resolve or re-randomize a study direction here. */
+export function getPresentedStudyPair(question: Question): StudyPair {
+  const pair = getQuestionStudyPair(question);
+  const answer = getCorrectAnswer(question);
+  const text = Array.isArray(answer) ? answer.join(' / ') : answer;
+  const mode = question.activeStudyMode ?? 'as_stored';
+  const normalize = (value: string) => value.normalize('NFKC').trim().replace(/\s+/g, ' ').toLocaleLowerCase();
+  let frontLabel = '問題';
+  let backLabel = '答え';
+  if (pair) {
+    if (mode === 'front_to_back' || (mode === 'as_stored' && normalize(question.prompt) === normalize(pair.front.text))) {
+      frontLabel = pair.front.label;
+      backLabel = pair.back.label;
+    } else if (mode === 'back_to_front' || (mode === 'as_stored' && normalize(question.prompt) === normalize(pair.back.text))) {
+      frontLabel = pair.back.label;
+      backLabel = pair.front.label;
+    }
+  }
+  return { front: { label: frontLabel, text: question.prompt }, back: { label: backLabel, text } };
 }
 
 function nonEmpty(value: unknown): value is string {

@@ -70,13 +70,21 @@ export class QuizController {
   }
   answer(input: string | string[], revealed = false): Attempt | undefined {
     if (!this.canAnswer) return undefined;
-    const { question, session, answerMode } = this.options;
+    const { question } = this.options;
     const nearMiss = !revealed && typeof input === 'string' && question.type !== 'multi_select' && isNearMissAnswer(question, input);
     const result = revealed ? 'revealed' : judgeQuestion(question, input) ? 'correct' : 'wrong';
+    return this.record(result, revealed ? '' : Array.isArray(input) ? [...input] : input, nearMiss);
+  }
+  gradeFlashcard(known: boolean): Attempt | undefined {
+    if (!this.canAnswer || this.options.answerMode !== 'flashcard') return undefined;
+    return this.record(known ? 'correct' : 'wrong', '', false);
+  }
+  private record(result: Attempt['result'], input: string | string[], nearMiss: boolean): Attempt {
+    const { question, session, answerMode } = this.options;
     this.attempt = buildQuizAttempt(
       question,
       result,
-      revealed ? '' : Array.isArray(input) ? [...input] : input,
+      input,
       elapsedForCurrent(session, this.excluded()),
       session.mode,
       answerMode,
@@ -107,7 +115,13 @@ export class QuizController {
     }
     if (this.state !== 'saved' || !this.options.isCurrent()) return;
     this.options.onPersistenceChange('saved');
-    if (this.phase === 'saved' && this.options.isCurrent() && this.attempt.result === 'correct' && this.options.session.settings.autoNext)
+    if (
+      this.phase === 'saved' &&
+      this.options.isCurrent() &&
+      this.options.answerMode !== 'flashcard' &&
+      this.attempt.result === 'correct' &&
+      this.options.session.settings.autoNext
+    )
       this.autoNext = setTimeout(() => this.advance(), 650);
   }
   advance(): void {

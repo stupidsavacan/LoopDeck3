@@ -64,6 +64,7 @@ export function clampEase(ease: number): number {
 }
 
 export function inferReviewRating(result: AnswerResult, elapsedMs: number, answerMode: AnswerFormat = 'input'): ReviewRating {
+  if (answerMode === 'flashcard') return result === 'correct' ? 'good' : 'again';
   if (result !== 'correct') return 'again';
   const [fast, slow] = answerMode === 'choice' ? [4500, 12000] : [7000, 20000];
   if (elapsedMs <= fast) return 'easy';

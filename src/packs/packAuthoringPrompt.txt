@@ -501,7 +501,8 @@ Optional module presentation metadata currently consumed by the UI includes:
 - `description`
 - `tags`
 - `subtitle`
-- `preferredAnswerFormat`: `auto`, `choice`, or `input`, used as the module's default answer format.
+- `preferredAnswerFormat`: `auto`, `choice`, `input`, or `flashcard`, used as the module's default answer format.
+- `flashcard` is the self-graded card answer format, not a question type. Keep question `type` as `input`, `choice`, or `multi_select`. Cards use the existing study directions and expose the question's image and visualReferences on the front; write explanations/examples for the back. KNOWN/AGAIN self-grades feed the normal history and SRS pipeline. Do not add a separate direction selector or flashcard-only content schema.
 
 Folders may also carry `description` and `tags`. Built-in presentation metadata and imported metadata use the same data contract.
 

@@ -1,6 +1,6 @@
 export type QuestionType = 'input' | 'choice' | 'multi_select';
 export type AnswerResult = 'correct' | 'wrong' | 'revealed';
-export type AnswerFormat = 'auto' | 'choice' | 'input';
+export type AnswerFormat = 'auto' | 'choice' | 'input' | 'flashcard';
 export type StudyFilter = 'all' | 'wrong' | 'bookmarked';
 
 export type ConcreteStudyQuestionMode = 'as_stored' | 'front_to_back' | 'back_to_front';

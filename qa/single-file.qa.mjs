@@ -150,6 +150,169 @@ test('combined text image and visual references fit phone and desktop screens', 
     await page.getByRole('button', { name: '次へ', exact: true }).click();
   }
   await info.attach('combined-layout-measurements', { body: JSON.stringify(measurements, null, 2), contentType: 'application/json' });
+  await page.getByRole('button', { name: '教材詳細に戻る', exact: true }).click();
+  // Returning reloads the module asynchronously; do not toggle the departing screen's details.
+  await expect(page.locator('.quiz-mount .quiz-card.done')).toHaveCount(0);
+  await page.locator('.v2-customize > summary').click();
+  await page.getByLabel('回答形式').selectOption('flashcard');
+  await page.getByRole('button', { name: '学習を始める', exact: true }).click();
+  for (const question of questions) {
+    await expect(page.getByRole('button', { name: '知ってる →', exact: true })).toBeEnabled();
+    await expect(page.locator('.flashcard-front .flashcard-term')).toHaveText(question.prompt);
+    const image = page.locator('.flashcard-front img.question-image');
+    await image.evaluate(image => image.decode());
+    await expect(page.locator('.flashcard-front .visual-reference-swatch')).toHaveCount(2);
+    for (const [width, height] of [[320, 568], [390, 844], [1280, 720]]) {
+      await page.setViewportSize({ width, height });
+      await layout(page, info, `flashcard-${question.id}-${width}`);
+      const content = page.locator('.flashcard-front .flashcard-content');
+      const dimensions = await content.evaluate(content => {
+        content.scrollTop = content.scrollHeight;
+        const image = content.querySelector('img');
+        const term = content.querySelector('.flashcard-term');
+        return { width: content.clientWidth, scrollWidth: content.scrollWidth, scrollTop: content.scrollTop,
+          scrollHeight: content.scrollHeight, height: content.clientHeight,
+          imageBeforePrompt: !!(image.compareDocumentPosition(term) & Node.DOCUMENT_POSITION_FOLLOWING) };
+      });
+      expect(dimensions.imageBeforePrompt).toBe(true);
+      expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.width + 1);
+      expect(dimensions.scrollTop + dimensions.height).toBeGreaterThanOrEqual(dimensions.scrollHeight - 1);
+      await page.screenshot({ path: info.outputPath(`flashcard-${question.id}-${width}.png`), fullPage: true });
+      await content.evaluate(content => { content.scrollTop = 0; });
+    }
+    await page.getByRole('button', { name: '知ってる →', exact: true }).click();
+  }
+  await expect(page.locator('.flashcard-donut-center')).toHaveText('100%KNOWN');
+});
+
+for (const width of [412, 1280]) test(`flashcard tap swipe result retry and resume ${width}`, async ({ page }, info) => {
+  await page.setViewportSize({ width, height: width === 412 ? 915 : 900 });
+  const pack = { packVersion: 1, packId: 'flashcard-qa', title: 'Cards', folders: [],
+    modules: [{ id: 'flashcard-qa', title: 'カード学習', questionIds: ['fc-strict', 'fc-agree'] }],
+    questions: [{ id: 'fc-strict', moduleId: 'flashcard-qa', type: 'input', prompt: 'strict', answer: '厳しい' },
+      { id: 'fc-agree', moduleId: 'flashcard-qa', type: 'input', prompt: 'agree', answer: '賛成する' }] };
+  await go(page, 'import');
+  await page.locator('input[type=file]').setInputFiles({ name: 'cards.loopdeck.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(pack)) });
+  await page.getByRole('button', { name: 'この教材を取り込む', exact: true }).click();
+  await expect(page.locator('.home-screen')).toBeVisible(); await go(page, 'module/flashcard-qa');
+  await page.locator('.v2-customize > summary').click();
+  await expect(page.getByLabel('回答形式').locator('option')).toHaveText(['自動', '4択', '入力', 'カード']);
+  await page.getByLabel('シャッフル', { exact: false }).uncheck();
+  const autoNext = page.getByLabel('正解時', { exact: false });
+  const autoReveal = page.getByLabel('10秒無操作', { exact: false });
+  await autoNext.check(); await autoReveal.check();
+  await page.getByLabel('回答形式').selectOption('flashcard');
+  await expect(autoNext).toBeDisabled(); await expect(autoNext).toBeChecked();
+  await expect(autoReveal).toBeDisabled(); await expect(autoReveal).toBeChecked();
+  await expect(page.getByLabel('出題形式')).toBeEnabled();
+  await page.getByLabel('出題形式').selectOption('front_to_back');
+  await expect(page.getByRole('button', { name: 'この設定で学習を始める →', exact: true })).toBeVisible();
+  await page.screenshot({ path: info.outputPath(`flashcard-module-${width}.png`), fullPage: true });
+  if (width === 412) await page.getByRole('button', { name: 'この設定で学習を始める →', exact: true }).click();
+  else await page.getByRole('button', { name: '学習を始める', exact: true }).click();
+  const wrap = page.locator('.flashcard-wrap');
+  await expect(wrap).toBeVisible();
+  await expect(page.locator('.flashcard-front .flashcard-term')).toHaveText('strict');
+  await expect(page.locator('.flashcard-back .flashcard-term')).toHaveText('厳しい');
+  await expect(page.locator('.flashcard-session select')).toHaveCount(0);
+  await expect(page.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '0');
+  await wrap.evaluate(async card => {
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    await Promise.all(card.getAnimations().map(animation => animation.finished));
+  });
+  const stageLayout = await page.locator('.flashcard-stage').evaluate(stage => {
+    const stageRect = stage.getBoundingClientRect();
+    const card = stage.querySelector('.flashcard-wrap').getBoundingClientRect();
+    const controls = document.querySelector('.flashcard-controls');
+    return { centerOffset: Math.abs((card.top + card.bottom) / 2 - (stageRect.top + stageRect.bottom) / 2),
+      stageMinHeight: parseFloat(getComputedStyle(stage).minHeight),
+      buttonBackground: getComputedStyle(controls.querySelector('.flashcard-known')).backgroundColor };
+  });
+  expect(stageLayout.centerOffset).toBeLessThanOrEqual(10);
+  expect(stageLayout.stageMinHeight).toBe(width <= 640 ? 430 : 480);
+  expect(stageLayout.buttonBackground).toBe('rgba(0, 0, 0, 0)');
+  await layout(page, info, `flashcard-front-${width}`);
+  await page.screenshot({ path: info.outputPath(`flashcard-front-${width}.png`), fullPage: true });
+  await page.evaluate(() => {
+    const card = document.querySelector('.flashcard-wrap');
+    window.flashcardFrame = new Promise(resolve => card.addEventListener('pointerup', () => requestAnimationFrame(() => {
+      const inner = document.querySelector('.flashcard-inner');
+      resolve({ flipped: card.classList.contains('is-flipped'), duration: inner.getAnimations()[0]?.effect.getTiming().duration });
+    }), { once: true }));
+  });
+  const bounds = await wrap.boundingBox();
+  if (width === 412) {
+    const touch = await page.context().newCDPSession(page);
+    await touch.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 1 });
+    await touch.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 }] });
+    await touch.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await touch.detach();
+  } else await page.mouse.click(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+  const frame = await page.evaluate(() => window.flashcardFrame);
+  expect(frame.flipped).toBe(true); expect(frame.duration).toBe(260);
+  await expect(wrap).toHaveClass(/is-flipped/);
+  await expect(page.locator('.flashcard-back')).toHaveAttribute('aria-hidden', 'false');
+  // Wait for the specified animation to settle before retaining the visible back face.
+  await page.evaluate(() => Promise.all(document.querySelector('.flashcard-inner').getAnimations().map(animation => animation.finished)));
+  await page.screenshot({ path: info.outputPath(`flashcard-back-${width}.png`), fullPage: true });
+  async function swipe(dx) {
+    const bounds = await wrap.boundingBox();
+    const x = bounds.x + bounds.width / 2, y = bounds.y + bounds.height / 2;
+    await page.mouse.move(x, y); await page.mouse.down(); await page.mouse.move(x + dx, y, { steps: 8 });
+    await expect(page.locator(`.flashcard-judge-label.${dx > 0 ? 'known' : 'again'}`)).toHaveClass(/show/);
+    await layout(page, info, `flashcard-drag-${width}`);
+    await page.mouse.up();
+  }
+  await swipe(130);
+  await expect(page.locator('.flashcard-front .flashcard-term')).toHaveText('agree');
+  await expect(wrap).not.toHaveClass(/is-flipped/);
+  await expect(page.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '1');
+  // Persistence checkpoints resume the next card, not the judged one, with its front visible.
+  await page.reload(); await expect(page.locator('.module-screen')).toBeVisible({ timeout: 15_000 });
+  await page.getByRole('button', { name: '再開 (2/2)', exact: true }).click();
+  await expect(page.locator('.flashcard-front .flashcard-term')).toHaveText('agree');
+  await expect(wrap).not.toHaveClass(/is-flipped/);
+  await swipe(-130);
+  await expect(page.getByRole('heading', { name: 'おつかれさま。', exact: true })).toBeVisible();
+  await expect(page.locator('.flashcard-donut-center')).toHaveText('50%KNOWN');
+  await expect(page.locator('.flashcard-stat')).toHaveCount(2);
+  await expect(page.locator('.flashcard-missed-chip')).toHaveText('agree');
+  await expect(page.locator('.flashcard-result-actions button')).toHaveText(['AGAINだけもう一度', '全部やり直す', '教材へ戻る']);
+  const resultLayout = await page.locator('.flashcard-result-panel').evaluate(panel => {
+    const stats = [...panel.querySelectorAll('.flashcard-stat')].map(stat => stat.getBoundingClientRect());
+    return { sameRow: stats[0].top === stats[1].top, missedInPanel: !!panel.querySelector('.flashcard-missed'),
+      actionsInPanel: !!panel.querySelector('.flashcard-result-actions'),
+      actionBackground: getComputedStyle(panel.querySelector('.btn.primary')).backgroundColor };
+  });
+  expect(resultLayout).toEqual({ sameRow: true, missedInPanel: true, actionsInPanel: true, actionBackground: 'rgb(10, 16, 32)' });
+  await page.locator('.flashcard-result').evaluate(result => Promise.all(result.getAnimations().map(animation => animation.finished)));
+  await layout(page, info, `flashcard-result-${width}`);
+  await page.screenshot({ path: info.outputPath(`flashcard-result-${width}.png`), fullPage: true });
+  const records = await page.evaluate(() => new Promise((resolve, reject) => {
+    const r = indexedDB.open('loopdeck3-learning');
+    r.onerror = () => reject(r.error);
+    r.onsuccess = () => {
+      const database = r.result;
+      const tx = database.transaction(['attempts', 'reviewLogs']);
+      const attempts = tx.objectStore('attempts').getAll(), logs = tx.objectStore('reviewLogs').getAll();
+      tx.oncomplete = () => { database.close(); resolve({ attempts: attempts.result, logs: logs.result }); };
+    };
+  }));
+  expect(records.attempts).toHaveLength(2);
+  for (const attempt of records.attempts) expect(attempt).toMatchObject({ answerMode: 'flashcard', input: '', questionMode: 'front_to_back' });
+  expect(records.logs.map(log => log.rating).sort()).toEqual(['again', 'good']);
+  await page.getByRole('button', { name: 'AGAINだけもう一度', exact: true }).click();
+  await expect(page.locator('.flashcard-front .flashcard-term')).toHaveText('agree');
+  await expect(page.locator('.flashcard-position')).toHaveText('1 / 1');
+  await expect(page.locator('.flashcard-counts')).toHaveText('KNOWN 0 · AGAIN 0');
+  await wrap.press('Space'); await expect(wrap).toHaveClass(/is-flipped/);
+  await wrap.press('ArrowRight');
+  await expect(page.locator('.flashcard-donut-center')).toHaveText('100%KNOWN');
+  await expect(page.getByRole('button', { name: 'AGAINだけもう一度', exact: true })).toBeDisabled();
+  await expect(page.locator('.flashcard-missed-chips')).toHaveText('なし');
+  await page.locator('.flashcard-result-actions').getByRole('button', { name: '教材へ戻る', exact: true }).click();
+  await expect(page.locator('.module-screen')).toBeVisible();
+  await expect(page.locator('.flashcard-session')).toHaveCount(0);
 });
 
 test('invalid hash normalization preserves browser back navigation', async ({ page }) => {

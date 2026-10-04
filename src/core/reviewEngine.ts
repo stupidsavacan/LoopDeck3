@@ -88,11 +88,12 @@ function recencyWeight(attempt: Attempt, now: Date, halfLifeDays?: number): numb
 }
 
 export function answerModeFor(attempt: Pick<Attempt, 'answerMode' | 'input'>): AnswerFormat {
-  if (attempt.answerMode === 'choice' || attempt.answerMode === 'input') return attempt.answerMode;
+  if (attempt.answerMode === 'choice' || attempt.answerMode === 'input' || attempt.answerMode === 'flashcard') return attempt.answerMode;
   return Array.isArray(attempt.input) ? 'choice' : 'input';
 }
 
 export function timingBand(elapsedMs: number, answerMode: AnswerFormat = 'input'): TimingBand {
+  if (answerMode === 'flashcard') return 'normal';
   const [fast, slow] = answerMode === 'choice' ? [4500, 12000] : [7000, 20000];
   if (elapsedMs <= fast) return 'fast';
   if (elapsedMs >= slow) return 'slow';
@@ -101,6 +102,7 @@ export function timingBand(elapsedMs: number, answerMode: AnswerFormat = 'input'
 
 export function scoreAttemptDelta(result: AnswerResult, nearMiss: boolean, elapsedMs: number, answerMode: AnswerFormat = 'input'): number {
   if (result === 'revealed') return 10;
+  if (answerMode === 'flashcard') return result === 'correct' ? -2 : 6;
   if (result === 'wrong' && nearMiss) return 4;
   if (result === 'wrong') return timingBand(elapsedMs, answerMode) === 'fast' ? 8 : 6;
   if (timingBand(elapsedMs, answerMode) === 'fast') return -4;
