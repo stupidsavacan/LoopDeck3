@@ -34,6 +34,24 @@ async function layout(page, info, name) {
   expect.soft(overflow.scroll, JSON.stringify({ name, ...overflow })).toBeLessThanOrEqual(overflow.width + 2);
   if (process.env.QA_SCREENSHOTS === 'all' || /home|quiz-result/.test(name)) await page.screenshot({ path: info.outputPath(`${name}.png`), fullPage: true });
 }
+async function touchDrag(page, locator, dx, dy, beforeEnd) {
+  const bounds = await locator.boundingBox();
+  if (!bounds) throw new Error('touch target has no bounding box');
+  const x = bounds.x + bounds.width / 2, y = bounds.y + bounds.height / 2;
+  const touch = await page.context().newCDPSession(page);
+  await touch.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 1 });
+  try {
+    await touch.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
+    for (let step = 1; step <= 8; step++) {
+      await touch.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x + dx * step / 8, y: y + dy * step / 8 }] });
+    }
+    if (beforeEnd) await beforeEnd();
+    await touch.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  } finally {
+    await touch.send('Emulation.setTouchEmulationEnabled', { enabled: false, maxTouchPoints: 1 }).catch(() => {});
+    await touch.detach();
+  }
+}
 async function start(page) {
   await page.locator('.v2-customize > summary').click();
   await page.getByLabel('シャッフル', { exact: false }).uncheck();
@@ -233,11 +251,28 @@ for (const width of [412, 1280]) test(`flashcard tap swipe result retry and resu
     const controls = document.querySelector('.flashcard-controls');
     return { centerOffset: Math.abs((card.top + card.bottom) / 2 - (stageRect.top + stageRect.bottom) / 2),
       stageMinHeight: parseFloat(getComputedStyle(stage).minHeight),
+      contentTouchAction: getComputedStyle(stage.querySelector('.flashcard-front .flashcard-content')).touchAction,
       buttonBackground: getComputedStyle(controls.querySelector('.flashcard-known')).backgroundColor };
   });
   expect(stageLayout.centerOffset).toBeLessThanOrEqual(10);
   expect(stageLayout.stageMinHeight).toBe(width <= 640 ? 430 : 480);
+  expect(stageLayout.contentTouchAction).toBe('pan-y');
   expect(stageLayout.buttonBackground).toBe('rgba(0, 0, 0, 0)');
+  if (width === 412) {
+    const content = page.locator('.flashcard-front .flashcard-content');
+    await content.evaluate(node => {
+      const spacer = document.createElement('div');
+      spacer.dataset.qaTouchScroll = 'true';
+      spacer.style.height = '900px';
+      node.append(spacer);
+      node.scrollTop = 0;
+    });
+    await touchDrag(page, content, 0, -160);
+    await expect.poll(() => content.evaluate(node => node.scrollTop)).toBeGreaterThan(20);
+    await expect(page.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '0');
+    await expect(page.locator('.flashcard-judge-label.show')).toHaveCount(0);
+    await content.evaluate(node => { node.querySelector('[data-qa-touch-scroll]')?.remove(); node.scrollTop = 0; });
+  }
   await layout(page, info, `flashcard-front-${width}`);
   await page.screenshot({ path: info.outputPath(`flashcard-front-${width}.png`), fullPage: true });
   await page.evaluate(() => {
@@ -263,10 +298,20 @@ for (const width of [412, 1280]) test(`flashcard tap swipe result retry and resu
   await page.evaluate(() => Promise.all(document.querySelector('.flashcard-inner').getAnimations().map(animation => animation.finished)));
   await page.screenshot({ path: info.outputPath(`flashcard-back-${width}.png`), fullPage: true });
   async function swipe(dx) {
+    const label = page.locator(`.flashcard-judge-label.${dx > 0 ? 'known' : 'again'}`);
+    if (width === 412) {
+      // Mobile regression: use real touch input so browser gesture arbitration can
+      // produce pointercancel if touch-action is configured on the wrong element.
+      await touchDrag(page, wrap, dx, 0, async () => {
+        await expect(label).toHaveClass(/show/);
+        await layout(page, info, `flashcard-drag-${width}`);
+      });
+      return;
+    }
     const bounds = await wrap.boundingBox();
     const x = bounds.x + bounds.width / 2, y = bounds.y + bounds.height / 2;
     await page.mouse.move(x, y); await page.mouse.down(); await page.mouse.move(x + dx, y, { steps: 8 });
-    await expect(page.locator(`.flashcard-judge-label.${dx > 0 ? 'known' : 'again'}`)).toHaveClass(/show/);
+    await expect(label).toHaveClass(/show/);
     await layout(page, info, `flashcard-drag-${width}`);
     await page.mouse.up();
   }

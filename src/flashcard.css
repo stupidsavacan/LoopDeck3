@@ -234,6 +234,9 @@
   width: 100%;
   overflow: auto;
   overscroll-behavior: contain;
+  /* This element is the touch scroll container. Keep vertical scrolling native while
+     reserving horizontal gestures for the flashcard Pointer Events handler. */
+  touch-action: pan-y;
   margin: 12px 0;
   align-content: center;
 }
