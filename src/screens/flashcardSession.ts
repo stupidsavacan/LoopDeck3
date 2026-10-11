@@ -5,6 +5,7 @@ import { writeDebugLog } from '../debug/debugLog';
 import { button, clear, el, toast } from '../ui/dom';
 import { createUiIcon } from '../ui/icons';
 import { createQuizBookmarkButton } from '../ui/quizBookmark';
+import { observeFlashcardLayout } from '../ui/flashcardLayout';
 import { renderFlashcardFace, renderFlashcardHeader, renderFlashcardProgress, renderFlashcardResult } from '../ui/flashcardView';
 import type { InlineQuizCallbacks, InlineQuizOptions } from './inlineQuiz';
 
@@ -98,6 +99,7 @@ export function renderFlashcardSession(
   const status = el('div', 'flashcard-status');
   status.setAttribute('aria-live', 'polite');
   screen.append(stage, controls, el('p', 'flashcard-key-hint', 'Space = flip · ← / → = judge'), status);
+  const disposeLayout = observeFlashcardLayout([front, rear]);
 
   let flipped = false;
   let locked = false;
@@ -286,6 +288,7 @@ export function renderFlashcardSession(
       toast('再開位置を保存できませんでした。');
     }
     controller.dispose();
+    disposeLayout();
     releasePointer();
     if (exitTimer !== undefined) clearTimeout(exitTimer);
     for (const id of frames) window.cancelAnimationFrame(id);

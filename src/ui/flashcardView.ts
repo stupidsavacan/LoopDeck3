@@ -61,7 +61,6 @@ export function renderFlashcardFace(
   const content = el('div', 'flashcard-content');
   const text = el('p', 'flashcard-term', side.text);
   if (/[\u3040-\u30ff\u3400-\u9fff]/.test(side.text) || side.text.length > 45) text.classList.add('jp');
-  if (side.text.length > 90 || (front && question.imageAsset)) text.classList.add('long');
   if (front) {
     const image = renderQuestionImage(question, resolveImage);
     if (image) {
