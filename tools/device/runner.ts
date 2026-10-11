@@ -24,7 +24,8 @@ import { errorScreenPresent, navigateHash, readDiagnostics, throwInPage, type Di
 import type { Deps } from './runtime.js';
 import { parseScenario, type Scenario, type Step } from './scenario.js';
 import { SessionHandle, atomicWriteFile, sessionPaths } from './session.js';
-import { captureStateInPage, compareStates, defaultCaptureArg, summarizeCapture, type StateSummary } from './state.js';
+import { captureLocalStorageInPage, captureStateInPage, compareStates, defaultCaptureArg, summarizeCapture } from './state.js';
+import { SNAPSHOT_DIR, buildSnapshot, diffSnapshots, judgeDelta, type StateDelta, type StateSnapshot } from './stateDelta.js';
 import { waitFor } from './ui.js';
 import { computeVerdict, type Final } from './verdict.js';
 import { openWebView, probe, type OpenWebView, type PageEvent } from './webview.js';
@@ -53,6 +54,8 @@ export interface RunSummary {
   channels: (
     { id: 'js' | 'diag'; status: ChannelStatus } | ({ id: 'logcat'; status: ChannelStatus; detail: string | null } & LogcatCounts)
   )[];
+  /** One entry per expectStateDelta check: counts and excluded patterns only, never record or localStorage content. */
+  stateDeltas: StateDeltaReport[];
   steps: { total: number; done: number };
   package: string;
   versionName: string | null;
@@ -62,6 +65,24 @@ export interface RunSummary {
   startedAt: string;
   finishedAt: string;
   runDir: string;
+}
+
+export interface StateDeltaReport {
+  step: string;
+  a: string;
+  b: string;
+  result: 'PASS' | 'FAIL' | 'INCONCLUSIVE';
+  reasons: string[];
+  schemaChanges: string[];
+  stores: Pick<StateDelta['stores'][number], 'name' | 'before' | 'after' | 'added' | 'removed' | 'updated' | 'unchanged'>[];
+  localStorage: {
+    available: boolean;
+    added: number;
+    removed: number;
+    updated: number;
+    unchanged: number;
+    excluded: { pattern: string; keys: number }[];
+  };
 }
 
 /** Where the tested build came from. `provenance.status` is `unverified` when nothing told the run which APK to expect. */
@@ -164,7 +185,8 @@ export async function runScenario(deps: Deps, options: RunOptions): Promise<RunR
   const channels: Record<'js' | 'diag' | 'logcat', ChannelStatus> = { js: 'ok', diag: 'ok', logcat: 'unavailable' };
   let logcatDetail: string | null = 'not started';
   let logcat: LogcatSession | null = null;
-  const snapshots = new Map<string, StateSummary>();
+  const snapshots = new Map<string, StateSnapshot>();
+  const stateDeltas: StateDeltaReport[] = [];
   let stateIncompleteForCheck = false;
   let infraError: string | null = null;
   let stepsDone = 0;
@@ -411,10 +433,23 @@ export async function runScenario(deps: Deps, options: RunOptions): Promise<RunR
       journal.append('check', status, data, step.id);
     };
 
-    const snapshot = async (): Promise<StateSummary> =>
-      summarizeCapture(
-        await withTimeout(page().evaluate(captureStateInPage, defaultCaptureArg()), TIMEOUTS.stateCaptureMs, 'state capture')
-      );
+    const snapshot = async (): Promise<StateSnapshot> => {
+      const result = await withTimeout(page().evaluate(captureStateInPage, defaultCaptureArg()), TIMEOUTS.stateCaptureMs, 'state capture');
+      let localStorage;
+      try {
+        localStorage = await withTimeout(page().evaluate(captureLocalStorageInPage, undefined), TIMEOUTS.stateCaptureMs, 'localStorage capture');
+      } catch {
+        localStorage = undefined; // recorded as unavailable; only checks that need it become INCONCLUSIVE
+      }
+      return buildSnapshot(result, localStorage);
+    };
+
+    /** Raw material for `ldev diff`: digests only, inside the run directory. */
+    const saveSnapshot = (name: string, value: StateSnapshot): void => {
+      const dir = join(runDir, SNAPSHOT_DIR);
+      mkdirSync(dir, { recursive: true });
+      atomicWriteFile(join(dir, `${name}.json`), `${JSON.stringify(value)}\n`);
+    };
 
     const execute = async (step: Step): Promise<void> => {
       if ('check' in step) {
@@ -450,14 +485,56 @@ export async function runScenario(deps: Deps, options: RunOptions): Promise<RunR
             return;
           }
           case 'expectStateSame': {
-            const a = snapshots.get(step.a);
-            const b = step.b === 'now' ? await snapshot() : snapshots.get(step.b);
+            const a = snapshots.get(step.a)?.summary;
+            const b = step.b === 'now' ? (await snapshot()).summary : snapshots.get(step.b)?.summary;
             const outcome = compareStates(a, b);
             if (outcome.verdict === 'incomplete') stateIncompleteForCheck = true;
             setCheck(step, outcome.verdict === 'same' ? 'PASS' : outcome.verdict === 'different' ? 'FAIL' : 'NOT_EVALUATED', {
               verdict: outcome.verdict,
               reasons: outcome.reasons
             });
+            return;
+          }
+          case 'expectStateDelta': {
+            const a = snapshots.get(step.a);
+            let b = snapshots.get(step.b);
+            if (step.b === 'now') {
+              b = await snapshot();
+              saveSnapshot(`${step.id}.now`, b);
+            }
+            const delta = a && b ? diffSnapshots(a, b, { ignoreLocalStorage: step.ignoreLocalStorage }) : null;
+            const judgement = delta
+              ? judgeDelta(delta, { counts: step.counts, updated: step.updated, otherStores: step.otherStores, localStorage: step.localStorage })
+              : { verdict: 'incomplete' as const, reasons: ['a snapshot is missing'] };
+            if (judgement.verdict === 'incomplete') stateIncompleteForCheck = true;
+            const status: CheckStatus = judgement.verdict === 'pass' ? 'PASS' : judgement.verdict === 'fail' ? 'FAIL' : 'NOT_EVALUATED';
+            const report: StateDeltaReport = {
+              step: step.id,
+              a: step.a,
+              b: step.b,
+              result: judgement.verdict === 'pass' ? 'PASS' : judgement.verdict === 'fail' ? 'FAIL' : 'INCONCLUSIVE',
+              reasons: judgement.reasons,
+              schemaChanges: delta?.schemaChanges ?? [],
+              stores: (delta?.stores ?? []).map(({ name, before, after, added, removed, updated, unchanged }) => ({
+                name,
+                before,
+                after,
+                added,
+                removed,
+                updated,
+                unchanged
+              })),
+              localStorage: {
+                available: delta?.localStorage.available ?? false,
+                added: delta?.localStorage.added.length ?? 0,
+                removed: delta?.localStorage.removed.length ?? 0,
+                updated: delta?.localStorage.updated.length ?? 0,
+                unchanged: delta?.localStorage.unchanged ?? 0,
+                excluded: delta?.localStorage.excluded ?? []
+              }
+            };
+            stateDeltas.push(report);
+            setCheck(step, status, report);
             return;
           }
         }
@@ -543,7 +620,13 @@ export async function runScenario(deps: Deps, options: RunOptions): Promise<RunR
         case 'snapshotState': {
           const summary = await snapshot();
           snapshots.set(step.label, summary);
-          journal.append('step', 'state', { label: step.label, complete: summary.complete, totalCount: summary.totalCount }, step.id);
+          saveSnapshot(step.label, summary);
+          journal.append(
+            'step',
+            'state',
+            { label: step.label, complete: summary.summary.complete, totalCount: summary.summary.totalCount, localStorage: summary.localStorage.ok },
+            step.id
+          );
           return;
         }
         case 'injectError':
@@ -632,6 +715,7 @@ export async function runScenario(deps: Deps, options: RunOptions): Promise<RunR
     checks: [...checks].map(([id, status]) => ({ id, status })),
     anomalies: [...counts.values()],
     channels: channelList(),
+    stateDeltas,
     steps: { total: scenario.steps.length, done: stepsDone },
     package: APP_PACKAGE,
     versionName,

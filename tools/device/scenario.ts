@@ -21,7 +21,17 @@ export type StepDef =
   | { do: 'injectError'; message: string }
   | { check: 'expectVisible'; target?: Locator; text?: string; timeoutMs: number }
   | { check: 'expectNoErrorScreen' }
-  | { check: 'expectStateSame'; a: string; b: string };
+  | { check: 'expectStateSame'; a: string; b: string }
+  | {
+      check: 'expectStateDelta';
+      a: string;
+      b: string;
+      counts: Record<string, number>;
+      updated: Record<string, number>;
+      otherStores: 'unchanged' | 'any';
+      localStorage: 'unchanged' | 'any';
+      ignoreLocalStorage: string[];
+    };
 
 export type Step = StepDef & { id: string };
 
@@ -72,6 +82,25 @@ function locator(value: unknown, path: string): Locator {
     throw usage(`${path}.role`, 'must be a lowercase ARIA role such as button');
   if (typeof o.name !== 'string') throw usage(`${path}.name`, 'must be a string (exact accessible name)');
   return { role: o.role, name: o.name };
+}
+
+const STORE_NAME = /^[A-Za-z0-9_.$-]{1,64}$/;
+
+function storeNumbers(value: unknown, path: string, min: number): Record<string, number> {
+  if (value === undefined) return {};
+  const o = object(value, path);
+  const result: Record<string, number> = {};
+  for (const key of Object.keys(o)) {
+    if (!STORE_NAME.test(key)) throw usage(`${path}.${key}`, 'is not a valid IndexedDB store name');
+    result[key] = integer(o[key], `${path}.${key}`, min, 1_000_000);
+  }
+  return result;
+}
+
+function choice(value: unknown, path: string): 'unchanged' | 'any' {
+  if (value === undefined || value === 'any') return 'any';
+  if (value === 'unchanged') return 'unchanged';
+  throw usage(path, 'must be "unchanged" or "any"');
 }
 
 const LABEL = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
@@ -185,6 +214,28 @@ function parseStep(raw: unknown, index: number, labels: Set<string>): StepDef {
       if (typeof o.b !== 'string' || (o.b !== 'now' && !labels.has(o.b)))
         throw usage(`${path}.b`, 'must name an earlier snapshotState label, or "now"');
       return { check: 'expectStateSame', a: o.a, b: o.b };
+    }
+    case 'expectStateDelta': {
+      only(o, path, ['check', 'a', 'b', 'counts', 'updated', 'otherStores', 'localStorage', 'ignoreLocalStorage']);
+      if (typeof o.a !== 'string' || !labels.has(o.a)) throw usage(`${path}.a`, 'must name an earlier snapshotState label');
+      if (typeof o.b !== 'string' || (o.b !== 'now' && !labels.has(o.b)))
+        throw usage(`${path}.b`, 'must name an earlier snapshotState label, or "now"');
+      const counts = storeNumbers(o.counts, `${path}.counts`, -1_000_000);
+      const updated = storeNumbers(o.updated, `${path}.updated`, 0);
+      const otherStores = choice(o.otherStores, `${path}.otherStores`);
+      const localStorage = choice(o.localStorage, `${path}.localStorage`);
+      let ignoreLocalStorage: string[] = [];
+      if (o.ignoreLocalStorage !== undefined) {
+        if (!Array.isArray(o.ignoreLocalStorage) || o.ignoreLocalStorage.length > 20)
+          throw usage(`${path}.ignoreLocalStorage`, 'must be an array of at most 20 keys or "prefix*" patterns');
+        ignoreLocalStorage = o.ignoreLocalStorage.map((pattern: unknown, index: number) =>
+          text(pattern, `${path}.ignoreLocalStorage[${index}]`, 200)
+        );
+      }
+      // A check that can never fail would read as a pass for nothing.
+      if (Object.keys(counts).length + Object.keys(updated).length === 0 && otherStores !== 'unchanged' && localStorage !== 'unchanged')
+        throw usage(path, 'expectStateDelta needs counts, updated, otherStores "unchanged" or localStorage "unchanged"');
+      return { check: 'expectStateDelta', a: o.a, b: o.b, counts, updated, otherStores, localStorage, ignoreLocalStorage };
     }
     default:
       throw usage(`${path}.check`, `unknown check "${String(o.check)}"`);

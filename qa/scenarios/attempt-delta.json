@@ -1,0 +1,28 @@
+{
+  "schema": 1,
+  "id": "attempt-delta",
+  "title": "Answering one question adds exactly one attempt, review card and review log, touches nothing else, and survives a restart",
+  "steps": [
+    { "do": "lifecycle", "action": "relaunch" },
+    { "do": "reset" },
+    { "do": "snapshotState", "label": "before" },
+    { "do": "tap", "target": { "role": "heading", "name": "歴史総合" } },
+    { "do": "tap", "target": { "role": "button", "name": "10問" } },
+    { "do": "tap", "target": { "role": "button", "name": "学習を始める" } },
+    { "check": "expectVisible", "target": { "css": ".choice-btn >> nth=0" } },
+    { "do": "tap", "target": { "css": ".choice-btn >> nth=0" } },
+    { "do": "wait", "ms": 1500 },
+    { "do": "snapshotState", "label": "answered" },
+    {
+      "check": "expectStateDelta",
+      "a": "before",
+      "b": "answered",
+      "counts": { "attempts": 1, "reviewCards": 1, "reviewLogs": 1 },
+      "otherStores": "unchanged",
+      "ignoreLocalStorage": ["loopdeck3.diagnostics"]
+    },
+    { "do": "lifecycle", "action": "relaunch" },
+    { "check": "expectVisible", "target": { "css": ".home-screen" } },
+    { "check": "expectStateDelta", "a": "answered", "b": "now", "otherStores": "unchanged" }
+  ]
+}

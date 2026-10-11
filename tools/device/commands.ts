@@ -19,6 +19,7 @@ import { finishSession, lifecycle, prepareSession, rotate, type LifecycleAction 
 import type { Locator } from './pageScripts.js';
 import { hostAdb, openPinnedDevice, type Deps, type DeviceRun } from './runtime.js';
 import { runScenario } from './runner.js';
+import { diffSnapshots, loadRunSnapshot } from './stateDelta.js';
 import { SessionHandle, sessionPaths } from './session.js';
 import { captureStateInPage, defaultCaptureArg, summarizeCapture } from './state.js';
 import { withWebView } from './webview.js';
@@ -494,6 +495,39 @@ const COMMAND_TABLE: Record<string, CommandDef> = {
       const output: CommandOutput = { data: { ...outcome }, summary: `state ${outcome.verdict}` };
       if (outcome.verdict === 'different') output.failure = { code: 'CHECK_FAILED', message: outcome.reasons.join('; ') };
       if (outcome.verdict === 'incomplete') output.failure = { code: 'INCOMPLETE', message: outcome.reasons.join('; ') };
+      return output;
+    }
+  },
+
+  diff: {
+    summary: 'Offline: record-level IndexedDB and localStorage differences between two run snapshots (digests only)',
+    usage: 'diff <runA:label> <runB:label> [--ignore-local-storage <key|prefix*>[,...]] [--expect-same]   (run = run directory or run id under $LDEV_HOME/runs)',
+    options: { 'ignore-local-storage': text, 'expect-same': flag },
+    positionals: { min: 2, max: 2 },
+    touchesDevice: false,
+    async run(context) {
+      const [a, b] = context.positionals.map((ref) => loadRunSnapshot(ref, context.deps.cwd, context.deps.env).snapshot);
+      const ignore = (str(context.values, 'ignore-local-storage') ?? '').split(',').filter((pattern) => pattern !== '');
+      const delta = diffSnapshots(a, b, { ignoreLocalStorage: ignore });
+      const changed =
+        delta.schemaChanges.length > 0 ||
+        delta.stores.some((store) => Boolean(store.added || store.removed || store.updated) || store.before !== store.after) ||
+        delta.localStorage.added.length + delta.localStorage.removed.length + delta.localStorage.updated.length > 0;
+      const output: CommandOutput = {
+        data: { ...delta, changed, localStorageCompared: delta.localStorage.available },
+        summary:
+          delta.verdict === 'incomplete'
+            ? 'INCOMPLETE'
+            : changed
+              ? 'states differ'
+              : delta.localStorage.available
+                ? 'no differences'
+                : 'no IndexedDB differences (localStorage NOT compared: not captured on both sides)'
+      };
+      if (delta.verdict === 'incomplete') output.failure = { code: 'INCOMPLETE', message: delta.reasons.join('; ') };
+      else if (changed && on(context.values, 'expect-same')) output.failure = { code: 'CHECK_FAILED', message: 'The two snapshots differ' };
+      else if (on(context.values, 'expect-same') && !delta.localStorage.available)
+        output.failure = { code: 'INCOMPLETE', message: 'localStorage was not captured on both sides, so the snapshots cannot be shown to be the same' };
       return output;
     }
   },
