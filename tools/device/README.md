@@ -42,6 +42,7 @@ Options are parsed strictly with `util.parseArgs`; unknown or misplaced options 
 | `expect (--text EXACT \| --locator CSS) [--timeout-ms N]`                                                   | Bounded polling; exit 1 if not met.                                                                              |
 | `collect LABEL [--compare-to PATH [--expect-same]]`                                                         | Evidence under `<session>/artifacts/LABEL`.                                                                      |
 | `compare A B`                                                                                               | Offline state comparison of two summaries (count + digest).                                                      |
+| `diff RUN:LABEL RUN:LABEL [--ignore-local-storage K,P*] [--expect-same]`                                     | Offline record-level IndexedDB + localStorage diff of two saved snapshots (see "State deltas").               |
 | `artifacts --apk F --html F`                                                                                | Offline: does the APK embed exactly this HTML (bytes, SHA-256)? Mismatch exits 1.                                |
 | `install --apk F [--replace-incompatible]`                                                                  | `adb install -r` of a debug APK (see "Managing the app").                                                        |
 | `reset`                                                                                                     | `pm clear` the debug app, relaunch, verify no learner data remains.                                              |
@@ -89,7 +90,8 @@ Scenario (JSON, unknown keys rejected, errors name the path such as `steps[3].ta
   `type {target, text}`, `key {key}`, `rotate {to}`, `lifecycle {action: background|resume|relaunch|kill}`, `wait {ms 1..30000}`,
   `snapshotState {label}`, `injectError {message}` (makes the scenario `testClass: harness`),
   `reset`, `setting {key: "uimode"|"font-scale", value}`, `installApk {file, replaceIncompatible?}`.
-- Checks (`check`): `expectVisible {target | text, timeoutMs?}`, `expectNoErrorScreen`, `expectStateSame {a, b}` (`b` may be `"now"`).
+- Checks (`check`): `expectVisible {target | text, timeoutMs?}`, `expectNoErrorScreen`, `expectStateSame {a, b}` (`b` may be `"now"`),
+  `expectStateDelta {a, b, counts?, updated?, otherStores?, localStorage?, ignoreLocalStorage?}` (see "State deltas").
 - `target` is `{role, name}` (exact accessible name) or `{css}`.
 
 `reset`, `installApk` and `lifecycle kill` end the app process on purpose, so the WebView connection is dropped
@@ -256,3 +258,35 @@ in `finally`. If the process is killed the DIRTY record remains for `ldev finish
 - `shell` is not available as a scenario step yet.
 - Physical acceptance on moto g13 / Android 14 is recorded in `docs/android-device-tool.md`.
   Full native file import/save and release-build QA remain separate checks.
+
+## State deltas (record level)
+
+`snapshotState` stores, besides the in-memory copy, `<run>/snapshots/<label>.json` (outside the repository, under
+`$LDEV_HOME`). It holds **digests only**: per IndexedDB record `[sha256(key), sha256(value)]` (same canonical encoding as
+`state`), per localStorage entry `[key, sha256(value)]`. No question text, answer or localStorage value is stored.
+`expectStateDelta` with `b: "now"` also saves the current state as `<stepId>.now` (e.g. `s3.now`).
+
+```json
+{ "check": "expectStateDelta", "a": "before", "b": "now",
+  "counts": { "attempts": 1 }, "otherStores": "unchanged",
+  "localStorage": "unchanged", "ignoreLocalStorage": ["loopdeck3.diagnostics", "loopdeck3.catalog-changes"] }
+```
+
+- `counts`: net record change per store (added - removed), an integer. `updated`: exact number of records whose value
+  changed in place (a store not named in `updated` is not restricted on updates unless `otherStores` applies to it).
+- `otherStores: "unchanged"` (default `"any"`): every store not named in `counts`/`updated` must have no added, removed or
+  updated record, and the database version / store set / key and index structure must not change.
+- `localStorage: "unchanged"` (default `"any"`): no added, removed or changed key outside `ignoreLocalStorage`.
+  `ignoreLocalStorage` entries are exact keys or `prefix*`; each pattern and the number of keys it hid is recorded in
+  `summary.json` (`stateDeltas[].localStorage.excluded`). Nothing is ignored by default.
+- Unknown labels are rejected when the scenario is parsed. A check with nothing to assert is rejected too.
+- Verdicts: expected change -> PASS; different change -> FAIL; IndexedDB capture incomplete (bounds, missing DB),
+  a missing snapshot, or localStorage unreadable while `localStorage: "unchanged"` -> INCONCLUSIVE.
+- `summary.json` -> `stateDeltas[]` and the `check` events in `events.ndjson` carry store counts (before/after/added/
+  removed/updated/unchanged) and localStorage counts, never record or localStorage content.
+
+`ldev diff <runA:label> <runB:label>` compares two saved snapshots offline (no adb, writes nothing). `run` is a run
+directory (absolute or relative) or a run id under `$LDEV_HOME/runs`; the label is split at the **last** colon, so
+`C:\runs\20260101-x:before` works. Output: per-store counts and added/removed/updated, schema changes, localStorage
+key names that were added/removed/updated. Differences exit 0 (use `--expect-same` for exit 1); an incomplete or legacy
+(schema 1, counts only) snapshot exits 5 with the reason; a missing snapshot is a usage error (exit 2).

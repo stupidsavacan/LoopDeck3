@@ -15,6 +15,8 @@ export interface StoreCapture {
   autoIncrement: boolean;
   indexes: { name: string; keyPath: string | string[]; unique: boolean; multiEntry: boolean }[];
   complete: boolean;
+  /** `[key digest, value digest]` per record, sorted by key digest. Digests only; never raw data. */
+  records?: [string, string][];
 }
 
 export interface CaptureResult {
@@ -208,8 +210,12 @@ export async function captureStateInPage(arg: CaptureArg): Promise<CaptureResult
       let storeComplete = raw.get(name)!.complete;
       const descriptor = meta.get(name)!;
       let chain = await sha(`store:${name.length}:${name}|${JSON.stringify(descriptor)}`);
+      const records: [string, string][] = [];
       for (const { key, value } of entries) {
-        const body = `k${await enc(key, [])}|v${await enc(value, [])}`;
+        const encodedKey = await enc(key, []);
+        const encodedValue = await enc(value, []);
+        const body = `k${encodedKey}|v${encodedValue}`;
+        records.push([await sha(`k${encodedKey}`), await sha(`v${encodedValue}`)]);
         encodedBytes += encoder.encode(body).byteLength;
         if (encodedBytes > arg.maxBytes) {
           storeComplete = false;
@@ -218,7 +224,8 @@ export async function captureStateInPage(arg: CaptureArg): Promise<CaptureResult
         chain = await sha(`${chain}|${await sha(body)}`);
       }
       if (!storeComplete) complete = false;
-      stores.push({ name, count: entries.length, sha256: chain, complete: storeComplete, ...descriptor });
+      records.sort((left, right) => (left[0] < right[0] ? -1 : left[0] > right[0] ? 1 : 0));
+      stores.push({ name, count: entries.length, sha256: chain, complete: storeComplete, ...descriptor, records });
     }
     const version = database.version;
     database.close();
@@ -226,6 +233,33 @@ export async function captureStateInPage(arg: CaptureArg): Promise<CaptureResult
   } catch (error) {
     database.close();
     return fail(`capture failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+export interface LocalStorageCapture {
+  ok: boolean;
+  /** `[key, SHA-256 of the value]` sorted by key. Values are never returned. */
+  entries: [string, string][];
+}
+
+/** Read-only localStorage capture (key + value digest), serialized into the page (self-contained on purpose). */
+export async function captureLocalStorageInPage(): Promise<LocalStorageCapture> {
+  try {
+    const storage = window.localStorage;
+    if (storage.length > 20_000) return { ok: false, entries: [] };
+    const encoder = new TextEncoder();
+    const entries: [string, string][] = [];
+    for (let index = 0; index < storage.length; index++) {
+      const key = storage.key(index);
+      const value = key === null ? null : storage.getItem(key);
+      if (key === null || value === null) return { ok: false, entries: [] }; // changed while reading
+      const digest = await crypto.subtle.digest('SHA-256', encoder.encode(value));
+      entries.push([key, Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('')]);
+    }
+    entries.sort((left, right) => (left[0] < right[0] ? -1 : left[0] > right[0] ? 1 : 0));
+    return { ok: true, entries };
+  } catch {
+    return { ok: false, entries: [] };
   }
 }
 
