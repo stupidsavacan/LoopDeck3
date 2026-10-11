@@ -37,3 +37,5 @@ mainへのマージ・pushで、署名付きAPKと単体HTMLを自動生成し�
 Actionsの `Build Android Debug APK` もHTMLとデバッグAPKを生成し、`LoopDeck3-debug-apk` 成果物としてまとめて保存します。普段のダウンロードにはReleaseの署名付きAPK・HTMLを使用します。
 
 署名鍵の扱いは [android/README_SIGNING.md](android/README_SIGNING.md)。Androidの実機でのファイル選択・保存・復帰はブラウザQAとは別に確認が必要です。
+
+Android debug版の実機QAには `npm run device -- <command>` を使えます。端末を `--serial` で指定し、WebView観測・ネイティブ操作・回転・復帰・保存状態の照合を実行します。`npm run qa:android -- --serial <serial>` は既存のカード検証用教材をdebug版へ投入して実機検証します。手順と検証範囲は [docs/android-device-tool.md](docs/android-device-tool.md)。
