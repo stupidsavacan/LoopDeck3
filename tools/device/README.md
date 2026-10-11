@@ -52,6 +52,50 @@ Exit codes: 0 ok · 1 check failed (expectation, differing state, APK/HTML misma
 3 refused (session/lock/identity/unsafe) · 4 device/adb/UI/WebView/timeout/cleanup failure ·
 5 incomplete evidence · 70 internal.
 
+## `run` — scenarios with a verdict
+
+```
+npm run device -- run <scenario.json> --serial <S> [--out DIR]     # serial falls back to $LDEV_SERIAL
+```
+
+One process prepares its own session (inside the run directory), launches the debug app, holds
+**one** CDP connection for the whole run, executes the steps, records JS errors (`pageerror`,
+`console.error`, renderer crash), new error entries of `loopdeck3.diagnostics` and the startup
+error screen after every step, judges the run, captures failure evidence over the same
+connection, then finishes the session (rotation restored, the forward removed, CLEAN).
+`run` refuses while the default CLI session (`qa-results/android`) is DIRTY.
+
+Scenario (JSON, unknown keys rejected, errors name the path such as `steps[3].target`):
+
+```json
+{
+  "schema": 1,
+  "id": "launch-home",
+  "title": "...",
+  "allowConsoleErrors": [{ "pattern": "regex", "reason": "why this is expected" }],
+  "steps": [{ "do": "launch" }, { "check": "expectVisible", "target": { "css": ".home-screen" } }]
+}
+```
+
+- Steps (`do`): `launch`, `navigate {route:"#…"}`, `tap {target, native?}`, `swipe {target, direction, distance?, durationMs?}`,
+  `type {target, text}`, `key {key}`, `rotate {to}`, `lifecycle {action: background|resume|relaunch}`, `wait {ms 1..30000}`,
+  `snapshotState {label}`, `injectError {message}` (makes the scenario `testClass: harness`).
+- Checks (`check`): `expectVisible {target | text, timeoutMs?}`, `expectNoErrorScreen`, `expectStateSame {a, b}` (`b` may be `"now"`).
+- `target` is `{role, name}` (exact accessible name) or `{css}`.
+
+Verdict: **FAIL** (a check failed, or an anomaly not allowed by `allowConsoleErrors`) › **ERROR**
+(steps could not be run to the end) › **INCONCLUSIVE** (no passing check, a check not evaluated,
+an observation channel `unavailable`/`interrupted`, incomplete state) › **PASS**. The first FAIL or
+infrastructure error stops the run; remaining checks are `NOT_EVALUATED`.
+
+Exit codes: PASS 0 · FAIL 1 · ERROR 4 · INCONCLUSIVE 5 (usage problems 2).
+
+Evidence lives outside the repository under `$LDEV_HOME/runs/<YYYYMMDD-HHMMSS>-<id>/`
+(`LDEV_HOME`, else `%LOCALAPPDATA%/LoopDeck3/ldev`, else `~/.loopdeck3-ldev`):
+`scenario.json`, `events.ndjson` (raw events, may contain device text), `summary.json`
+(kinds and counts only, safe to quote), `session/`, and on non-PASS `failure/`
+(`screenshot.png`, `dom.json`, `state.json`, `diagnostics.json`, `logcat.txt`, `capture.json`).
+
 ## Sessions, locking, recovery
 
 - `--session DIR` (default `qa-results/android`) holds `session.json`, `session.lock`,

@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { ExecResult, Runner } from '../../tools/device/exec';
 import type { Deps } from '../../tools/device/runtime';
-import type { CdpBrowser, CdpConnector, CdpPage, LocateResult } from '../../tools/device/webview';
+import type { CdpBrowser, CdpConnector, CdpPage, LocateResult, PageEvent } from '../../tools/device/webview';
 
 const result = (stdout: string | Buffer, code = 0, stderr = ''): ExecResult => ({
   stdout: Buffer.isBuffer(stdout) ? stdout : Buffer.from(stdout),
@@ -181,7 +181,7 @@ export interface FakePageSpec {
   url?: string;
   locate?: (locator: unknown, options: { scroll: boolean; points?: { x: number; y: number }[] }) => LocateResult;
   countVisible?: (target: unknown) => number;
-  evaluate?: (arg: unknown) => unknown;
+  evaluate?: (arg: unknown, fn: { name: string }) => unknown;
 }
 
 export class FakeCdp implements CdpConnector {
@@ -191,6 +191,14 @@ export class FakeCdp implements CdpConnector {
   pages: FakePageSpec[] = [{ url: 'https://appassets.androidplatform.net/assets/loopdeck/index.html#home' }];
   connectError: Error | null = null;
   beforeClose: (() => void) | null = null;
+  /** Page-event subscribers of every live fake page. */
+  listeners = new Set<(event: PageEvent) => void>();
+  fills: { locator: unknown; text: string }[] = [];
+
+  /** Fires a page event at every current subscriber (as Playwright would). */
+  emit(event: PageEvent): void {
+    for (const listener of [...this.listeners]) listener(event);
+  }
 
   async connect(endpoint: string): Promise<CdpBrowser> {
     this.endpoints.push(endpoint);
@@ -199,7 +207,12 @@ export class FakeCdp implements CdpConnector {
       pages: () =>
         this.pages.map((spec): CdpPage => ({
           url: () => spec.url ?? 'about:blank',
-          evaluate: (async (_fn: unknown, arg: unknown) => spec.evaluate?.(arg)) as CdpPage['evaluate'],
+          evaluate: (async (fn: { name: string }, arg: unknown) => spec.evaluate?.(arg, fn)) as CdpPage['evaluate'],
+          onEvent: (handler) => {
+            this.listeners.add(handler);
+            return () => void this.listeners.delete(handler);
+          },
+          fill: async (locator, text) => void this.fills.push({ locator, text }),
           mouseClick: async (x, y) => void this.clicks.push({ x, y }),
           locate: async (locator, options) => spec.locate!(locator, options),
           countVisible: async (target) => spec.countVisible!(target)

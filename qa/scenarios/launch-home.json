@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "id": "launch-home",
+  "title": "起動してホームが表示される",
+  "steps": [
+    { "do": "launch" },
+    { "do": "navigate", "route": "#home" },
+    { "check": "expectVisible", "target": { "css": ".home-screen" } },
+    { "check": "expectNoErrorScreen" }
+  ]
+}

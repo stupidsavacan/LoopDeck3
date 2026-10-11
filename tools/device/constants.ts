@@ -10,6 +10,13 @@ export const WEBVIEW_CLASS = 'android.webkit.WebView';
 export const DOCUMENTS_UI_PACKAGES: readonly string[] = ['com.google.android.documentsui', 'com.android.documentsui'];
 export const DEFAULT_SESSION_ROOT = 'qa-results/android';
 
+/** Where raw run evidence lives: outside the repository. */
+export function resolveLdevHome(env: NodeJS.ProcessEnv, _platform: string, homedir: string): string {
+  if (env.LDEV_HOME) return env.LDEV_HOME;
+  if (env.LOCALAPPDATA) return `${env.LOCALAPPDATA}/LoopDeck3/ldev`;
+  return `${homedir}/.loopdeck3-ldev`;
+}
+
 /** Keys `ldev key` may send. HOME/POWER/etc. are reachable only through typed lifecycle commands. */
 export const ALLOWED_KEYS: readonly string[] = [
   'BACK',

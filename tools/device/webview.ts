@@ -30,6 +30,10 @@ export interface CdpPage {
   countVisible(target: ExpectTarget): Promise<number>;
   /** Real mouse input at layout-viewport CSS coordinates (not Android input). */
   mouseClick(x: number, y: number): Promise<void>;
+  /** Subscribes to page events; returns the unsubscribe function. */
+  onEvent(handler: (event: PageEvent) => void): () => void;
+  /** Fills the single visible element resolved by the locator. */
+  fill(locator: Locator, text: string): Promise<void>;
 }
 
 export interface CdpBrowser {
@@ -113,12 +117,20 @@ export async function releaseForward(run: DeviceRun, forward: OwnedForward): Pro
   return outcome;
 }
 
+export type PageEvent =
+  | { type: 'console'; level: string; text: string }
+  | { type: 'pageerror'; message: string; stack?: string }
+  | { type: 'crash' }
+  | { type: 'close' };
+
+export type OpenWebView = WebViewHandle & { close(): Promise<void> };
+
 /**
- * Attach for one finite unit of work: pick the single app PID, forward its devtools socket
- * to a free host port, persist ownership BEFORE connecting, connect over CDP, run `work`,
- * then disconnect and remove only that forward. Re-attaches transparently after PID changes.
+ * Attach and keep the connection: pick the single app PID, forward its devtools socket to a
+ * free host port, persist ownership BEFORE connecting, connect over CDP. The caller must
+ * `close()` (idempotent) to disconnect and remove only that forward.
  */
-export async function withWebView<T>(run: DeviceRun, work: (handle: WebViewHandle) => Promise<T>): Promise<T> {
+export async function openWebView(run: DeviceRun): Promise<OpenWebView> {
   const { device, session, deps } = run;
   const pid = await selectAppPid(device);
   const remote = await requireDevtoolsSocket(device, pid);
@@ -138,8 +150,16 @@ export async function withWebView<T>(run: DeviceRun, work: (handle: WebViewHandl
   });
 
   let browser: CdpBrowser | null = null;
-  let primary: unknown = null;
-  let result!: T;
+  let closing: Promise<void> | null = null;
+  // Cleanup order: disconnect first, then remove the forward. Runs at most once.
+  const close = (): Promise<void> => {
+    closing ??= (async () => {
+      if (browser) await withTimeout(browser.close(), 5_000, 'CDP disconnect').catch(() => undefined);
+      await releaseForward(run, owned);
+    })();
+    return closing;
+  };
+
   try {
     browser = await withTimeout(
       deps.cdp.connect(`http://127.0.0.1:${port}`, TIMEOUTS.cdpConnectMs),
@@ -147,14 +167,25 @@ export async function withWebView<T>(run: DeviceRun, work: (handle: WebViewHandl
       'CDP connect'
     );
     const page = selectAppPage(browser.pages());
-    result = await work({ page, pid, port, previousPid });
+    return { page, pid, port, previousPid, close };
+  } catch (primary) {
+    await close().catch(() => undefined); // never masks the primary failure
+    throw primary;
+  }
+}
+
+/** Attach for one finite unit of work; re-attaches transparently after PID changes. */
+export async function withWebView<T>(run: DeviceRun, work: (handle: WebViewHandle) => Promise<T>): Promise<T> {
+  const handle = await openWebView(run);
+  let primary: unknown = null;
+  let result!: T;
+  try {
+    result = await work(handle);
   } catch (error) {
     primary = error;
   }
-  // Cleanup always runs, in this order, and never masks the primary failure.
-  if (browser) await withTimeout(browser.close(), 5_000, 'CDP disconnect').catch(() => undefined);
   try {
-    await releaseForward(run, owned);
+    await handle.close();
   } catch (error) {
     if (!primary) primary = error;
   }

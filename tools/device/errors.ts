@@ -11,6 +11,7 @@ export type ErrorCode =
   | 'TIMEOUT'
   | 'CHECK_FAILED'
   | 'INCOMPLETE'
+  | 'RUN_ERROR'
   | 'CLEANUP_FAILED'
   | 'INTERNAL';
 
@@ -29,6 +30,7 @@ export const EXIT_CODES: Record<ErrorCode | 'OK', number> = {
   GEOMETRY: 4,
   TIMEOUT: 4,
   CLEANUP_FAILED: 4,
+  RUN_ERROR: 4,
   INCOMPLETE: 5,
   INTERNAL: 70
 };

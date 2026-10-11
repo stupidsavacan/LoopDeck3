@@ -81,20 +81,21 @@ export interface TapReport {
   screen?: Point;
 }
 
-export function tap(run: DeviceRun, locator: Locator, native: boolean): Promise<TapReport> {
-  return withWebView(run, async ({ page }) => {
-    const target = await locate(page, locator);
-    if (!target.hit)
-      throw new DeviceCliError('GEOMETRY', 'Refusing tap: elementFromPoint at the target centre is not the target (covered or clipped)');
-    if (!native) {
-      await page.mouseClick(target.point.x, target.point.y);
-      return { mode: 'dom' as const };
-    }
-    const webView = await nativeGeometry(run, target.viewport);
-    const screen = cssToScreen(target.point, webView, target.viewport);
-    await run.device.tap(screen.x, screen.y);
-    return { mode: 'native' as const, screen };
-  });
+export const tap = (run: DeviceRun, locator: Locator, native: boolean): Promise<TapReport> =>
+  withWebView(run, ({ page }) => tapOn(run, page, locator, native));
+
+export async function tapOn(run: DeviceRun, page: CdpPage, locator: Locator, native: boolean): Promise<TapReport> {
+  const target = await locate(page, locator);
+  if (!target.hit)
+    throw new DeviceCliError('GEOMETRY', 'Refusing tap: elementFromPoint at the target centre is not the target (covered or clipped)');
+  if (!native) {
+    await page.mouseClick(target.point.x, target.point.y);
+    return { mode: 'dom' };
+  }
+  const webView = await nativeGeometry(run, target.viewport);
+  const screen = cssToScreen(target.point, webView, target.viewport);
+  await run.device.tap(screen.x, screen.y);
+  return { mode: 'native', screen };
 }
 
 export interface SwipeReport {
@@ -103,30 +104,37 @@ export interface SwipeReport {
   cssDistance: number;
 }
 
-export function swipe(
+export const swipe = (
   run: DeviceRun,
   locator: Locator,
   direction: Direction,
   requestedCssDistance: number,
   durationMs: number
+): Promise<SwipeReport> => withWebView(run, ({ page }) => swipeOn(run, page, locator, direction, requestedCssDistance, durationMs));
+
+export async function swipeOn(
+  run: DeviceRun,
+  page: CdpPage,
+  locator: Locator,
+  direction: Direction,
+  requestedCssDistance: number,
+  durationMs: number
 ): Promise<SwipeReport> {
-  return withWebView(run, async ({ page }) => {
-    const target = await locate(page, locator);
-    const plan = planSwipe(target.rect, direction, requestedCssDistance, target.viewport);
-    const path = Array.from({ length: 5 }, (_, index) => ({
-      x: plan.start.x + ((plan.end.x - plan.start.x) * index) / 4,
-      y: plan.start.y + ((plan.end.y - plan.start.y) * index) / 4
-    }));
-    const verified = await locate(page, locator, path);
-    if (!verified.pointHits || !verified.pointHits.every(Boolean)) {
-      throw new DeviceCliError('GEOMETRY', 'Refusing swipe: the planned path is not wholly over the target element');
-    }
-    const webView = await nativeGeometry(run, verified.viewport);
-    const start = cssToScreen(plan.start, webView, verified.viewport);
-    const end = cssToScreen(plan.end, webView, verified.viewport);
-    await run.device.swipe(start.x, start.y, end.x, end.y, durationMs);
-    return { start, end, cssDistance: plan.distance };
-  });
+  const target = await locate(page, locator);
+  const plan = planSwipe(target.rect, direction, requestedCssDistance, target.viewport);
+  const path = Array.from({ length: 5 }, (_, index) => ({
+    x: plan.start.x + ((plan.end.x - plan.start.x) * index) / 4,
+    y: plan.start.y + ((plan.end.y - plan.start.y) * index) / 4
+  }));
+  const verified = await locate(page, locator, path);
+  if (!verified.pointHits || !verified.pointHits.every(Boolean)) {
+    throw new DeviceCliError('GEOMETRY', 'Refusing swipe: the planned path is not wholly over the target element');
+  }
+  const webView = await nativeGeometry(run, verified.viewport);
+  const start = cssToScreen(plan.start, webView, verified.viewport);
+  const end = cssToScreen(plan.end, webView, verified.viewport);
+  await run.device.swipe(start.x, start.y, end.x, end.y, durationMs);
+  return { start, end, cssDistance: plan.distance };
 }
 
 export interface ExpectReport {
@@ -135,24 +143,25 @@ export interface ExpectReport {
 }
 
 /** Polls (bounded) for exact visible text or a CSS locator. Failure is a check failure, not an infrastructure error. */
-export function expectVisible(run: DeviceRun, target: ExpectTarget, timeoutMs: number): Promise<ExpectReport> {
-  return withWebView(run, async ({ page }) => {
-    try {
-      const visible = await waitFor(
-        run.deps.clock,
-        () => page.countVisible(target),
-        (count) => count === -1 || count > 0,
-        'expected element',
-        timeoutMs,
-        TIMEOUTS.uiPollMs
-      );
-      if (visible === -1) throw new DeviceCliError('USAGE', 'Invalid CSS selector');
-      return { passed: true, visible };
-    } catch (error) {
-      if (error instanceof DeviceCliError && error.code === 'TIMEOUT') return { passed: false, visible: 0 };
-      throw error;
-    }
-  });
+export const expectVisible = (run: DeviceRun, target: ExpectTarget, timeoutMs: number): Promise<ExpectReport> =>
+  withWebView(run, ({ page }) => expectVisibleOn(run, page, target, timeoutMs));
+
+export async function expectVisibleOn(run: DeviceRun, page: CdpPage, target: ExpectTarget, timeoutMs: number): Promise<ExpectReport> {
+  try {
+    const visible = await waitFor(
+      run.deps.clock,
+      () => page.countVisible(target),
+      (count) => count === -1 || count > 0,
+      'expected element',
+      timeoutMs,
+      TIMEOUTS.uiPollMs
+    );
+    if (visible === -1) throw new DeviceCliError('USAGE', 'Invalid CSS selector');
+    return { passed: true, visible };
+  } catch (error) {
+    if (error instanceof DeviceCliError && error.code === 'TIMEOUT') return { passed: false, visible: 0 };
+    throw error;
+  }
 }
 
 // --- inspect -----------------------------------------------------------------
