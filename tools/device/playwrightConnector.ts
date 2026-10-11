@@ -1,4 +1,5 @@
 import type { Page } from '@playwright/test';
+import { DeviceCliError } from './errors.js';
 import { elementProbe, type Locator } from './pageScripts.js';
 import type { CdpBrowser, CdpConnector, CdpPage, ExpectTarget, LocateResult } from './webview.js';
 
@@ -34,8 +35,10 @@ function wrap(page: Page): CdpPage {
       try {
         const base = 'text' in target ? page.getByText(target.text, { exact: true }) : page.locator(target.css);
         return await base.filter({ visible: true }).count();
-      } catch {
-        return -1;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if ('css' in target && /(?:parsing (?:css )?selector|not a valid selector|invalid selector)/i.test(message)) return -1;
+        throw new DeviceCliError('WEBVIEW', 'Could not query the WebView target; the connection or page may have changed');
       }
     }
   };

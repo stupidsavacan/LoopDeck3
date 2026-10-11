@@ -35,9 +35,20 @@ export function acquireLock(path: string, command: string, now: () => Date = () 
     );
   }
   try {
-    writeSync(fd, JSON.stringify({ token, pid: process.pid, command, startedAt: now().toISOString() }));
-  } finally {
-    closeSync(fd);
+    try {
+      writeSync(fd, JSON.stringify({ token, pid: process.pid, command, startedAt: now().toISOString() }));
+    } finally {
+      closeSync(fd);
+    }
+  } catch (error) {
+    // Creation succeeded, but no caller received a releasable lock. Remove our
+    // incomplete file after closing it (Windows cannot unlink an open file).
+    try {
+      unlinkSync(path);
+    } catch {
+      /* preserve the original I/O failure */
+    }
+    throw error;
   }
   const lock: HostLock = {
     path,
