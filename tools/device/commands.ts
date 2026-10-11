@@ -12,6 +12,7 @@ import { acquireLock } from './lock.js';
 import { finishSession, lifecycle, prepareSession, rotate, type LifecycleAction } from './lifecycle.js';
 import type { Locator } from './pageScripts.js';
 import { hostAdb, openPinnedDevice, type Deps, type DeviceRun } from './runtime.js';
+import { runScenario } from './runner.js';
 import { SessionHandle, sessionPaths } from './session.js';
 import { captureStateInPage, defaultCaptureArg, summarizeCapture } from './state.js';
 import { withWebView } from './webview.js';
@@ -31,7 +32,7 @@ export interface CommandOutput {
   /** One concise human line for stderr. */
   summary: string;
   /** Set when the command ran but a check did not pass (exit 1) or evidence is incomplete (exit 5). */
-  failure?: { code: 'CHECK_FAILED' | 'INCOMPLETE'; message: string };
+  failure?: { code: 'CHECK_FAILED' | 'INCOMPLETE' | 'RUN_ERROR'; message: string };
 }
 
 export interface CommandDef {
@@ -380,6 +381,32 @@ const COMMAND_TABLE: Record<string, CommandDef> = {
         summary: result.matches ? 'APK embeds exactly this HTML' : 'APK HTML differs from the given file'
       };
       if (!result.matches) output.failure = { code: 'CHECK_FAILED', message: 'The APK-embedded HTML does not match the supplied HTML' };
+      return output;
+    }
+  },
+
+  run: {
+    summary: 'Run a scenario file: prepare, drive the app, observe JS errors, judge PASS|FAIL|INCONCLUSIVE|ERROR, finish',
+    usage: 'run <scenario.json> [--serial <adb serial>] [--out <dir>]   (serial falls back to $LDEV_SERIAL)',
+    options: { serial: text, out: text },
+    positionals: { min: 1, max: 1 },
+    touchesDevice: true,
+    async run(context) {
+      const serial = str(context.values, 'serial') ?? context.deps.env.LDEV_SERIAL;
+      if (!serial) throw new DeviceCliError('USAGE', 'run requires --serial (or LDEV_SERIAL)');
+      const { runDir, summary } = await runScenario(context.deps, {
+        serial,
+        scenarioPath: context.positionals[0],
+        outDir: str(context.values, 'out')
+      });
+      const output: CommandOutput = {
+        data: { ...summary, runDir },
+        summary: `${summary.final} (${summary.steps.done}/${summary.steps.total} steps) -> ${runDir}`
+      };
+      const why = summary.reasons.join('; ') || summary.final;
+      if (summary.final === 'FAIL') output.failure = { code: 'CHECK_FAILED', message: why };
+      else if (summary.final === 'ERROR') output.failure = { code: 'RUN_ERROR', message: why };
+      else if (summary.final === 'INCONCLUSIVE') output.failure = { code: 'INCOMPLETE', message: why };
       return output;
     }
   },

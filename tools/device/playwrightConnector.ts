@@ -1,7 +1,7 @@
-import type { Page } from '@playwright/test';
+import type { ConsoleMessage, Page } from '@playwright/test';
 import { DeviceCliError } from './errors.js';
 import { elementProbe, type Locator } from './pageScripts.js';
-import type { CdpBrowser, CdpConnector, CdpPage, ExpectTarget, LocateResult } from './webview.js';
+import type { CdpBrowser, CdpConnector, CdpPage, ExpectTarget, LocateResult, PageEvent } from './webview.js';
 
 type Role = Parameters<Page['getByRole']>[0];
 
@@ -14,6 +14,33 @@ function wrap(page: Page): CdpPage {
     url: () => page.url(),
     evaluate: ((fn: unknown, arg: unknown) => page.evaluate(fn as (arg: unknown) => unknown, arg)) as CdpPage['evaluate'],
     mouseClick: (x, y) => page.mouse.click(x, y),
+    onEvent(handler: (event: PageEvent) => void): () => void {
+      const onConsole = (msg: ConsoleMessage) => handler({ type: 'console', level: msg.type(), text: msg.text() });
+      const onPageError = (error: Error) => handler({ type: 'pageerror', message: error.message, stack: error.stack });
+      const onCrash = () => handler({ type: 'crash' });
+      const onClose = () => handler({ type: 'close' });
+      page.on('console', onConsole);
+      page.on('pageerror', onPageError);
+      page.on('crash', onCrash);
+      page.on('close', onClose);
+      return () => {
+        page.off('console', onConsole);
+        page.off('pageerror', onPageError);
+        page.off('crash', onCrash);
+        page.off('close', onClose);
+      };
+    },
+    async fill(locator, text): Promise<void> {
+      const target = resolve(page, locator).filter({ visible: true });
+      let count: number;
+      try {
+        count = await target.count();
+      } catch {
+        throw new DeviceCliError('WEBVIEW', 'fill: invalid locator');
+      }
+      if (count !== 1) throw new DeviceCliError('WEBVIEW', `fill: expected exactly one visible element, found ${count}`);
+      await target.fill(text, { timeout: 5_000 });
+    },
     async locate(locator, options): Promise<LocateResult> {
       let base;
       let total: number;

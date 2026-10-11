@@ -120,3 +120,51 @@ export function domProbe(arg: ProbeArg): ProbeResult {
   });
   return { mode: 'snapshot', items, truncated: all.length > arg.max, viewport, href: window.location.href };
 }
+
+// --- run scenario helpers (self-contained, serialized into the page) ---------------
+
+export interface DiagnosticsRead {
+  ok: boolean;
+  entries: { id: string; level: string; code: string | null; area: string }[];
+}
+
+/** Reads the app's persisted diagnostics log (localStorage `loopdeck3.diagnostics`). */
+export function readDiagnostics(): DiagnosticsRead {
+  let raw: string | null;
+  try {
+    raw = window.localStorage.getItem('loopdeck3.diagnostics');
+  } catch {
+    return { ok: false, entries: [] };
+  }
+  if (raw === null) return { ok: true, entries: [] };
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return { ok: false, entries: [] };
+    const entries = parsed
+      .filter((item): item is Record<string, unknown> => typeof item === 'object' && item !== null)
+      .map((item) => ({
+        id: String(item.id ?? ''),
+        level: String(item.level ?? ''),
+        code: typeof item.code === 'string' ? item.code : null,
+        area: String(item.area ?? '')
+      }));
+    return { ok: true, entries };
+  } catch {
+    return { ok: false, entries: [] };
+  }
+}
+
+export function errorScreenPresent(): boolean {
+  return document.querySelector('.startup-error-screen') !== null;
+}
+
+export function navigateHash(route: string): void {
+  window.location.hash = route;
+}
+
+/** Throws an uncaught error from a timer so it surfaces as a pageerror. */
+export function throwInPage(message: string): void {
+  setTimeout(() => {
+    throw new Error(message);
+  }, 0);
+}
