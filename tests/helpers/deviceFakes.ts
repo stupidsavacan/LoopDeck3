@@ -1,8 +1,9 @@
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { ExecResult, Runner } from '../../tools/device/exec';
-import type { Deps } from '../../tools/device/runtime';
+import type { ExecResult, Runner, StreamExit, StreamHandle, StreamOptions, StreamSpawner } from '../../tools/device/exec';
+import { LineSplitter } from '../../tools/device/lineSplitter';
+import type { Deps, SignalHost } from '../../tools/device/runtime';
 import type { CdpBrowser, CdpConnector, CdpPage, LocateResult, PageEvent } from '../../tools/device/webview';
 
 const result = (stdout: string | Buffer, code = 0, stderr = ''): ExecResult => ({
@@ -43,6 +44,7 @@ export function shellSplit(line: string): string[] {
 }
 
 export const APP = 'com.loopdeck3.app.debug';
+export const APP_UID = '10241';
 
 export interface UiBox {
   top?: number;
@@ -96,6 +98,7 @@ export class FakeAdb {
   dumped = '';
   removedUiPaths: string[] = [];
   versionName = '0.3.1-debug';
+  deviceEpochMs = 1_700_000_000_000;
 
   /** Argument vectors of every call, e.g. to prove nothing ran. */
   get shellCalls(): string[][] {
@@ -163,6 +166,8 @@ export class FakeAdb {
       this.removedUiPaths.push(a[a.length - 1]);
       return result('');
     }
+    if (cmd === 'date') return result(`${Math.floor(this.deviceEpochMs / 1000)}\n`);
+    if (cmd === 'pm' && a[0] === 'list') return result(`package:${APP} uid:${APP_UID}\n`);
     if (cmd === 'logcat') return result('I/app: hello\n');
     return result(''); // input, am, ...
   }
@@ -225,10 +230,117 @@ export class FakeCdp implements CdpConnector {
   }
 }
 
-export function fakeDeps(adb: FakeAdb, cdp: FakeCdp, cwd: string): Deps {
+/** Builds one logcat line the way `adb logcat -v epoch,uid` prints it. */
+export function logLine(fields: {
+  t?: number;
+  uid?: string | number;
+  pid?: number;
+  tid?: number;
+  prio?: string;
+  tag: string;
+  msg: string;
+}): string {
+  const { t = 1_700_000_001.234, uid = APP_UID, pid = 4321, tid = pid, prio = 'I', tag, msg } = fields;
+  return `         ${t.toFixed(3)} ${String(uid).padStart(5)} ${String(pid).padStart(5)} ${String(tid).padStart(5)} ${prio} ${tag}: ${msg}\n`;
+}
+
+/** A scripted `adb logcat` process: tests push chunks (split anywhere) and decide how it ends. */
+export class FakeLogcat {
+  spawns: { file: string; args: string[] }[] = [];
+  running = 0;
+  killed = 0;
+  /** Set to make the next spawn fail to start. */
+  startError: string | null = null;
+  /** Set to make the process exit right after it started, as adb does for an offline device. */
+  exitAtOnce: { code: number; stderr: string } | null = null;
+  /** Chunks delivered right after spawn. */
+  initial: (string | Buffer)[] = [];
+  private current: { splitter: LineSplitter; exit: (value: Partial<StreamExit>) => void } | null = null;
+
+  spawnStream: StreamSpawner = (file, args, options: StreamOptions) => {
+    this.spawns.push({ file, args: [...args] });
+    let resolve!: (value: StreamExit) => void;
+    const exited = new Promise<StreamExit>((r) => (resolve = r));
+    let ended = false;
+    let stopped = false;
+    const splitter = new LineSplitter(options.maxLineChars, options.onLine);
+    const exit = (value: Partial<StreamExit>): void => {
+      if (ended) return;
+      ended = true;
+      this.running--;
+      splitter.flush();
+      resolve({ code: 0, signal: null, error: null, stopped, stderr: '', ...value });
+    };
+    this.running++;
+    this.current = { splitter, exit };
+    const handle: StreamHandle = {
+      exited,
+      kill: () => {
+        if (ended) return;
+        this.killed++;
+        stopped = true;
+        exit({ code: null, signal: 'SIGTERM', stopped: true });
+      },
+      stop: () => {
+        handle.kill();
+        return exited;
+      }
+    };
+    if (this.startError !== null) {
+      const error = this.startError;
+      this.startError = null;
+      queueMicrotask(() => exit({ code: null, error }));
+    } else {
+      for (const chunk of this.initial) splitter.push(chunk);
+      const early = this.exitAtOnce;
+      if (early) queueMicrotask(() => exit({ code: early.code, stderr: early.stderr, stopped: false }));
+    }
+    return handle;
+  };
+
+  /** Delivers a raw chunk of stdout; it may end mid-line or mid-character. */
+  push(chunk: string | Buffer): void {
+    this.current?.splitter.push(chunk);
+  }
+
+  /** The process ends by itself (not because we stopped it). */
+  end(code: number | null = 1, stderr = ''): void {
+    this.current?.exit({ code, stderr, stopped: false });
+  }
+}
+
+export class FakeSignals implements SignalHost {
+  handlers = new Map<string, Set<() => void>>();
+  reraised: string[] = [];
+  on(signal: 'SIGINT' | 'SIGTERM', handler: () => void): void {
+    this.handlers.set(signal, (this.handlers.get(signal) ?? new Set()).add(handler));
+  }
+  off(signal: 'SIGINT' | 'SIGTERM', handler: () => void): void {
+    this.handlers.get(signal)?.delete(handler);
+  }
+  reraise(signal: 'SIGINT' | 'SIGTERM'): void {
+    this.reraised.push(signal);
+  }
+  emit(signal: 'SIGINT' | 'SIGTERM'): void {
+    for (const handler of [...(this.handlers.get(signal) ?? [])]) handler();
+  }
+  get installed(): number {
+    return [...this.handlers.values()].reduce((sum, set) => sum + set.size, 0);
+  }
+}
+
+export function fakeDeps(
+  adb: FakeAdb,
+  cdp: FakeCdp,
+  cwd: string,
+  logcat: FakeLogcat = new FakeLogcat(),
+  signals: SignalHost = new FakeSignals()
+): Deps {
   let now = 1_700_000_000_000;
   return {
     runner: adb.runner,
+    spawnStream: logcat.spawnStream,
+    signals,
     env: {},
     cwd,
     now: () => new Date(now),

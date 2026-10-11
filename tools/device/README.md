@@ -96,6 +96,29 @@ Evidence lives outside the repository under `$LDEV_HOME/runs/<YYYYMMDD-HHMMSS>-<
 (kinds and counts only, safe to quote), `session/`, and on non-PASS `failure/`
 (`screenshot.png`, `dom.json`, `state.json`, `diagnostics.json`, `logcat.txt`, `capture.json`).
 
+### Android log channel (`logcat`)
+
+For the whole run `run` keeps one `adb -s <S> logcat -v epoch,uid -b main,system,crash,events -T <device now>`
+stream (started before the app is touched, stopped in `finally`, and killed on Ctrl+C / SIGTERM so no
+child is left behind). It is **not** `--pid`-filtered: the process may die and come back with another
+pid, and the lines around its death are the evidence. A line is the app's when its uid is the app's, its
+pid was ever seen as the app's (old pids are kept), or it names the package. Package names are compared
+exactly, so other apps' crashes (and look-alike packages) never count.
+
+| Seen in the stream                                                                          | Anomaly                 |
+| ------------------------------------------------------------------------------------------- | ----------------------- |
+| `FATAL EXCEPTION` whose process is the app                                                  | `androidFatalException` |
+| `am_crash` for the app (also native crashes)                                                | `androidCrash`          |
+| `am_anr` for the app                                                                        | `androidAnr`            |
+| `am_proc_died` for the app that no crash/ANR explains and no `lifecycle relaunch` asked for | `androidProcessDied`    |
+
+Channel `logcat` in `summary.json` carries `status`, a fixed-text `detail` and counts
+(`lines`, `appLines`, `writtenLines`, `droppedLines`, `pidsSeen`); never log text. Cannot start or ends
+before any output → `unavailable`; ends mid-run or the 8 MiB raw-log cap is hit → `interrupted`; both make the run
+INCONCLUSIVE (a FAIL still wins). A healthy but quiet stream is not a failure. Raw lines are in
+`logcat-stream.log`, warnings/errors and every detected event in `events.ndjson` (`src: "logcat"`, with
+`hostMs` arrival time and the device time).
+
 ## Sessions, locking, recovery
 
 - `--session DIR` (default `qa-results/android`) holds `session.json`, `session.lock`,

@@ -8,6 +8,7 @@ import { DeviceCliError, withTimeout } from './errors.js';
 import { withDeviceSession, type DeviceSessionApi } from './fixture.js';
 import { Journal } from './journal.js';
 import { lifecycle, rotate } from './lifecycle.js';
+import { LogcatSession, type LogcatSummary } from './logcat.js';
 import { errorScreenPresent, navigateHash, readDiagnostics, throwInPage, type DiagnosticsRead } from './pageScripts.js';
 import type { Deps } from './runtime.js';
 import { parseScenario, type Scenario, type Step } from './scenario.js';
@@ -36,7 +37,9 @@ export interface RunSummary {
   checks: { id: string; status: CheckStatus }[];
   /** Kinds and counts only: event bodies stay in events.ndjson. */
   anomalies: { kind: string; allowed: boolean; count: number }[];
-  channels: { id: 'js' | 'diag'; status: ChannelStatus }[];
+  channels: (
+    { id: 'js' | 'diag'; status: ChannelStatus } | ({ id: 'logcat'; status: ChannelStatus; detail: string | null } & LogcatCounts)
+  )[];
   steps: { total: number; done: number };
   package: string;
   versionName: string | null;
@@ -46,6 +49,9 @@ export interface RunSummary {
   finishedAt: string;
   runDir: string;
 }
+
+/** Counts only; the lines themselves stay in logcat-stream.log under the run directory. */
+type LogcatCounts = Pick<LogcatSummary, 'lines' | 'appLines' | 'writtenLines' | 'droppedLines' | 'pidsSeen'>;
 
 export interface RunResult {
   runDir: string;
@@ -122,7 +128,9 @@ export async function runScenario(deps: Deps, options: RunOptions): Promise<RunR
   const allow = scenario.allowConsoleErrors.map((entry) => new RegExp(entry.pattern));
   const checks = new Map<string, CheckStatus>(scenario.steps.filter((step) => 'check' in step).map((step) => [step.id, 'NOT_EVALUATED']));
   const anomalies: Anomaly[] = [];
-  const channels: Record<'js' | 'diag', ChannelStatus> = { js: 'ok', diag: 'ok' };
+  const channels: Record<'js' | 'diag' | 'logcat', ChannelStatus> = { js: 'ok', diag: 'ok', logcat: 'unavailable' };
+  let logcatDetail: string | null = 'not started';
+  let logcat: LogcatSession | null = null;
   const snapshots = new Map<string, StateSummary>();
   let stateIncompleteForCheck = false;
   let infraError: string | null = null;
@@ -131,10 +139,42 @@ export async function runScenario(deps: Deps, options: RunOptions): Promise<RunR
   let versionCode: string | null = null;
   let captured = false;
 
-  const degrade = (channel: 'js' | 'diag', status: ChannelStatus, why: string, stepId?: string): void => {
+  const degrade = (channel: 'js' | 'diag' | 'logcat', status: ChannelStatus, why: string, stepId?: string): void => {
     if (channels[channel] !== 'ok') return;
     channels[channel] = status;
     journal.append('runner', 'channel', { channel, status, why }, stepId);
+  };
+
+  /** Moves what the logcat stream has seen so far into the journal and the anomaly list. */
+  const drainLogcat = (stepId?: string): void => {
+    if (!logcat) return;
+    for (const event of logcat.takeEvents()) {
+      journal.append('logcat', event.type, event.data, stepId);
+      if (event.anomaly) anomalies.push({ kind: event.anomaly, allowed: false });
+    }
+    const health = logcat.health;
+    if (health.status !== 'ok') {
+      channels.logcat = health.status;
+      logcatDetail = health.detail;
+    }
+  };
+
+  const channelList = (): RunSummary['channels'] => {
+    const seen = logcat?.summary();
+    return [
+      { id: 'js', status: channels.js },
+      { id: 'diag', status: channels.diag },
+      {
+        id: 'logcat',
+        status: channels.logcat,
+        detail: channels.logcat === 'ok' ? null : logcatDetail,
+        lines: seen?.lines ?? 0,
+        appLines: seen?.appLines ?? 0,
+        writtenLines: seen?.writtenLines ?? 0,
+        droppedLines: seen?.droppedLines ?? 0,
+        pidsSeen: seen?.pidsSeen ?? 0
+      }
+    ];
   };
 
   const evaluateVerdict = () =>
@@ -142,10 +182,11 @@ export async function runScenario(deps: Deps, options: RunOptions): Promise<RunR
       checks: [...checks].map(([id, status]) => ({ id, status })),
       anomalies,
       infraError,
-      channels: [
-        { id: 'js', status: channels.js },
-        { id: 'diag', status: channels.diag }
-      ],
+      channels: channelList().map((channel) => ({
+        id: channel.id,
+        status: channel.status,
+        detail: 'detail' in channel ? (channel.detail ?? undefined) : undefined
+      })),
       stateIncompleteForCheck
     });
 
@@ -193,6 +234,7 @@ export async function runScenario(deps: Deps, options: RunOptions): Promise<RunR
 
     /** Turns queued page events, new error diagnostics and the error screen into anomalies. */
     const observe = async (): Promise<void> => {
+      drainLogcat(currentStep);
       const events = pending;
       pending = [];
       for (const event of events) {
@@ -355,6 +397,8 @@ export async function runScenario(deps: Deps, options: RunOptions): Promise<RunR
           await reattach(() => lifecycle(run, 'resume'));
           return;
         case 'lifecycle':
+          // The relaunch force-stops the app on purpose: its death must not read as a crash.
+          if (step.action === 'relaunch') logcat?.expectExit(await run.device.pids());
           await reattach(() => lifecycle(run, step.action));
           return;
         case 'navigate':
@@ -392,6 +436,11 @@ export async function runScenario(deps: Deps, options: RunOptions): Promise<RunR
     };
 
     try {
+      // Subscribe before anything touches the app so its first lines (and its death) are covered.
+      logcat = await LogcatSession.start(run, { rawPath: join(runDir, 'logcat-stream.log') });
+      channels.logcat = logcat.health.status;
+      logcatDetail = logcat.health.detail;
+      journal.append('logcat', 'start', { status: logcat.health.status });
       try {
         const info = await run.device.packageInfo();
         versionName = info.versionName;
@@ -419,10 +468,17 @@ export async function runScenario(deps: Deps, options: RunOptions): Promise<RunR
       // Late events: let anything still in flight arrive before judging.
       currentStep = undefined;
       await clock.sleep(300);
+      await logcat.stop(); // flushes what the child had already written
       await observe();
 
       if (evaluateVerdict().final !== 'PASS' && !captured) await captureFailure();
     } finally {
+      try {
+        await logcat?.stop();
+        drainLogcat();
+      } catch (error) {
+        journal.append('runner', 'logcat-stop-failed', { code: codeOf(error) });
+      }
       try {
         await disconnect();
       } catch (error) {
@@ -455,10 +511,7 @@ export async function runScenario(deps: Deps, options: RunOptions): Promise<RunR
     reasons: verdict.reasons,
     checks: [...checks].map(([id, status]) => ({ id, status })),
     anomalies: [...counts.values()],
-    channels: [
-      { id: 'js', status: channels.js },
-      { id: 'diag', status: channels.diag }
-    ],
+    channels: channelList(),
     steps: { total: scenario.steps.length, done: stepsDone },
     package: APP_PACKAGE,
     versionName,

@@ -5,7 +5,7 @@ export interface VerdictInput {
   anomalies: { kind: string; allowed: boolean }[];
   /** Why the steps could not be run to the end; null when they were. */
   infraError: string | null;
-  channels: { id: 'js' | 'diag'; status: 'ok' | 'unavailable' | 'interrupted' }[];
+  channels: { id: 'js' | 'diag' | 'logcat'; status: 'ok' | 'unavailable' | 'interrupted'; detail?: string }[];
   stateIncompleteForCheck: boolean;
 }
 
@@ -24,7 +24,8 @@ export function computeVerdict(input: VerdictInput): { final: Final; reasons: st
 
   if (!input.checks.some((check) => check.status === 'PASS')) doubtful.push('no check passed');
   for (const check of input.checks) if (check.status === 'NOT_EVALUATED') doubtful.push(`check ${check.id} was not evaluated`);
-  for (const channel of input.channels) if (channel.status !== 'ok') doubtful.push(`channel ${channel.id} is ${channel.status}`);
+  for (const channel of input.channels)
+    if (channel.status !== 'ok') doubtful.push(`channel ${channel.id} is ${channel.status}${channel.detail ? ` (${channel.detail})` : ''}`);
   if (input.stateIncompleteForCheck) doubtful.push('state capture needed by a check was incomplete');
 
   const final: Final = failed.length > 0 ? 'FAIL' : input.infraError !== null ? 'ERROR' : doubtful.length > 0 ? 'INCONCLUSIVE' : 'PASS';

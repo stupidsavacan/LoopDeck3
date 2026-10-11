@@ -144,9 +144,10 @@ describe('runScenario', () => {
     cdp.beforeClose = () => cdp.emit({ type: 'close' }); // closing our own connection is not an interruption
     const { summary } = await run();
     expect(summary.final).toBe('PASS');
-    expect(summary.channels).toEqual([
-      { id: 'js', status: 'ok' },
-      { id: 'diag', status: 'ok' }
+    expect(summary.channels.map((channel) => [channel.id, channel.status])).toEqual([
+      ['js', 'ok'],
+      ['diag', 'ok'],
+      ['logcat', 'ok']
     ]);
     expect(cdp.endpoints).toHaveLength(2);
     expect(adb.calls.filter((args) => args.includes('tcp:0'))).toHaveLength(2);
