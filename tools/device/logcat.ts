@@ -74,20 +74,54 @@ export interface LogcatSummary {
   limitReached: boolean;
 }
 
+/** True when `text` names the app as a whole token: not as a prefix of a longer package (`<pkg>.other`, `<pkg>x`). */
+export function mentionsApp(text: string): boolean {
+  for (let from = text.indexOf(APP_PACKAGE); from !== -1; from = text.indexOf(APP_PACKAGE, from + 1)) {
+    const before = text[from - 1] ?? '';
+    const after = text[from + APP_PACKAGE.length] ?? '';
+    const afterNext = text[from + APP_PACKAGE.length + 1] ?? '';
+    const tokenChar = /[A-Za-z0-9_.]/;
+    if (tokenChar.test(before)) continue;
+    if (/[A-Za-z0-9_]/.test(after) || (after === '.' && /[A-Za-z0-9_]/.test(afterNext))) continue;
+    return true;
+  }
+  return false;
+}
+
+/** Event-log lines carry `[a,b,c]` fields under a snake_case tag such as `wm_finish_activity`. */
+const EVENT_TAG = /^[a-z][a-z0-9]*(_[a-z0-9]+)+$/;
+
+/** A field of an event-log line names the app exactly: `pkg`, `pkg:proc` or a component `pkg/Class`. */
+function eventNamesApp(fields: readonly string[]): boolean {
+  return fields.some((field) => isAppProcess(field.split('/')[0]));
+}
+
+/** System components (root, system, shell, uid < 10000) may talk about the app; other apps' lines never count. */
+function isSystemUid(uid: string): boolean {
+  if (!/^[0-9]+$/.test(uid)) return true;
+  return Number.parseInt(uid, 10) < 10_000;
+}
+
 /**
  * Consumes parsed log lines and decides what is evidence about the debug app. A line counts as the
- * app's when its uid is the app's, when its pid was ever seen as the app's (pids are kept after the
- * process dies), or when it names the package. Crashes of other apps never match: package names are
- * compared exactly.
+ * app's when its uid is the app's, when its pid was seen as the app's process (pids are kept after the
+ * process dies, but only lines of the app's own uid or of system components follow them, so a reused
+ * pid of another app does not leak in), or when a system component or an event-log field names the
+ * package exactly. Process deaths are accounted per pid.
  */
 export class LogcatAnalyzer {
   private appUid: string | null;
   private readonly pids = new Set<number>();
+  /** Pids believed to be running, oldest first. */
+  private readonly alive = new Set<number>();
+  /** Pids whose death was asked for (relaunch); each entry is consumed by that pid's death. */
   private readonly expectedExits = new Set<number>();
+  /** Pids whose death a crash/ANR/fatal exception already accounts for. */
+  private readonly explainedExits = new Set<number>();
   private readonly pendingFatal = new Set<number>();
+  /** Pids that died and have not been started again; late lines of theirs must not revive them. */
+  private readonly exitedPids = new Set<number>();
   private readonly flaggedFatal = new Set<number>();
-  /** A crash/ANR was reported and its process death has not been seen yet. */
-  private deathExplained = false;
   readonly events: LogcatEvent[] = [];
 
   constructor(appUid: string | null) {
@@ -106,21 +140,48 @@ export class LogcatAnalyzer {
   /** True when the line is evidence about the app. Also feeds the anomaly detectors. */
   consume(line: LogcatLine): boolean {
     const ownUid = this.appUid !== null && line.uid === this.appUid;
-    if (ownUid) this.pids.add(line.pid);
-    let relevant = ownUid || this.pids.has(line.pid) || line.message.includes(APP_PACKAGE);
+    if (ownUid) this.seen(line.pid);
+    const fields = EVENT_TAG.test(line.tag) ? parseEventFields(line.message) : null;
+    const pidMatch = this.pids.has(line.pid) && (this.appUid === null || ownUid || isSystemUid(line.uid));
+    let relevant = ownUid || pidMatch;
+    if (fields) relevant = eventNamesApp(fields) || relevant;
+    else if (isSystemUid(line.uid) && mentionsApp(line.message)) relevant = true;
 
-    if (line.tag === 'AndroidRuntime') relevant = this.androidRuntime(line, ownUid) || relevant;
-    else if (line.tag.startsWith('am_')) relevant = this.eventLog(line) || relevant;
+    if (line.tag === 'AndroidRuntime') relevant = this.androidRuntime(line, ownUid || pidMatch) || relevant;
+    else if (fields && line.tag.startsWith('am_')) relevant = this.eventLog(line, fields) || relevant;
     return relevant;
+  }
+
+  private seen(pid: number): void {
+    this.pids.add(pid);
+    if (!this.exitedPids.has(pid)) this.alive.add(pid);
+  }
+
+  private started(pid: number): void {
+    this.pids.add(pid);
+    this.exitedPids.delete(pid);
+    // A new process under this pid: nothing said about the previous owner of the pid applies to it.
+    this.expectedExits.delete(pid);
+    this.explainedExits.delete(pid);
+    this.flaggedFatal.delete(pid);
+    this.alive.delete(pid);
+    this.alive.add(pid);
+  }
+
+  /** The crashed process of an `am_crash`: its own pid when known, else (native crash, reported by system_server) the newest running one. */
+  private crashedPid(reported: number): number | null {
+    if (this.pids.has(reported)) return reported;
+    const running = [...this.alive];
+    return running.length > 0 ? running[running.length - 1] : null;
   }
 
   private emit(type: string, anomaly: LogcatAnomalyKind | null, line: LogcatLine, extra: Record<string, unknown> = {}): void {
     this.events.push({ type, anomaly, data: { pid: line.pid, uid: line.uid, deviceEpochMs: line.epochMs, ...extra } });
   }
 
-  private androidRuntime(line: LogcatLine, ownUid: boolean): boolean {
+  private androidRuntime(line: LogcatLine, ownProcess: boolean): boolean {
     if (line.message.startsWith('FATAL EXCEPTION')) {
-      if (ownUid || this.pids.has(line.pid)) return this.fatal(line);
+      if (ownProcess) return this.fatal(line);
       this.pendingFatal.add(line.pid); // the next "Process:" line names the process
       return false;
     }
@@ -129,57 +190,62 @@ export class LogcatAnalyzer {
     if (process === undefined) return false;
     this.pendingFatal.delete(line.pid);
     if (!isAppProcess(process)) return false;
-    this.pids.add(line.pid);
+    this.seen(line.pid);
     return this.fatal(line);
   }
 
   private fatal(line: LogcatLine): boolean {
     if (!this.flaggedFatal.has(line.pid)) {
       this.flaggedFatal.add(line.pid);
-      this.deathExplained = true;
+      this.explainedExits.add(line.pid);
       this.emit('fatalException', 'androidFatalException', line);
     }
     return true;
   }
 
-  private eventLog(line: LogcatLine): boolean {
-    const fields = parseEventFields(line.message);
-    if (!fields) return false;
+  private eventLog(line: LogcatLine, fields: readonly string[]): boolean {
     switch (line.tag) {
       case 'am_proc_start': {
         // [user, pid, uid, processName, hostingType, hostingName]
         if (!isAppProcess(fields[3] ?? '')) return false;
         const pid = Number.parseInt(fields[1], 10);
-        if (Number.isInteger(pid)) this.pids.add(pid);
-        if (this.appUid === null && /^\d+$/.test(fields[2] ?? '')) this.appUid = fields[2];
-        this.deathExplained = false;
+        if (Number.isInteger(pid)) this.started(pid);
+        if (this.appUid === null && /^[0-9]+$/.test(fields[2] ?? '')) this.appUid = fields[2];
         this.emit('processStart', null, line, { appPid: pid });
         return true;
       }
-      case 'am_crash': // [pid, user, processName, flags, exceptionClass, message, file, line]
+      case 'am_crash': {
+        // [pid, user, processName, flags, exceptionClass, message, file, line]
         if (!isAppProcess(fields[2] ?? '')) return false;
-        this.deathExplained = true;
-        this.emit('amCrash', 'androidCrash', line, { exception: fields[4] ?? null });
+        const pid = this.crashedPid(Number.parseInt(fields[0], 10));
+        if (pid !== null) this.explainedExits.add(pid);
+        this.emit('amCrash', 'androidCrash', line, { exception: fields[4] ?? null, appPid: pid });
         return true;
-      case 'am_anr': // [user, pid, processName, flags, reason]
+      }
+      case 'am_anr': {
+        // [user, pid, processName, flags, reason]
         if (!isAppProcess(fields[2] ?? '')) return false;
-        this.deathExplained = true;
-        this.emit('amAnr', 'androidAnr', line, { appPid: Number.parseInt(fields[1], 10) });
+        const pid = Number.parseInt(fields[1], 10);
+        if (Number.isInteger(pid)) this.explainedExits.add(pid);
+        this.emit('amAnr', 'androidAnr', line, { appPid: pid });
         return true;
+      }
       case 'am_proc_died': {
         // [user, pid, processName, oomAdj, procState]
         if (!isAppProcess(fields[2] ?? '')) return false;
         const pid = Number.parseInt(fields[1], 10);
-        const expected = this.expectedExits.has(pid);
-        const explained = this.deathExplained;
-        this.deathExplained = false;
+        const expected = this.expectedExits.delete(pid);
+        const explained = this.explainedExits.delete(pid);
+        this.alive.delete(pid);
+        this.exitedPids.add(pid);
+        this.flaggedFatal.delete(pid);
         if (expected) this.emit('expectedExit', null, line, { appPid: pid });
         else if (explained) this.emit('processDied', null, line, { appPid: pid, explainedBy: 'crash-or-anr' });
         else this.emit('processDied', 'androidProcessDied', line, { appPid: pid });
         return true;
       }
       default:
-        return false;
+        return false; // other event-log lines are evidence only when a field names the app (decided in consume)
     }
   }
 }

@@ -2,9 +2,20 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { LineSplitter } from '../tools/device/lineSplitter';
-import { LOGCAT_LIMITS, isAppProcess, parseEventFields, parseLogcatLine } from '../tools/device/logcat';
+import { LOGCAT_LIMITS, LogcatAnalyzer, isAppProcess, mentionsApp, parseEventFields, parseLogcatLine } from '../tools/device/logcat';
 import { runScenario } from '../tools/device/runner';
-import { APP, FakeAdb, FakeCdp, FakeLogcat, FakeSignals, fakeDeps, logLine, tempDir, type FakePageSpec } from './helpers/deviceFakes';
+import {
+  APP,
+  APP_UID,
+  FakeAdb,
+  FakeCdp,
+  FakeLogcat,
+  FakeSignals,
+  fakeDeps,
+  logLine,
+  tempDir,
+  type FakePageSpec
+} from './helpers/deviceFakes';
 
 const OTHER_UID = 10999;
 const visibleCheck = { check: 'expectVisible', target: { css: '.home-screen' } };
@@ -405,6 +416,102 @@ describe('ldev run: logcat channel', () => {
     const { summary } = await run();
     expect(summary.final).toBe('FAIL');
     expect(summary.anomalies).toEqual([{ kind: 'jsException', allowed: false, count: 1 }]);
+  });
+});
+
+describe('package attribution is exact', () => {
+  it('matches the package only as a whole token', () => {
+    expect(mentionsApp(`Process ${APP} (pid 1) has died`)).toBe(true);
+    expect(mentionsApp(`crashed: ${APP}.`)).toBe(true);
+    expect(mentionsApp(`start ${APP}/com.loopdeck3.app.MainActivity`)).toBe(true);
+    expect(mentionsApp(`Process ${APP}.other (pid 1) has died`)).toBe(false);
+    expect(mentionsApp(`Process ${APP}x (pid 1) has died`)).toBe(false);
+    expect(mentionsApp(`Process x${APP} (pid 1) has died`)).toBe(false);
+  });
+
+  it('keeps other apps whose package starts with ours out of logcat-stream.log and the verdict', async () => {
+    const { run, logcat, during } = setup();
+    const other = `${APP}.other`;
+    during(() => {
+      logcat.push(logLine({ uid: OTHER_UID, pid: 777, prio: 'E', tag: 'AndroidRuntime', msg: 'FATAL EXCEPTION: main' }));
+      logcat.push(logLine({ uid: OTHER_UID, pid: 777, prio: 'E', tag: 'AndroidRuntime', msg: `Process: ${other}, PID: 777` }));
+      logcat.push(
+        logLine({ uid: OTHER_UID, pid: 777, prio: 'E', tag: 'AndroidRuntime', msg: 'java.lang.IllegalStateException: OTHER-APP-TRACE' })
+      );
+      logcat.push(logLine({ uid: 1000, pid: 1788, tag: 'am_crash', msg: `[777,0,${other},1,Native crash,Trap,unknown,0,0]` }));
+      logcat.push(logLine({ uid: 1000, pid: 1788, tag: 'wm_finish_activity', msg: `[0,1,2,${other}/.MainActivity,force-crash]` }));
+      logcat.push(logLine({ uid: 1000, pid: 1788, tag: 'ActivityManager', msg: `Process ${other} (pid 777) has died: fg TOP` }));
+      logcat.push(diedEvent(777, other));
+      logcat.push(logLine({ uid: OTHER_UID, pid: 778, tag: 'Launcher', msg: `starting ${APP} for the user` }));
+      logcat.push(logLine({ uid: 1000, pid: 1788, tag: 'ActivityManager', msg: `Process ${APP} (pid 4321) is bound: SYSTEM-MENTION` }));
+    });
+    const { summary, runDir } = await run();
+    expect(summary.final).toBe('PASS');
+    expect(summary.anomalies).toEqual([]);
+    const raw = read(join(runDir, 'logcat-stream.log'));
+    expect(raw).not.toContain('OTHER-APP-TRACE');
+    expect(raw).not.toContain(other);
+    expect(raw).not.toContain('starting');
+    expect(raw).toContain('SYSTEM-MENTION'); // a system component naming the exact package is evidence
+  });
+
+  it('does not attribute a reused pid of another app to ours', () => {
+    const analyzer = new LogcatAnalyzer(APP_UID);
+    const feed = (text: string) => analyzer.consume(parseLogcatLine(text.trimEnd())!);
+    expect(feed(logLine({ pid: 4321, tag: 'LoopDeck', msg: 'mine' }))).toBe(true);
+    expect(feed(logLine({ uid: OTHER_UID, pid: 4321, tag: 'Reused', msg: 'someone else now owns this pid' }))).toBe(false);
+    expect(feed(logLine({ uid: 1000, pid: 4321, tag: 'ActivityManager', msg: 'system talks about pid 4321' }))).toBe(true);
+  });
+});
+
+describe('process deaths are accounted per pid', () => {
+  const analyzer = () => new LogcatAnalyzer(APP_UID);
+  const kinds = (a: LogcatAnalyzer) => a.events.map((event) => event.anomaly);
+  const feed = (a: LogcatAnalyzer, ...lines: string[]) => lines.forEach((text) => a.consume(parseLogcatLine(text.trimEnd())!));
+  const started = (pid: number) =>
+    logLine({ uid: 1000, pid: 1788, tag: 'am_proc_start', msg: `[0,${pid},${APP_UID},${APP},activity,${APP}/.MainActivity]` });
+
+  it('consumes an intended exit, so the same pid dying again is a failure', () => {
+    const a = analyzer();
+    a.expectExit([4321]);
+    feed(a, diedEvent(4321));
+    expect(kinds(a)).toEqual([null]);
+    expect(a.events[0].type).toBe('expectedExit');
+    feed(a, diedEvent(4321));
+    expect(kinds(a)).toEqual([null, 'androidProcessDied']);
+  });
+
+  it('does not excuse a reused pid: an unconsumed expectation ends when the pid is started again', () => {
+    const a = analyzer();
+    a.expectExit([4321]); // force-stop that logged no am_proc_died
+    feed(a, started(4321), diedEvent(4321));
+    expect(kinds(a)).toEqual([null, 'androidProcessDied']);
+  });
+
+  it('lets a crash or ANR explain only the pid it belongs to', () => {
+    const a = analyzer();
+    feed(a, started(4321), started(5555), anrEvent());
+    expect(kinds(a)).toEqual([null, null, 'androidAnr']); // anrEvent() names pid 4321
+    feed(a, diedEvent(5555)); // an unrelated process of the app dies
+    expect(kinds(a).slice(3)).toEqual(['androidProcessDied']);
+    feed(a, diedEvent(4321)); // the ANR'd process: already accounted for
+    expect(kinds(a).slice(4)).toEqual([null]);
+  });
+
+  it('attributes a native crash (reported with the system pid) to the newest running pid only', () => {
+    const a = analyzer();
+    feed(a, started(4321), started(5555), crashEvent());
+    feed(a, diedEvent(4321));
+    expect(kinds(a)).toEqual([null, null, 'androidCrash', 'androidProcessDied']);
+    feed(a, diedEvent(5555));
+    expect(kinds(a).slice(4)).toEqual([null]);
+  });
+
+  it('does not let one explained death hide a later one under the same pid', () => {
+    const a = analyzer();
+    feed(a, started(4321), crashEvent(), diedEvent(4321));
+    feed(a, started(4321), diedEvent(4321)); // pid reused by a new process that dies on its own
+    expect(kinds(a).filter((kind) => kind === 'androidProcessDied')).toHaveLength(1);
   });
 });
 
