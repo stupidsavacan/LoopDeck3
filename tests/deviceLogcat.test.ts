@@ -507,6 +507,19 @@ describe('process deaths are accounted per pid', () => {
     expect(kinds(a).slice(4)).toEqual([null]);
   });
 
+  it('ignores the crash dumper (same uid, other pid) when mapping a native crash to the app process', () => {
+    const a = analyzer();
+    feed(
+      a,
+      started(15391),
+      logLine({ pid: 15391, tid: 15420, tag: 'LoopDeck', msg: 'main process alive' }),
+      logLine({ pid: 15658, tag: 'linker64', msg: 'performing dump of process 15391 (target tid = 15391)' }),
+      logLine({ uid: 1000, pid: 1788, tag: 'am_crash', msg: `[1788,0,${APP},552123974,Native crash,Trap,unknown,0,0]` }),
+      diedEvent(15391)
+    );
+    expect(kinds(a)).toEqual([null, 'androidCrash', null]); // the death of the crashed process is explained, not a second failure
+  });
+
   it('does not let one explained death hide a later one under the same pid', () => {
     const a = analyzer();
     feed(a, started(4321), crashEvent(), diedEvent(4321));

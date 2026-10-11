@@ -88,6 +88,9 @@ export function mentionsApp(text: string): boolean {
   return false;
 }
 
+/** Tags of helper processes that run under the app's uid while it is crashing. */
+const HELPER_TAGS: ReadonlySet<string> = new Set(['crash_dump64', 'crash_dump32', 'DEBUG', 'tombstoned']);
+
 /** Event-log lines carry `[a,b,c]` fields under a snake_case tag such as `wm_finish_activity`. */
 const EVENT_TAG = /^[a-z][a-z0-9]*(_[a-z0-9]+)+$/;
 
@@ -112,8 +115,10 @@ function isSystemUid(uid: string): boolean {
 export class LogcatAnalyzer {
   private appUid: string | null;
   private readonly pids = new Set<number>();
-  /** Pids believed to be running, oldest first. */
+  /** Pids of app processes seen starting (am_proc_start) and not yet dead, oldest first. */
   private readonly alive = new Set<number>();
+  /** Weaker: pids that merely logged under the app's uid (e.g. a process that started before the stream did). */
+  private readonly sighted = new Set<number>();
   /** Pids whose death was asked for (relaunch); each entry is consumed by that pid's death. */
   private readonly expectedExits = new Set<number>();
   /** Pids whose death a crash/ANR/fatal exception already accounts for. */
@@ -140,7 +145,7 @@ export class LogcatAnalyzer {
   /** True when the line is evidence about the app. Also feeds the anomaly detectors. */
   consume(line: LogcatLine): boolean {
     const ownUid = this.appUid !== null && line.uid === this.appUid;
-    if (ownUid) this.seen(line.pid);
+    if (ownUid) this.seen(line, line.tag);
     const fields = EVENT_TAG.test(line.tag) ? parseEventFields(line.message) : null;
     const pidMatch = this.pids.has(line.pid) && (this.appUid === null || ownUid || isSystemUid(line.uid));
     let relevant = ownUid || pidMatch;
@@ -152,9 +157,12 @@ export class LogcatAnalyzer {
     return relevant;
   }
 
-  private seen(pid: number): void {
-    this.pids.add(pid);
-    if (!this.exitedPids.has(pid)) this.alive.add(pid);
+  private seen(line: LogcatLine, tag: string): void {
+    this.pids.add(line.pid);
+    // Crash dumpers and their forks run under the app's uid in their own single-threaded pid: they are
+    // evidence, but never "the app process". A real app process logs from threads other than its main one.
+    const helper = HELPER_TAGS.has(tag) || line.tid === line.pid;
+    if (!this.exitedPids.has(line.pid) && !helper) this.sighted.add(line.pid);
   }
 
   private started(pid: number): void {
@@ -164,6 +172,7 @@ export class LogcatAnalyzer {
     this.expectedExits.delete(pid);
     this.explainedExits.delete(pid);
     this.flaggedFatal.delete(pid);
+    this.sighted.delete(pid);
     this.alive.delete(pid);
     this.alive.add(pid);
   }
@@ -171,7 +180,8 @@ export class LogcatAnalyzer {
   /** The crashed process of an `am_crash`: its own pid when known, else (native crash, reported by system_server) the newest running one. */
   private crashedPid(reported: number): number | null {
     if (this.pids.has(reported)) return reported;
-    const running = [...this.alive];
+    // A crash dumper also logs under the app's uid, so a process seen starting beats one merely seen logging.
+    const running = this.alive.size > 0 ? [...this.alive] : [...this.sighted];
     return running.length > 0 ? running[running.length - 1] : null;
   }
 
@@ -190,7 +200,7 @@ export class LogcatAnalyzer {
     if (process === undefined) return false;
     this.pendingFatal.delete(line.pid);
     if (!isAppProcess(process)) return false;
-    this.seen(line.pid);
+    this.seen(line, line.tag);
     return this.fatal(line);
   }
 
@@ -237,6 +247,7 @@ export class LogcatAnalyzer {
         const expected = this.expectedExits.delete(pid);
         const explained = this.explainedExits.delete(pid);
         this.alive.delete(pid);
+        this.sighted.delete(pid);
         this.exitedPids.add(pid);
         this.flaggedFatal.delete(pid);
         if (expected) this.emit('expectedExit', null, line, { appPid: pid });
