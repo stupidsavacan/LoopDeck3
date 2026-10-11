@@ -177,7 +177,7 @@ export async function runScenario(deps: Deps, options: RunOptions): Promise<RunR
       try {
         const read = await evaluate(readDiagnostics, undefined);
         if (!read.ok) degrade('diag', 'unavailable', 'diagnostics unreadable', currentStep);
-        else baseline = new Set(read.entries.map((entry) => entry.id));
+        else baseline ??= new Set(read.entries.map((entry) => entry.id)); // kept across reconnects so errors logged while the app restarted are still seen
       } catch (error) {
         degrade('diag', 'unavailable', `diagnostics read failed: ${codeOf(error)}`, currentStep);
       }

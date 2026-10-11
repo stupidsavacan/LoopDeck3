@@ -153,6 +153,20 @@ describe('runScenario', () => {
     expect(adb.forwards).toEqual([]);
   });
 
+  it('detects an error diagnostics entry logged while the app was restarting', async () => {
+    const { run, adb, state } = setup(scenarioOf0([{ do: 'launch' }, { do: 'lifecycle', action: 'relaunch' }, visibleCheck]));
+    adb.failures.push((args) => {
+      if (args.includes('force-stop')) {
+        adb.pids = [5555];
+        state.diag = { ok: true, entries: [{ id: 'during-restart', level: 'error', code: 'E_BOOT', area: 'db' }] };
+      }
+      return false;
+    });
+    const { summary } = await run();
+    expect(summary.final).toBe('FAIL');
+    expect(summary.anomalies).toEqual([{ kind: 'diagError', allowed: false, count: 1 }]);
+  });
+
   it('is INCONCLUSIVE when the page closes outside a lifecycle step', async () => {
     const { run, spec, cdp } = setup(scenarioOf0([{ do: 'launch' }, visibleCheck]));
     spec.countVisible = () => {
