@@ -217,6 +217,9 @@
 .flashcard-back {
   transform: rotateY(180deg) translateZ(0.1px);
 }
+.flashcard-face[aria-hidden='true'] {
+  pointer-events: none;
+}
 .flashcard-side-label {
   position: absolute;
   top: 25px;
@@ -238,25 +241,22 @@
      reserving horizontal gestures for the flashcard Pointer Events handler. */
   touch-action: pan-y;
   margin: 12px 0;
-  align-content: center;
+  align-content: safe center;
 }
 .flashcard-term {
+  --flashcard-min-term-size: clamp(1.1rem, 2.2vw, 1.5rem);
   margin: 0;
   font-size: clamp(2.2rem, 9vw, 4.9rem);
-  line-height: 1.02;
+  line-height: 1.25;
   letter-spacing: -0.055em;
   font-weight: 950;
   text-align: center;
   overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 .flashcard-term.jp {
   font-size: clamp(1.8rem, 8vw, 3.8rem);
   letter-spacing: -0.035em;
-}
-.flashcard-term.long {
-  font-size: clamp(1.1rem, 2.2vw, 1.5rem);
-  line-height: 1.45;
-  letter-spacing: normal;
 }
 .flashcard-explanation,
 .flashcard-example {
@@ -618,13 +618,11 @@
     right: 24px;
   }
   .flashcard-term {
+    --flashcard-min-term-size: 1.15rem;
     font-size: clamp(2.3rem, 14vw, 4rem);
   }
   .flashcard-term.jp {
     font-size: clamp(1.8rem, 10vw, 3rem);
-  }
-  .flashcard-term.long {
-    font-size: 1.15rem;
   }
   .flashcard-controls .btn {
     font-size: 0.66rem;
