@@ -289,4 +289,4 @@ in `finally`. If the process is killed the DIRTY record remains for `ldev finish
 directory (absolute or relative) or a run id under `$LDEV_HOME/runs`; the label is split at the **last** colon, so
 `C:\runs\20260101-x:before` works. Output: per-store counts and added/removed/updated, schema changes, localStorage
 key names that were added/removed/updated. Differences exit 0 (use `--expect-same` for exit 1); an incomplete or legacy
-(schema 1, counts only) snapshot exits 5 with the reason; a missing snapshot is a usage error (exit 2).
+(schema 1, counts only) snapshot exits 5 with the reason; a missing snapshot is a usage error (exit 2). If localStorage was not captured on both sides, the output says it was not compared (`localStorageCompared: false`) and `--expect-same` exits 5.

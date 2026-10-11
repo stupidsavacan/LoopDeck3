@@ -458,6 +458,37 @@ describe('ldev run + ldev diff', () => {
     expect(readdirSync(join(a.runDir, 'snapshots'))).toEqual(['start.json']); // diff wrote nothing
   });
 
+  it('does not call a diff clean when localStorage was not captured, and --expect-same then exits INCOMPLETE', async () => {
+    const dir = tempDir();
+    const db = new Db({ attempts: [{ id: 1 }] });
+    for (const [name, ls] of [
+      ['a', undefined],
+      ['b', { ok: true, entries: [['k', h('1')]] as [string, string][] }]
+    ] as const) {
+      mkdirSync(join(dir, name, 'snapshots'), { recursive: true });
+      writeFileSync(join(dir, name, 'snapshots', 'x.json'), JSON.stringify(buildSnapshot(await db.capture(), ls)));
+    }
+    const deps = fakeDeps(new FakeAdb(), new FakeCdp(), dir);
+    const ref = (name: string) => `${join(dir, name)}:x`;
+    const plain = JSON.parse((await runCli(['diff', ref('a'), ref('a')], deps)).stdout);
+    expect(plain).toMatchObject({ ok: true, exitCode: 0, data: { changed: false, localStorageCompared: false } });
+    expect(plain.data.localStorage.available).toBe(false);
+    const strict = await runCli(['diff', ref('a'), ref('a'), '--expect-same'], deps);
+    expect(strict.exitCode).toBe(5);
+    expect(strict.stderr).toContain('localStorage was not captured');
+    expect((await runCli(['diff', ref('a'), ref('b'), '--expect-same'], deps)).exitCode).toBe(5); // one side only
+    // Both captured and equal: still clean.
+    expect((await runCli(['diff', ref('b'), ref('b'), '--expect-same'], deps)).exitCode).toBe(0);
+  });
+
+  it('keeps expectStateDelta with localStorage "any" independent of localStorage capture', async () => {
+    const db = new Db({ attempts: [{ id: 1 }] });
+    const world: World = { db, ls: undefined, capture: () => db.capture() };
+    const result = await setup(world, [...base, delta({ counts: { attempts: 0 }, otherStores: 'unchanged' })], () => undefined).run();
+    expect(result.summary.final).toBe('PASS');
+    expect(result.summary.stateDeltas[0].localStorage.available).toBe(false);
+  });
+
   it('exits INCOMPLETE for a legacy snapshot', async () => {
     const dir = tempDir();
     const run = join(dir, 'old');

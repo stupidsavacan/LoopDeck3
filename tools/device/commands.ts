@@ -514,11 +514,20 @@ const COMMAND_TABLE: Record<string, CommandDef> = {
         delta.stores.some((store) => Boolean(store.added || store.removed || store.updated) || store.before !== store.after) ||
         delta.localStorage.added.length + delta.localStorage.removed.length + delta.localStorage.updated.length > 0;
       const output: CommandOutput = {
-        data: { ...delta, changed },
-        summary: delta.verdict === 'incomplete' ? 'INCOMPLETE' : changed ? 'states differ' : 'no differences'
+        data: { ...delta, changed, localStorageCompared: delta.localStorage.available },
+        summary:
+          delta.verdict === 'incomplete'
+            ? 'INCOMPLETE'
+            : changed
+              ? 'states differ'
+              : delta.localStorage.available
+                ? 'no differences'
+                : 'no IndexedDB differences (localStorage NOT compared: not captured on both sides)'
       };
       if (delta.verdict === 'incomplete') output.failure = { code: 'INCOMPLETE', message: delta.reasons.join('; ') };
       else if (changed && on(context.values, 'expect-same')) output.failure = { code: 'CHECK_FAILED', message: 'The two snapshots differ' };
+      else if (on(context.values, 'expect-same') && !delta.localStorage.available)
+        output.failure = { code: 'INCOMPLETE', message: 'localStorage was not captured on both sides, so the snapshots cannot be shown to be the same' };
       return output;
     }
   },
