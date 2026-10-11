@@ -1,6 +1,6 @@
 import { appendFileSync } from 'node:fs';
 
-export type JournalSource = 'runner' | 'step' | 'check' | 'js' | 'diag' | 'screen';
+export type JournalSource = 'runner' | 'step' | 'check' | 'js' | 'diag' | 'screen' | 'logcat';
 
 export interface JournalRecord {
   seq: number;

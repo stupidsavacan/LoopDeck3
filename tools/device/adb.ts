@@ -1,6 +1,6 @@
 import { ALLOWED_KEYS, APP_COMPONENT, APP_PACKAGE, LIMITS, ROTATION_SETTINGS, TIMEOUTS, type RotationSetting } from './constants.js';
 import { DeviceCliError } from './errors.js';
-import type { ExecResult, Runner } from './exec.js';
+import type { ExecResult, Runner, StreamHandle, StreamOptions, StreamSpawner } from './exec.js';
 import { randomBytes } from 'node:crypto';
 
 const SERIAL_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$/;
@@ -80,6 +80,10 @@ interface RunOptions {
 
 export class HostAdb {
   readonly adbPath: string;
+
+  get environment(): NodeJS.ProcessEnv | undefined {
+    return this.options.env;
+  }
 
   constructor(private readonly options: AdbOptions) {
     this.adbPath = options.adbPath ?? 'adb';
@@ -299,6 +303,38 @@ export class AdbDevice {
     });
     const truncated = Buffer.byteLength(raw) > LIMITS.maxLogBytes;
     return { text: truncated ? Buffer.from(raw).subarray(-LIMITS.maxLogBytes).toString('utf8') : raw, truncated };
+  }
+
+  /** Device wall clock in whole epoch seconds, or null when it cannot be read. Anchors `logcat -T`. */
+  async deviceEpochSeconds(): Promise<number | null> {
+    const result = await this.shell(['date', '+%s']);
+    const seconds = Number.parseInt(text(result).trim(), 10);
+    return result.code === 0 && Number.isInteger(seconds) && seconds > 0 ? seconds : null;
+  }
+
+  /** Linux uid of the debug package, or null when it cannot be read. */
+  async appUid(): Promise<string | null> {
+    const result = await this.shell(['pm', 'list', 'packages', '-U', APP_PACKAGE]);
+    if (result.code !== 0) return null;
+    for (const line of text(result).split(/\r?\n/)) {
+      const match = /^package:(\S+)\s+uid:(\d+)$/.exec(line.trim());
+      if (match && match[1] === APP_PACKAGE) return match[2];
+    }
+    return null;
+  }
+
+  /**
+   * Streams the device log for the whole run. Deliberately not `--pid`-scoped: the process can die
+   * and come back with another pid, and the lines around its death are the evidence. `events`
+   * carries am_crash / am_anr / am_proc_died, which are not in the other buffers.
+   */
+  async openLogcatStream(spawn: StreamSpawner, startEpochSeconds: number | null, options: StreamOptions): Promise<StreamHandle> {
+    await this.verifyIdentity();
+    const since = startEpochSeconds === null ? '1' : `${expectInt(startEpochSeconds, 1, 4_102_444_800, 'epoch')}.000`;
+    return spawn(this.host.adbPath, ['-s', this.transport, 'logcat', '-v', 'epoch,uid', '-b', 'main,system,crash,events', '-T', since], {
+      ...options,
+      env: options.env ?? this.host.environment
+    });
   }
 
   // --- port forwards (host side of the adb server) ---------------------------
