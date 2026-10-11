@@ -1,6 +1,12 @@
 import { assertSerial } from './adb.js';
+import { inspectApk, installDebugApk } from './apk.js';
+import { applySetting, parseSettingRequest } from './deviceSettings.js';
+import { Journal } from './journal.js';
+import { resetApp } from './reset.js';
+import { checkShellArgv } from './shellPolicy.js';
 import { attachProbe, expectVisible, inspect, pickerInspect, pickerSelect, swipe, tap } from './actions.js';
 import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { verifyArtifacts } from './artifacts.js';
@@ -96,6 +102,49 @@ async function withSession<T>(context: CommandContext, work: (run: DeviceRun) =>
   try {
     const handle = SessionHandle.requireActive(paths, context.deps.now);
     return await work(openPinnedDevice(context.deps, handle));
+  } finally {
+    lock.release();
+  }
+}
+
+/** The serial named on the command line, else $LDEV_SERIAL. Never guessed from `adb devices`. */
+function serialOption(context: CommandContext): string | undefined {
+  const serial = str(context.values, 'serial') ?? context.deps.env.LDEV_SERIAL;
+  return serial === undefined || serial === '' ? undefined : assertSerial(serial);
+}
+
+/**
+ * Like withSession, but able to start the session itself: when no active session exists, `--serial`
+ * (or $LDEV_SERIAL) pins the phone exactly as `prepare` would, and the session stays DIRTY until
+ * `finish`. With an active session the serial, if given, must be that session's device; a different
+ * one is refused before anything is sent. `allowMissingApp` is for commands that work without the
+ * debug app installed (install, setting, shell).
+ */
+async function withManagedSession<T>(
+  context: CommandContext,
+  options: { allowMissingApp?: boolean },
+  work: (run: DeviceRun) => Promise<T>
+): Promise<T> {
+  const { deps } = context;
+  const paths = sessionPaths(str(context.values, 'session'), deps.cwd);
+  const serial = serialOption(context);
+  const lock = acquireLock(paths.lock, context.name, deps.now);
+  try {
+    const existing = SessionHandle.read(paths, deps.now);
+    if (existing && existing.record.status === 'DIRTY') {
+      if (serial !== undefined && serial !== existing.record.transport) {
+        throw new DeviceCliError('IDENTITY', 'The given serial is not the device of the active session; refusing to send anything');
+      }
+      return await work(openPinnedDevice(deps, existing));
+    }
+    if (serial === undefined) {
+      throw new DeviceCliError(
+        'SESSION',
+        `No active session at ${paths.root}. Pass --serial <serial> (or set LDEV_SERIAL), or run "ldev prepare --serial <serial>" first.`
+      );
+    }
+    const { run } = await prepareSession(deps, paths, serial, false, { allowMissingApp: options.allowMissingApp });
+    return await work(run);
   } finally {
     lock.release();
   }
@@ -270,17 +319,106 @@ const COMMAND_TABLE: Record<string, CommandDef> = {
   },
 
   lifecycle: {
-    summary: `background | resume | relaunch the debug app (${APP_PACKAGE} only; relaunch = force-stop + start)`,
-    usage: 'lifecycle background|resume|relaunch [--session <dir>]',
-    options: { session },
+    summary: `background | resume | relaunch | kill the debug app (${APP_PACKAGE} only; relaunch = force-stop + start; kill = force-stop, no restart)`,
+    usage: 'lifecycle background|resume|relaunch|kill [--serial <adb serial>] [--session <dir>]',
+    options: { session, serial: text },
     positionals: { min: 1, max: 1 },
     touchesDevice: true,
     async run(context) {
       const [action] = context.positionals;
-      if (action !== 'background' && action !== 'resume' && action !== 'relaunch')
-        throw new DeviceCliError('USAGE', 'lifecycle action must be background, resume or relaunch');
-      const report = await withSession(context, (run) => lifecycle(run, action as LifecycleAction));
-      return { data: { ...report }, summary: `${action} done${report.pidChanged ? ' (new process)' : ''}` };
+      if (action !== 'background' && action !== 'resume' && action !== 'relaunch' && action !== 'kill')
+        throw new DeviceCliError('USAGE', 'lifecycle action must be background, resume, relaunch or kill');
+      const report = await withManagedSession(context, {}, (run) => lifecycle(run, action as LifecycleAction));
+      return {
+        data: { ...report },
+        summary: action === 'kill' ? 'app process stopped (not restarted)' : `${action} done${report.pidChanged ? ' (new process)' : ''}`
+      };
+    }
+  },
+
+  install: {
+    summary: `Install a debug APK (${APP_PACKAGE} only); --replace-incompatible uninstalls the debug package first when Android refuses the update`,
+    usage: 'install --apk <file.apk> [--replace-incompatible] [--serial <adb serial>] [--session <dir>]',
+    options: { apk: text, 'replace-incompatible': flag, serial: text, session },
+    positionals: { min: 0, max: 0 },
+    touchesDevice: true,
+    async run(context) {
+      const apk = str(context.values, 'apk');
+      if (!apk) throw new DeviceCliError('USAGE', 'install requires --apk <file.apk>');
+      await inspectApk(context.deps, apk); // refuse a wrong or unreadable APK before any session or device work
+      const report = await withManagedSession(context, { allowMissingApp: true }, (run) =>
+        installDebugApk(run, apk, { replaceIncompatible: on(context.values, 'replace-incompatible') })
+      );
+      return {
+        data: { ...report },
+        summary: `installed ${report.versionName ?? '?'} (${report.versionCode ?? '?'}) sha256:${report.sha256.slice(0, 12)}${report.replaced ? ' [replaced after uninstall]' : ''}`
+      };
+    }
+  },
+
+  reset: {
+    summary: `pm clear ${APP_PACKAGE}, relaunch, and verify that no learner data remains (IndexedDB and localStorage)`,
+    usage: 'reset [--serial <adb serial>] [--session <dir>]',
+    options: { serial: text, session },
+    positionals: { min: 0, max: 0 },
+    touchesDevice: true,
+    async run(context) {
+      const report = await withManagedSession(context, {}, resetApp);
+      return { data: { ...report }, summary: 'app data cleared; no learner data remains' };
+    }
+  },
+
+  setting: {
+    summary: 'Change dark mode (uimode yes|no|auto) or the font scale (font-scale 0.5..2.0); finish restores the original value',
+    usage: 'setting uimode <yes|no|auto> | setting font-scale <0.5..2.0> [--serial <adb serial>] [--session <dir>]',
+    options: { serial: text, session },
+    positionals: { min: 2, max: 2 },
+    touchesDevice: true,
+    async run(context) {
+      const request = parseSettingRequest(context.positionals[0], context.positionals[1]);
+      const report = await withManagedSession(context, { allowMissingApp: true }, (run) => applySetting(run, request));
+      return {
+        data: { ...report },
+        summary: `${report.setting} ${report.original ?? 'unset'} -> ${report.actual ?? 'unset'} (original recorded; "ldev finish" restores it)`
+      };
+    }
+  },
+
+  shell: {
+    summary: 'Run one command on the pinned phone via adb shell (argv allowlist, every call journaled); not a sandbox',
+    usage: 'shell [--serial <adb serial>] [--session <dir>] -- <command> [args...]',
+    options: { serial: text, session },
+    positionals: { min: 1, max: 64 },
+    touchesDevice: true,
+    async run(context) {
+      const argv = [...context.positionals];
+      const { deps } = context;
+      const paths = sessionPaths(str(context.values, 'session'), deps.cwd);
+      const journal = new Journal(join(paths.root, 'shell.ndjson'), () => deps.clock.now());
+      try {
+        checkShellArgv(argv); // before any device or session work
+      } catch (error) {
+        if (existsSync(paths.file)) journal.append('shell', 'refused', { argv, reason: (error as Error).message });
+        throw error;
+      }
+      return await withManagedSession(context, { allowMissingApp: true }, async (run) => {
+        journal.append('shell', 'command', { argv });
+        const result = await run.device.runShell(argv, { timeoutMs: 60_000, maxBytes: 1024 * 1024 });
+        const clip = (value: string): string => (value.length > 16_384 ? value.slice(0, 16_384) : value);
+        const truncated = result.stdout.length > 16_384 || result.stderr.length > 16_384;
+        const data = {
+          argv,
+          exitCode: result.code,
+          stdout: clip(result.stdout),
+          stderr: clip(result.stderr),
+          truncated,
+          containsDeviceText: true
+        };
+        journal.append('shell', 'result', { argv, exitCode: result.code, stdout: data.stdout, stderr: data.stderr, truncated });
+        const output: CommandOutput = { data, summary: `exit ${result.code}` };
+        if (result.code !== 0) output.failure = { code: 'RUN_ERROR', message: `The device command exited with status ${result.code}` };
+        return output;
+      });
     }
   },
 
@@ -387,8 +525,8 @@ const COMMAND_TABLE: Record<string, CommandDef> = {
 
   run: {
     summary: 'Run a scenario file: prepare, drive the app, observe JS errors, judge PASS|FAIL|INCONCLUSIVE|ERROR, finish',
-    usage: 'run <scenario.json> [--serial <adb serial>] [--out <dir>]   (serial falls back to $LDEV_SERIAL)',
-    options: { serial: text, out: text },
+    usage: 'run <scenario.json> [--serial <adb serial>] [--out <dir>] [--apk <expected.apk>]   (serial falls back to $LDEV_SERIAL)',
+    options: { serial: text, out: text, apk: text },
     positionals: { min: 1, max: 1 },
     touchesDevice: true,
     async run(context) {
@@ -397,7 +535,8 @@ const COMMAND_TABLE: Record<string, CommandDef> = {
       const { runDir, summary } = await runScenario(context.deps, {
         serial,
         scenarioPath: context.positionals[0],
-        outDir: str(context.values, 'out')
+        outDir: str(context.values, 'out'),
+        apkPath: str(context.values, 'apk')
       });
       const output: CommandOutput = {
         data: { ...summary, runDir },

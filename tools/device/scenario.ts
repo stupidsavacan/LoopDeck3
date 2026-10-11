@@ -1,4 +1,5 @@
 import { ALLOWED_KEYS, TIMEOUTS } from './constants.js';
+import { parseSettingRequest } from './deviceSettings.js';
 import { DeviceCliError } from './errors.js';
 import type { Direction } from './geometry.js';
 import type { Locator } from './pageScripts.js';
@@ -11,7 +12,10 @@ export type StepDef =
   | { do: 'type'; target: Locator; text: string }
   | { do: 'key'; key: string }
   | { do: 'rotate'; to: 'portrait' | 'landscape' }
-  | { do: 'lifecycle'; action: 'background' | 'resume' | 'relaunch' }
+  | { do: 'lifecycle'; action: 'background' | 'resume' | 'relaunch' | 'kill' }
+  | { do: 'reset' }
+  | { do: 'setting'; key: 'uimode' | 'font-scale'; value: string }
+  | { do: 'installApk'; file: string; replaceIncompatible: boolean }
   | { do: 'wait'; ms: number }
   | { do: 'snapshotState'; label: string }
   | { do: 'injectError'; message: string }
@@ -122,9 +126,30 @@ function parseStep(raw: unknown, index: number, labels: Set<string>): StepDef {
         return { do: 'rotate', to: o.to };
       case 'lifecycle':
         only(o, path, ['do', 'action']);
-        if (o.action !== 'background' && o.action !== 'resume' && o.action !== 'relaunch')
-          throw usage(`${path}.action`, 'must be background, resume or relaunch');
+        if (o.action !== 'background' && o.action !== 'resume' && o.action !== 'relaunch' && o.action !== 'kill')
+          throw usage(`${path}.action`, 'must be background, resume, relaunch or kill');
         return { do: 'lifecycle', action: o.action };
+      case 'reset':
+        only(o, path, ['do']);
+        return { do: 'reset' };
+      case 'setting': {
+        only(o, path, ['do', 'key', 'value']);
+        if (o.key !== 'uimode' && o.key !== 'font-scale') throw usage(`${path}.key`, 'must be uimode or font-scale');
+        // Same validation as the CLI, so a bad value is a usage error before the device is touched.
+        const value = typeof o.value === 'number' ? String(o.value) : o.value;
+        if (typeof value !== 'string') throw usage(`${path}.value`, 'must be a string (uimode) or a number (font-scale)');
+        try {
+          parseSettingRequest(o.key, value);
+        } catch (error) {
+          throw usage(`${path}.value`, (error as Error).message);
+        }
+        return { do: 'setting', key: o.key, value };
+      }
+      case 'installApk':
+        only(o, path, ['do', 'file', 'replaceIncompatible']);
+        if (o.replaceIncompatible !== undefined && typeof o.replaceIncompatible !== 'boolean')
+          throw usage(`${path}.replaceIncompatible`, 'must be a boolean');
+        return { do: 'installApk', file: text(o.file, `${path}.file`, 500), replaceIncompatible: o.replaceIncompatible === true };
       case 'wait':
         only(o, path, ['do', 'ms']);
         return { do: 'wait', ms: integer(o.ms, `${path}.ms`, 1, 30_000) };

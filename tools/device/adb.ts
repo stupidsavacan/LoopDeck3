@@ -1,4 +1,14 @@
-import { ALLOWED_KEYS, APP_COMPONENT, APP_PACKAGE, LIMITS, ROTATION_SETTINGS, TIMEOUTS, type RotationSetting } from './constants.js';
+import {
+  ALLOWED_KEYS,
+  APP_COMPONENT,
+  APP_PACKAGE,
+  LIMITS,
+  NIGHT_MODES,
+  SYSTEM_SETTINGS,
+  TIMEOUTS,
+  type NightMode,
+  type SystemSetting
+} from './constants.js';
 import { DeviceCliError } from './errors.js';
 import type { ExecResult, Runner, StreamHandle, StreamOptions, StreamSpawner } from './exec.js';
 import { randomBytes } from 'node:crypto';
@@ -120,6 +130,17 @@ function expectInt(value: number, min: number, max: number, what: string): strin
   return String(value);
 }
 
+const APK_PATH = /^\/data\/app\/[A-Za-z0-9_=+.\/~-]+\.apk$/;
+
+export interface PackageInfo {
+  installed: boolean;
+  versionName: string | null;
+  versionCode: string | null;
+  lastUpdateTime: string | null;
+  /** From the package flags; null when the package is not installed. */
+  allowBackup: boolean | null;
+}
+
 export class AdbDevice {
   constructor(
     private readonly host: HostAdb,
@@ -172,37 +193,122 @@ export class AdbDevice {
     return text(result);
   }
 
-  // --- settings (rotation only) ---------------------------------------------
+  // --- settings (rotation, font scale, night mode) ----------------------------
 
-  async getSetting(key: RotationSetting): Promise<string | null> {
+  async getSetting(key: SystemSetting): Promise<string | null> {
     this.assertSetting(key);
     const value = (await this.shellOk(['settings', 'get', 'system', key])).trim();
     return value === 'null' || value === '' ? null : value;
   }
 
-  async putSetting(key: RotationSetting, value: string): Promise<void> {
+  async putSetting(key: SystemSetting, value: string): Promise<void> {
     this.assertSetting(key);
-    if (!/^[0-9]{1,2}$/.test(value)) throw new DeviceCliError('UNSAFE', 'Rotation setting values are small integers');
+    const pattern = key === 'font_scale' ? /^[0-9](\.[0-9]{1,7})?$/ : /^[0-9]{1,2}$/;
+    if (!pattern.test(value)) throw new DeviceCliError('UNSAFE', `Value for ${key} is not in the expected numeric form`);
     await this.shellOk(['settings', 'put', 'system', key, value]);
   }
 
-  async deleteSetting(key: RotationSetting): Promise<void> {
+  async deleteSetting(key: SystemSetting): Promise<void> {
     this.assertSetting(key);
     await this.shellOk(['settings', 'delete', 'system', key]);
   }
 
   private assertSetting(key: string): void {
-    if (!(ROTATION_SETTINGS as readonly string[]).includes(key))
-      throw new DeviceCliError('UNSAFE', 'Only rotation settings may be changed');
+    if (!(SYSTEM_SETTINGS as readonly string[]).includes(key))
+      throw new DeviceCliError('UNSAFE', 'Only rotation and font_scale settings may be changed');
+  }
+
+  /** `cmd uimode night` prints "Night mode: <yes|no|auto|custom_*>" (Android 14). */
+  async getNightMode(): Promise<NightMode> {
+    const body = await this.shellOk(['cmd', 'uimode', 'night']);
+    const value = /Night mode:\s*(\w+)/.exec(body)?.[1];
+    if (!value || !(NIGHT_MODES as readonly string[]).includes(value))
+      throw new DeviceCliError('ADB', 'Could not read the night mode from "cmd uimode night"');
+    return value as NightMode;
+  }
+
+  async setNightMode(mode: NightMode): Promise<void> {
+    if (!(NIGHT_MODES as readonly string[]).includes(mode)) throw new DeviceCliError('UNSAFE', 'Unknown night mode');
+    await this.shellOk(['cmd', 'uimode', 'night', mode]);
   }
 
   // --- app / process --------------------------------------------------------
 
-  async packageInfo(): Promise<{ installed: boolean; versionName: string | null; versionCode: string | null }> {
+  async packageInfo(): Promise<PackageInfo> {
     const result = await this.shell(['dumpsys', 'package', APP_PACKAGE], { maxBytes: 4 * 1024 * 1024 });
     const body = text(result);
     const versionName = /versionName=(\S+)/.exec(body)?.[1] ?? null;
-    return { installed: result.code === 0 && versionName !== null, versionName, versionCode: /versionCode=(\d+)/.exec(body)?.[1] ?? null };
+    return {
+      installed: result.code === 0 && versionName !== null,
+      versionName,
+      versionCode: /versionCode=(\d+)/.exec(body)?.[1] ?? null,
+      lastUpdateTime: /lastUpdateTime=([^\r\n]+)/.exec(body)?.[1]?.trim() ?? null,
+      allowBackup: versionName === null ? null : /pkgFlags=\[[^\]]*\bALLOW_BACKUP\b/.test(body)
+    };
+  }
+
+  /** `pm path`: the installed APK files of the debug package (base.apk plus any splits). */
+  async apkPaths(): Promise<string[]> {
+    const result = await this.shell(['pm', 'path', APP_PACKAGE]);
+    if (result.code !== 0) return [];
+    return text(result)
+      .split(/\r?\n/)
+      .map((line) => /^package:(\/\S+\.apk)$/.exec(line.trim())?.[1])
+      .filter((path): path is string => path !== undefined && APK_PATH.test(path));
+  }
+
+  /** SHA-256 of an installed APK, computed on the device (the path must come from apkPaths()). */
+  async remoteSha256(path: string): Promise<string> {
+    if (!APK_PATH.test(path)) throw new DeviceCliError('UNSAFE', 'Refusing to hash a path outside /data/app');
+    const body = await this.shellOk(['sha256sum', path], { maxBytes: 4096 });
+    const digest = /^([0-9a-f]{64})\s/.exec(body.trim())?.[1];
+    if (!digest) throw new DeviceCliError('ADB', 'sha256sum did not return a digest');
+    return digest;
+  }
+
+  /** WebView implementation package and version, or null when `dumpsys webviewupdate` cannot say. */
+  async webViewVersion(): Promise<{ package: string; version: string } | null> {
+    const result = await this.shell(['dumpsys', 'webviewupdate'], { maxBytes: 1024 * 1024 });
+    const match = /Current WebView package \(name, version\): \(([^,()]+), ([^()]+)\)/.exec(text(result));
+    return result.code === 0 && match ? { package: match[1].trim(), version: match[2].trim() } : null;
+  }
+
+  /**
+   * `adb install -r <apk>` (identity re-checked first). Never uninstalls. The caller decides what a
+   * failure means; the Android failure code (INSTALL_FAILED_*) is parsed out for that.
+   */
+  async installApk(apkPath: string): Promise<{ ok: boolean; failureCode: string | null; detail: string }> {
+    await this.verifyIdentity();
+    const result = await this.host.exec(['-s', this.transport, 'install', '-r', apkPath], { timeoutMs: TIMEOUTS.installMs });
+    const output = `${text(result)}\n${result.stderr}`.trim();
+    if (result.code === 0 && /^Success\s*$/m.test(text(result))) return { ok: true, failureCode: null, detail: 'Success' };
+    return { ok: false, failureCode: /Failure \[([A-Z0-9_]+)/.exec(output)?.[1] ?? null, detail: output.slice(0, 400) };
+  }
+
+  /** The window that has input focus, e.g. `Window{... com.android.vending/...PlayProtectDialogsActivity}`; null when unknown. */
+  async focusedWindow(): Promise<string | null> {
+    const result = await this.shell(['dumpsys', 'window'], { maxBytes: 8 * 1024 * 1024 });
+    return /mCurrentFocus=(.+)/.exec(text(result))?.[1]?.trim() ?? null;
+  }
+
+  /** Removes the debug package and its data. The package is the fixed constant; nothing else can be passed. */
+  async uninstallApp(): Promise<void> {
+    await this.verifyIdentity();
+    const result = await this.host.exec(['-s', this.transport, 'uninstall', APP_PACKAGE]);
+    if (result.code !== 0 || !/^Success\s*$/m.test(text(result))) throw new DeviceCliError('ADB', `adb uninstall ${APP_PACKAGE} failed`);
+  }
+
+  /** `pm clear` on the debug package only: deletes its data, keeps the install. */
+  async clearAppData(): Promise<void> {
+    const result = await this.shell(['pm', 'clear', APP_PACKAGE], { timeoutMs: TIMEOUTS.pmClearMs });
+    if (result.code !== 0 || !/^Success\s*$/m.test(text(result)))
+      throw new DeviceCliError('ADB', `pm clear ${APP_PACKAGE} did not report Success`);
+  }
+
+  /** Arbitrary argv on the device, after the identity check. The caller must have applied the shell policy. */
+  async runShell(argv: readonly string[], run: RunOptions = {}): Promise<{ code: number | null; stdout: string; stderr: string }> {
+    const result = await this.shell(argv, run);
+    return { code: result.code, stdout: text(result), stderr: result.stderr };
   }
 
   async pids(): Promise<number[]> {
@@ -236,7 +342,7 @@ export class AdbDevice {
     ]);
   }
 
-  /** Debug package only. Never `pm clear`, never uninstall. */
+  /** Debug package only (fixed constant). */
   async forceStopApp(): Promise<void> {
     await this.shellOk(['am', 'force-stop', APP_PACKAGE]);
   }

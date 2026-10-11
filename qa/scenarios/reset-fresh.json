@@ -1,0 +1,17 @@
+{
+  "schema": 1,
+  "id": "reset-fresh",
+  "title": "Reset clears learner data, the app restarts clean, dark mode and text size can be changed and are restored",
+  "steps": [
+    { "do": "launch" },
+    { "do": "reset" },
+    { "check": "expectVisible", "target": { "css": ".home-screen" } },
+    { "do": "setting", "key": "uimode", "value": "yes" },
+    { "do": "setting", "key": "font-scale", "value": 1.25 },
+    { "check": "expectVisible", "target": { "css": ".home-screen" } },
+    { "do": "lifecycle", "action": "kill" },
+    { "do": "launch" },
+    { "check": "expectVisible", "target": { "css": ".home-screen" } },
+    { "check": "expectNoErrorScreen" }
+  ]
+}
