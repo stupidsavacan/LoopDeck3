@@ -7,6 +7,8 @@ export interface VerdictInput {
   infraError: string | null;
   channels: { id: 'js' | 'diag' | 'logcat'; status: 'ok' | 'unavailable' | 'interrupted'; detail?: string }[];
   stateIncompleteForCheck: boolean;
+  /** Why the installed APK could not be matched to the expected one; null when it matched or none was expected. */
+  provenanceProblem?: string | null;
 }
 
 /**
@@ -27,6 +29,7 @@ export function computeVerdict(input: VerdictInput): { final: Final; reasons: st
   for (const channel of input.channels)
     if (channel.status !== 'ok') doubtful.push(`channel ${channel.id} is ${channel.status}${channel.detail ? ` (${channel.detail})` : ''}`);
   if (input.stateIncompleteForCheck) doubtful.push('state capture needed by a check was incomplete');
+  if (input.provenanceProblem) doubtful.push(`APK provenance: ${input.provenanceProblem}`);
 
   const final: Final = failed.length > 0 ? 'FAIL' : input.infraError !== null ? 'ERROR' : doubtful.length > 0 ? 'INCONCLUSIVE' : 'PASS';
   return { final, reasons: [...failed, ...reasons, ...doubtful] };

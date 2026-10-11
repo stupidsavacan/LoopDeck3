@@ -29,6 +29,8 @@ export interface WithDeviceSessionOptions {
   /** Session directory; defaults to qa-results/android. */
   session?: string;
   launch?: boolean;
+  /** Let the session start on a phone that does not have the debug app yet (a run that begins with installApk). */
+  allowMissingApp?: boolean;
   deps?: Partial<Deps>;
 }
 
@@ -46,7 +48,7 @@ export async function withDeviceSession<T>(options: WithDeviceSessionOptions, sc
   const paths = sessionPaths(options.session, deps.cwd);
   const lock = acquireLock(paths.lock, 'withDeviceSession', deps.now);
   try {
-    const { run } = await prepareSession(deps, paths, options.serial, false);
+    const { run } = await prepareSession(deps, paths, options.serial, false, { allowMissingApp: options.allowMissingApp });
     let failure: unknown;
     let value!: T;
     try {

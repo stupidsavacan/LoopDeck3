@@ -41,6 +41,17 @@ database or to equality.
 `ldev artifacts --apk <file> --html <LoopDeck3.html>` checks offline that an APK embeds exactly the
 single-file HTML (bytes and SHA-256). It does not prove which build is installed on the phone.
 
+## Managing the app and the phone
+
+`ldev install`, `reset`, `setting`, `shell` and `lifecycle kill` (and the matching `ldev run` steps
+`installApk`, `reset`, `setting`, `lifecycle kill`) let an agent rebuild the app's state between
+reproduction attempts. They only ever target `com.loopdeck3.app.debug`; release, Clocky and every other
+package are refused. The phone is a development-only device whose debug data may be erased by these
+commands, but device-wide settings are restored by `finish` and device-wide operations (reboot, recovery,
+fastboot, factory reset) are not available. Details, exact boundaries of the raw `shell`, APK provenance in
+`summary.json` and the known Google Play Protect prompt are in
+[`tools/device/README.md`](../tools/device/README.md#managing-the-app).
+
 ## Verification scope
 
 Host tests (`tests/device*.test.ts`) use a scripted fake `adb` and fake CDP page, `fake-indexeddb`

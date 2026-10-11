@@ -154,6 +154,25 @@ export function readDiagnostics(): DiagnosticsRead {
   }
 }
 
+export interface LocalStorageKeys {
+  ok: boolean;
+  keys: string[];
+}
+
+/** Key names only (never values) of this origin's localStorage. */
+export function readLocalStorageKeys(): LocalStorageKeys {
+  try {
+    const keys: string[] = [];
+    for (let index = 0; index < window.localStorage.length; index++) {
+      const key = window.localStorage.key(index);
+      if (key !== null) keys.push(key);
+    }
+    return { ok: true, keys: keys.sort() };
+  } catch {
+    return { ok: false, keys: [] };
+  }
+}
+
 export function errorScreenPresent(): boolean {
   return document.querySelector('.startup-error-screen') !== null;
 }

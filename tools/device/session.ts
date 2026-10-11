@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { closeSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { APP_PACKAGE, DEFAULT_SESSION_ROOT, ROTATION_SETTINGS, type RotationSetting } from './constants.js';
+import { APP_PACKAGE, DEFAULT_SESSION_ROOT, ROTATION_SETTINGS, type RotationSetting, type TrackedSettingKey } from './constants.js';
 import { DeviceCliError } from './errors.js';
 
 export interface OwnedForward {
@@ -9,6 +9,15 @@ export interface OwnedForward {
   remote: string;
   pid: number;
   createdAt: string;
+}
+
+/** The APK this session installed, or was told to expect: the only thing provenance is checked against. */
+export interface ExpectedApk {
+  sha256: string;
+  versionName: string | null;
+  versionCode: string | null;
+  source: 'install' | 'run';
+  recordedAt: string;
 }
 
 export interface SessionRecord {
@@ -28,6 +37,13 @@ export interface SessionRecord {
   pendingForward: { remote: string; since: string } | null;
   lastPid: number | null;
   notes: string[];
+  /**
+   * Original value of every device setting this session changed beyond rotation (`uimode`,
+   * `font_scale`), written BEFORE the change and removed only once `finish` re-read the restored
+   * value. Absent in sessions written before PR3, which means "nothing to restore".
+   */
+  changedSettings?: Partial<Record<TrackedSettingKey, { original: string | null }>>;
+  expectedApk?: ExpectedApk | null;
 }
 
 export interface SessionPaths {
@@ -86,6 +102,17 @@ function validate(raw: unknown): SessionRecord {
     throw bad('forwards');
   if (raw.pendingForward !== null && !isRecord(raw.pendingForward)) throw bad('pendingForward');
   if (!Array.isArray(raw.notes)) throw bad('notes');
+  if (raw.changedSettings !== undefined) {
+    if (!isRecord(raw.changedSettings)) throw bad('changedSettings');
+    for (const [key, entry] of Object.entries(raw.changedSettings)) {
+      if (key !== 'uimode' && key !== 'font_scale') throw bad(`changedSettings.${key}`);
+      if (!isRecord(entry) || (entry.original !== null && typeof entry.original !== 'string')) throw bad(`changedSettings.${key}`);
+    }
+  }
+  if (raw.expectedApk !== undefined && raw.expectedApk !== null) {
+    const apk = raw.expectedApk;
+    if (!isRecord(apk) || typeof apk.sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(apk.sha256)) throw bad('expectedApk');
+  }
   return raw as unknown as SessionRecord;
 }
 

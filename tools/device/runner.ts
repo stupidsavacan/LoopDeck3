@@ -7,7 +7,18 @@ import { APP_PACKAGE, DEFAULT_SESSION_ROOT, TIMEOUTS, resolveLdevHome } from './
 import { DeviceCliError, withTimeout } from './errors.js';
 import { withDeviceSession, type DeviceSessionApi } from './fixture.js';
 import { Journal } from './journal.js';
+import {
+  installDebugApk,
+  inspectApk,
+  judgeProvenance,
+  readApkFile,
+  readInstalledApk,
+  type InstalledApk,
+  type ProvenanceStatus
+} from './apk.js';
+import { applySetting, parseSettingRequest } from './deviceSettings.js';
 import { lifecycle, rotate } from './lifecycle.js';
+import { clearAndRelaunch, leftoverError, verifyFreshState } from './reset.js';
 import { LogcatSession, type LogcatSummary } from './logcat.js';
 import { errorScreenPresent, navigateHash, readDiagnostics, throwInPage, type DiagnosticsRead } from './pageScripts.js';
 import type { Deps } from './runtime.js';
@@ -22,6 +33,8 @@ export interface RunOptions {
   serial: string;
   scenarioPath: string;
   outDir?: string;
+  /** The APK the phone is expected to have; checked, never installed. */
+  apkPath?: string;
 }
 
 type ChannelStatus = 'ok' | 'unavailable' | 'interrupted';
@@ -44,10 +57,23 @@ export interface RunSummary {
   package: string;
   versionName: string | null;
   versionCode: string | null;
+  apk: ApkSummary;
   git: { revision: string | null; dirty: boolean | null };
   startedAt: string;
   finishedAt: string;
   runDir: string;
+}
+
+/** Where the tested build came from. `provenance.status` is `unverified` when nothing told the run which APK to expect. */
+export interface ApkSummary {
+  applicationId: string;
+  versionName: string | null;
+  versionCode: string | null;
+  lastUpdateTime: string | null;
+  sha256: string | null;
+  apkFileCount: number | null;
+  webView: { package: string; version: string } | null;
+  provenance: { status: ProvenanceStatus; reason: string | null; expected: { sha256: string; source: 'run --apk' | 'installApk' } | null };
 }
 
 /** Counts only; the lines themselves stay in logcat-stream.log under the run directory. */
@@ -109,6 +135,13 @@ export async function runScenario(deps: Deps, options: RunOptions): Promise<RunR
   }
   const scenario = parseScenario(source);
 
+  // Everything about the APKs that can be known without the phone is checked before it is touched.
+  const installSteps = scenario.steps.filter(
+    (step): step is Extract<Step, { do: 'installApk' }> => 'do' in step && step.do === 'installApk'
+  );
+  for (const step of installSteps) await inspectApk(deps, step.file);
+  const explicitExpected = options.apkPath === undefined ? null : readApkFile(deps, options.apkPath).file.sha256;
+
   // A DIRTY default CLI session holds rotation originals that this run would otherwise not see.
   const existing = SessionHandle.read(sessionPaths(undefined, deps.cwd), deps.now);
   if (existing && existing.record.status === 'DIRTY') {
@@ -138,6 +171,9 @@ export async function runScenario(deps: Deps, options: RunOptions): Promise<RunR
   let versionName: string | null = null;
   let versionCode: string | null = null;
   let captured = false;
+  let installedApk = null as InstalledApk | null;
+  let lastInstalledSha: string | null = null;
+  let provenanceAtStart: ProvenanceStatus = 'unverified';
 
   const degrade = (channel: 'js' | 'diag' | 'logcat', status: ChannelStatus, why: string, stepId?: string): void => {
     if (channels[channel] !== 'ok') return;
@@ -177,6 +213,16 @@ export async function runScenario(deps: Deps, options: RunOptions): Promise<RunR
     ];
   };
 
+  const expectedSha = (): { sha256: string; source: 'run --apk' | 'installApk' } | null =>
+    explicitExpected !== null
+      ? { sha256: explicitExpected, source: 'run --apk' }
+      : lastInstalledSha !== null
+        ? { sha256: lastInstalledSha, source: 'installApk' }
+        : null;
+  function provenanceNow() {
+    return judgeProvenance(installedApk, expectedSha()?.sha256 ?? null);
+  }
+
   const evaluateVerdict = () =>
     computeVerdict({
       checks: [...checks].map(([id, status]) => ({ id, status })),
@@ -187,7 +233,8 @@ export async function runScenario(deps: Deps, options: RunOptions): Promise<RunR
         status: channel.status,
         detail: 'detail' in channel ? (channel.detail ?? undefined) : undefined
       })),
-      stateIncompleteForCheck
+      stateIncompleteForCheck,
+      provenanceProblem: provenanceNow().reason
     });
 
   const script = async (api: DeviceSessionApi): Promise<void> => {
@@ -230,6 +277,29 @@ export async function runScenario(deps: Deps, options: RunOptions): Promise<RunR
       const old = connection;
       connection = null;
       await old?.close();
+    };
+
+    /** After a configuration change the WebView page can be briefly absent; a few bounded retries, then the real error. */
+    const connectWithRetry = async (): Promise<void> => {
+      for (let attempt = 1; ; attempt++) {
+        try {
+          await connect();
+          return;
+        } catch (error) {
+          if (attempt >= 4 || !(error instanceof DeviceCliError && error.code === 'WEBVIEW')) throw error;
+          await clock.sleep(500);
+        }
+      }
+    };
+
+    const readInstalled = async (): Promise<void> => {
+      try {
+        installedApk = await readInstalledApk(run.device);
+        versionName = installedApk.versionName;
+        versionCode = installedApk.versionCode;
+      } catch {
+        installedApk = null; // reported as unreadable when an APK was expected
+      }
     };
 
     /** Turns queued page events, new error diagnostics and the error screen into anomalies. */
@@ -397,10 +467,58 @@ export async function runScenario(deps: Deps, options: RunOptions): Promise<RunR
           await reattach(() => lifecycle(run, 'resume'));
           return;
         case 'lifecycle':
-          // The relaunch force-stops the app on purpose: its death must not read as a crash.
+          // Relaunch and kill stop the app on purpose: its death must not read as a crash.
+          if (step.action === 'kill') {
+            logcat?.expectExit(await run.device.pids());
+            await disconnect(); // no page after this step until a later "launch"
+            await lifecycle(run, 'kill');
+            return;
+          }
           if (step.action === 'relaunch') logcat?.expectExit(await run.device.pids());
           await reattach(() => lifecycle(run, step.action));
           return;
+        case 'reset': {
+          await disconnect(); // the old CDP connection dies with the process
+          const clear = await clearAndRelaunch(run, (pids) => logcat?.expectExit(pids));
+          // The storage was wiped: diagnostics read from now on are new, even if ids repeat old ones.
+          baseline = new Set();
+          await connectWithRetry();
+          const fresh = await verifyFreshState(run, page());
+          journal.append(
+            'step',
+            'reset',
+            { fresh: fresh.fresh, userStores: fresh.userStores, appMetadata: fresh.appMetadata, processRestarted: clear.processRestarted },
+            step.id
+          );
+          if (!fresh.fresh) throw leftoverError(fresh, clear);
+          return;
+        }
+        case 'setting': {
+          const wasConnected = connection !== null;
+          await disconnect(); // a night-mode or font-scale change can recreate the activity and its page
+          const report = await applySetting(run, parseSettingRequest(step.key, step.value));
+          journal.append('step', 'setting', report, step.id);
+          if (wasConnected) await connectWithRetry();
+          return;
+        }
+        case 'installApk': {
+          const report = await installDebugApk(run, step.file.startsWith('/') ? step.file : resolve(deps.cwd, step.file), {
+            replaceIncompatible: step.replaceIncompatible,
+            // Replacing the package kills the app: only now, after the APK was accepted, drop the page and expect the death.
+            beforeProcessStops: async () => {
+              logcat?.expectExit(await run.device.pids());
+              await disconnect();
+            }
+          });
+          lastInstalledSha = report.sha256;
+          journal.append(
+            'step',
+            'install',
+            { versionName: report.versionName, versionCode: report.versionCode, sha256: report.sha256, replaced: report.replaced },
+            step.id
+          );
+          return;
+        }
         case 'navigate':
           await evaluate(navigateHash, step.route);
           return;
@@ -441,15 +559,13 @@ export async function runScenario(deps: Deps, options: RunOptions): Promise<RunR
       channels.logcat = logcat.health.status;
       logcatDetail = logcat.health.detail;
       journal.append('logcat', 'start', { status: logcat.health.status });
-      try {
-        const info = await run.device.packageInfo();
-        versionName = info.versionName;
-        versionCode = info.versionCode;
-      } catch {
-        // version facts are informational
-      }
+      await readInstalled();
+      provenanceAtStart = provenanceNow().status;
+      journal.append('runner', 'provenance', { status: provenanceAtStart, expected: expectedSha()?.source ?? null });
+      // Running against the wrong build proves nothing, and a reset step would wipe its data for no reason.
+      const wrongBuild = (provenanceAtStart === 'mismatch' || provenanceAtStart === 'unreadable') && installSteps.length === 0;
 
-      for (const step of scenario.steps) {
+      for (const step of wrongBuild ? [] : scenario.steps) {
         currentStep = step.id;
         journal.append('step', 'start', step, step.id);
         let stepError: unknown = null;
@@ -470,6 +586,7 @@ export async function runScenario(deps: Deps, options: RunOptions): Promise<RunR
       await clock.sleep(300);
       await logcat.stop(); // flushes what the child had already written
       await observe();
+      await readInstalled(); // the final build, after any installApk step
 
       if (evaluateVerdict().final !== 'PASS' && !captured) await captureFailure();
     } finally {
@@ -488,7 +605,10 @@ export async function runScenario(deps: Deps, options: RunOptions): Promise<RunR
   };
 
   try {
-    await withDeviceSession({ serial: options.serial, session: join(runDir, 'session'), deps }, script);
+    await withDeviceSession(
+      { serial: options.serial, session: join(runDir, 'session'), deps, allowMissingApp: installSteps.length > 0 },
+      script
+    );
   } catch (error) {
     infraError ??= `[${codeOf(error)}] ${messageOf(error)}`;
   }
@@ -516,6 +636,16 @@ export async function runScenario(deps: Deps, options: RunOptions): Promise<RunR
     package: APP_PACKAGE,
     versionName,
     versionCode,
+    apk: {
+      applicationId: APP_PACKAGE,
+      versionName: installedApk?.versionName ?? null,
+      versionCode: installedApk?.versionCode ?? null,
+      lastUpdateTime: installedApk?.lastUpdateTime ?? null,
+      sha256: installedApk?.sha256 ?? null,
+      apkFileCount: installedApk?.apkFileCount ?? null,
+      webView: installedApk?.webView ?? null,
+      provenance: { ...provenanceNow(), expected: expectedSha() }
+    },
     git: await gitInfo(deps),
     startedAt: startedAt.toISOString(),
     finishedAt: deps.now().toISOString(),

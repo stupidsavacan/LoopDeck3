@@ -109,10 +109,15 @@ describe('strict argument handling', () => {
         'compare',
         'artifacts',
         'finish',
-        'devices'
+        'devices',
+        'install',
+        'reset',
+        'setting',
+        'shell'
       ])
     );
-    expect(Object.keys(result.json.data!.commands)).not.toContain('shell');
+    // Still no host-level escape hatches: only the typed commands above reach the device.
+    expect(Object.keys(result.json.data!.commands)).not.toContain('adb');
   });
 });
 

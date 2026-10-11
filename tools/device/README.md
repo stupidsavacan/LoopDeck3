@@ -37,16 +37,24 @@ Options are parsed strictly with `util.parseArgs`; unknown or misplaced options 
 | `swipe (--role/--name \| --locator) --direction up\|down\|left\|right [--distance CSSPX] [--duration-ms N]` | Native swipe clipped inside the visible target.                                                                  |
 | `picker inspect` / `picker select (--text T \| --resource-id ID)`                                           | Android DocumentsUI only; exact match, exactly one element.                                                      |
 | `key KEY`                                                                                                   | Allowlist: BACK ENTER TAB ESCAPE DPAD_* PAGE_UP PAGE_DOWN.                                                       |
-| `lifecycle background\|resume\|relaunch`                                                                    | Debug package only; relaunch = `am force-stop` + start + UI-ready wait.                                          |
+| `lifecycle background\|resume\|relaunch\|kill`                                                              | Debug package only; relaunch = `am force-stop` + start + UI-ready wait; kill = force-stop only.                  |
 | `rotate portrait\|landscape`                                                                                | Records intent first; `finish` restores originals.                                                               |
 | `expect (--text EXACT \| --locator CSS) [--timeout-ms N]`                                                   | Bounded polling; exit 1 if not met.                                                                              |
 | `collect LABEL [--compare-to PATH [--expect-same]]`                                                         | Evidence under `<session>/artifacts/LABEL`.                                                                      |
 | `compare A B`                                                                                               | Offline state comparison of two summaries (count + digest).                                                      |
 | `artifacts --apk F --html F`                                                                                | Offline: does the APK embed exactly this HTML (bytes, SHA-256)? Mismatch exits 1.                                |
+| `install --apk F [--replace-incompatible]`                                                                  | `adb install -r` of a debug APK (see "Managing the app").                                                        |
+| `reset`                                                                                                     | `pm clear` the debug app, relaunch, verify no learner data remains.                                              |
+| `setting uimode yes\|no\|auto` / `setting font-scale 0.5..2.0`                                              | Change dark mode / text size; the original is recorded first and `finish` restores it.                           |
+| `shell -- <command> [args...]`                                                                              | One command on the pinned phone through an argv allowlist; journaled (see "Managing the app").                   |
+| `lifecycle kill`                                                                                            | `am force-stop` the debug app and confirm by pid; does not start it again.                                       |
 | `finish [--accept-unowned-forward]`                                                                         | Restore, verify, remove owned forwards; stays DIRTY on any failure.                                              |
 
-There is deliberately **no** raw `adb`/shell passthrough, no install, uninstall, `pm clear`,
-root, or adb-server restart.
+`install`, `reset`, `setting`, `shell` and `lifecycle` accept `--serial S` (or `$LDEV_SERIAL`). With an
+active session the serial must be that session's device (anything else is refused before a byte is
+sent); with none, they pin the phone exactly like `prepare` (DIRTY until `finish`). A serial is never
+guessed from `adb devices`. There is no root, no adb-server restart, and no host-level `adb`
+passthrough.
 
 Exit codes: 0 ok · 1 check failed (expectation, differing state, APK/HTML mismatch) · 2 usage ·
 3 refused (session/lock/identity/unsafe) · 4 device/adb/UI/WebView/timeout/cleanup failure ·
@@ -78,10 +86,20 @@ Scenario (JSON, unknown keys rejected, errors name the path such as `steps[3].ta
 ```
 
 - Steps (`do`): `launch`, `navigate {route:"#…"}`, `tap {target, native?}`, `swipe {target, direction, distance?, durationMs?}`,
-  `type {target, text}`, `key {key}`, `rotate {to}`, `lifecycle {action: background|resume|relaunch}`, `wait {ms 1..30000}`,
-  `snapshotState {label}`, `injectError {message}` (makes the scenario `testClass: harness`).
+  `type {target, text}`, `key {key}`, `rotate {to}`, `lifecycle {action: background|resume|relaunch|kill}`, `wait {ms 1..30000}`,
+  `snapshotState {label}`, `injectError {message}` (makes the scenario `testClass: harness`),
+  `reset`, `setting {key: "uimode"|"font-scale", value}`, `installApk {file, replaceIncompatible?}`.
 - Checks (`check`): `expectVisible {target | text, timeoutMs?}`, `expectNoErrorScreen`, `expectStateSame {a, b}` (`b` may be `"now"`).
 - `target` is `{role, name}` (exact accessible name) or `{css}`.
+
+`reset`, `installApk` and `lifecycle kill` end the app process on purpose, so the WebView connection is dropped
+first and the logcat channel is told the death is expected. `reset` relaunches the app, reconnects, and
+verifies the fresh state (a failure is an ERROR and the later checks stay `NOT_EVALUATED`); diagnostics
+read after it are all treated as new, even when their ids repeat old ones. `setting` reconnects if a page
+was attached. `installApk` does not start the app and `kill` does not either: add a `launch` step before
+anything that needs the page. `file` is relative to the working directory; every `installApk` file is checked
+(ZIP, package name, debuggable) before the phone is touched, and `finish` restores any `setting` at the end
+(a failed restore turns the run into ERROR).
 
 Verdict: **FAIL** (a check failed, or an anomaly not allowed by `allowConsoleErrors`) › **ERROR**
 (steps could not be run to the end) › **INCONCLUSIVE** (no passing check, a check not evaluated,
@@ -118,6 +136,62 @@ before any output → `unavailable`; ends mid-run or the 8 MiB raw-log cap is hi
 INCONCLUSIVE (a FAIL still wins). A healthy but quiet stream is not a failure. Raw lines are in
 `logcat-stream.log`, warnings/errors and every detected event in `events.ndjson` (`src: "logcat"`, with
 `hostMs` arrival time and the device time).
+
+## Managing the app
+
+`install --apk F [--replace-incompatible]`: before anything is sent to the phone the APK must exist, be a
+ZIP with an `AndroidManifest.xml`, be debuggable, and `aapt2 dump badging` must name exactly
+`com.loopdeck3.app.debug` (the release package and everything else are refused). `aapt2` is found through
+`LDEV_AAPT2`, then `ANDROID_HOME` / `ANDROID_SDK_ROOT` / `%LOCALAPPDATA%/Android/Sdk` (newest build-tools); if none
+is found `install` stops with an error instead of skipping the check. It then runs `adb install -r`. Only if
+Android answers `INSTALL_FAILED_UPDATE_INCOMPATIBLE` (signature) or `INSTALL_FAILED_VERSION_DOWNGRADE`, **and**
+`--replace-incompatible` was given, the debug package is uninstalled (its data goes with it) and installed again.
+Any other failure is reported and nothing is uninstalled. Afterwards the installed `base.apk` is hashed on the phone
+and must equal the supplied file, and package name / version / hash / `lastUpdateTime` are reported and stored in
+the session as the expected APK. Works on a phone where the app is not installed yet.
+
+A Google Play Protect "send app for scanning?" dialog on the phone can hold an `adb install` until someone
+taps it. `install` then fails with a TIMEOUT that names Play Protect; dismiss the dialog on the phone. ldev does
+not tap it, and does not change the device's Play Protect / `verifier_verify_adb_installs` setting.
+
+`reset`: exact-package `pm clear`, relaunch (45 s allowed for the first start), attach, then read IndexedDB
+(`attempts`, `bookmarks`, `packs`, `packAssets`, `reviewCards`, `reviewLogs`: every one must be present and 0) and the
+localStorage key names (learner keys such as `loopdeck3.session.*`, `loopdeck3.preferences.*`, `loopdeck3.library.folders.*`,
+`loopdeck3.library.last-module`, `loopdeck3.review.scope` must be absent). What the app writes by itself while
+starting (`contentMetadata`, `loopdeck3.diagnostics`, `loopdeck3.library.in-player`) is reported under `appMetadata`
+and is not a failure. Leftovers are an ERROR (exit 4) with the leftover names and the possible causes known to ldev
+(process not restarted; `ALLOW_BACKUP` is set on the debug app, so Android Auto Backup may restore data). Which
+`loopdeck3.*` keys are learner data lives in `constants.ts`; a test fails if `src/` gains a key in neither list.
+
+`setting`: `uimode` uses `cmd uimode night yes|no|auto` (read back from `cmd uimode night`), `font-scale` uses
+`settings put system font_scale`. The first original value of each is written to the session before the change;
+`finish` restores it and re-reads it. A setting that cannot be restored keeps the session DIRTY. Sessions written
+before this change have no such field and still load. The app has no dark theme of its own, so `uimode` changes the
+OS state (and anything that follows `prefers-color-scheme`), not necessarily the app's colours.
+
+`shell -- <command> [args...]` runs one command through `adb shell` after the physical identity check. Every
+argument is quoted separately, so `;`, `|`, `$()` and redirections are plain text and commands cannot be chained.
+The command is checked against an **argv allowlist** first (`shellPolicy.ts`): read-style commands, `input`,
+`am start|broadcast|…`, `dumpsys`, `pm list|path|dump`, and file commands only inside `/sdcard/Download/ldev/`,
+`/data/local/tmp/ldev-*` and the debug app's external directory. `pm clear|uninstall|grant|…` and `am force-stop|kill|crash`
+accept only `com.loopdeck3.app.debug` (release `com.loopdeck3.app`, Clocky and every other package are refused);
+`pm install`, `cmd` (other than `package`, `activity` and the `uimode night` query), `settings put`, `wm` changes, `svc`,
+`setprop`, shells/`su`/`run-as`, and anything mentioning reboot, recovery, fastboot, bootloader, factory reset or
+wipe are refused. Each call, result (exit code, stdout, stderr; 16 KiB each) and refusal is appended to
+`<session>/shell.ndjson`. A non-zero exit code of the device command is returned as an ERROR (exit 4) with the
+result attached.
+
+What this does **not** guarantee: it is not a sandbox. Allowed commands still act on the real phone with the
+shell user's rights (`input`, `am start`, `am broadcast`, `dumpsys` can all change state), the check reads argument
+text only, and the phone can change between the check and the command. It limits what an agent can do by
+accident; it cannot isolate the device.
+
+`run --apk F` only compares: `F`'s SHA-256 against the installed `base.apk`; it never installs. Without it (and
+without an `installApk` step) the provenance is `unverified` and does not block a PASS. A mismatch or an unreadable
+installed hash makes the run INCONCLUSIVE, and then no step is executed at all unless the scenario installs an APK
+itself. `summary.json` gets an `apk` object: `applicationId`, `versionName`, `versionCode`, `lastUpdateTime`,
+installed `sha256`, `apkFileCount`, `webView {package, version}` and `provenance {status, reason, expected}`
+next to the existing `git {revision, dirty}`.
 
 ## Sessions, locking, recovery
 
@@ -169,12 +243,16 @@ in `finally`. If the process is killed the DIRTY record remains for `ldev finish
 
 ## Not implemented / limits
 
-- No APK install or signature verification. `artifacts` checks an APK file against an HTML file
-  offline; it does **not** prove what is installed on the phone.
+- Signatures are not verified by ldev: Android decides that when it installs. `artifacts` checks an APK
+  file against an HTML file offline; the installed APK is identified by `install` / `run` (SHA-256 of the
+  installed `base.apk`), not by `artifacts`.
 - No release-build coverage (release has no debuggable WebView).
 - Page `role`/`name` listing in `inspect` is an approximation for reading; actions use Playwright.
 - Foreground detection is from the active window's UI dump, not `dumpsys`.
 - Physical identity is re-checked before each operation, but a swap between check and command is
   not excluded.
+- A replace-install (uninstall + install) changes the app's uid, which the running logcat channel does not
+  re-read; lines are still matched by pid and package name.
+- `shell` is not available as a scenario step yet.
 - Physical acceptance on moto g13 / Android 14 is recorded in `docs/android-device-tool.md`.
   Full native file import/save and release-build QA remain separate checks.
