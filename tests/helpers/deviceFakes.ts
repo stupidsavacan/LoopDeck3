@@ -129,6 +129,8 @@ export class FakeAdb {
   removedUiPaths: string[] = [];
   versionName = '0.3.1-debug';
   deviceEpochMs = 1_700_000_000_000;
+  /** What a one-shot `logcat -d -v epoch,uid` prints (the stream used by run is separate). */
+  logcatDump = '';
   basePath = '/data/app/~~abc==/com.loopdeck3.app.debug-xyz==/base.apk';
 
   /** Argument vectors of every call, e.g. to prove nothing ran. */
@@ -265,6 +267,7 @@ export class FakeAdb {
     }
     if (cmd === 'date') return result(`${Math.floor(this.deviceEpochMs / 1000)}\n`);
     if (cmd === 'pm' && a[0] === 'list') return result(`package:${APP} uid:${APP_UID}\n`);
+    if (cmd === 'logcat' && a.includes('-v')) return result(this.logcatDump);
     if (cmd === 'logcat') return result('I/app: hello\n');
     return result(''); // input, am, ...
   }

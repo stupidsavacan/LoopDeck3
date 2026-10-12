@@ -290,3 +290,54 @@ directory (absolute or relative) or a run id under `$LDEV_HOME/runs`; the label 
 `C:\runs\20260101-x:before` works. Output: per-store counts and added/removed/updated, schema changes, localStorage
 key names that were added/removed/updated. Differences exit 0 (use `--expect-same` for exit 1); an incomplete or legacy
 (schema 1, counts only) snapshot exits 5 with the reason; a missing snapshot is a usage error (exit 2). If localStorage was not captured on both sides, the output says it was not compared (`localStorageCompared: false`) and `--expect-same` exits 5.
+
+## Exploration mode (`prepare --record`, `observe`)
+
+For investigating an unknown bug by hand or by an AI agent: look, act, look again, and reconstruct afterwards
+which operation caused what.
+
+```
+ldev prepare --serial S --record [--launch] [--session DIR]   # DIRTY session + exploration directory
+ldev observe [--state] [--screenshot] [--require-complete] [--session DIR]
+ldev tap / swipe / key / lifecycle / rotate / setting / reset / install / shell / inspect ...   # as before
+ldev finish                                                   # restores, writes summary.json, CLEAN
+```
+
+**Recording.** With `--record` the session record points at `$LDEV_HOME/explore/<time>-<sessionId>/`. One
+wrapper in `cli.ts` writes every session-bound command to `ops.ndjson` as a `begin` line (seq, time,
+command, options) before it runs and an `end` line (ok, error code, duration) after it. A command that was
+killed has a `begin` without an `end`. Each line carries the session id; a directory that belongs to another
+session is never written to. After `finish` (CLEAN) nothing is recorded. A failed `finish` leaves the session
+DIRTY and `summary.json` says DIRTY until a later `finish` succeeds. Without `--record` nothing changes: no
+files, no extra output. Recorded commands add `data.recording.seq` to their envelope.
+
+**`observe`** reads once and returns `data.observation`:
+
+- `screen`: WebView connection (or why not), route, visible elements with `role`, `name`, `actionable`, a
+  `byRole` locator (`unique` = no other listed element has the same pair) and a `css` locator **only when it
+  was checked to match exactly that element**, Android UI nodes, and `changedSincePrevious`.
+- `diagnostics`: error entries of `loopdeck3.diagnostics` that are new since the previous look (`newErrors`;
+  `null` on the first look, which only establishes the baseline), and the error screen.
+- `android`: crashes, ANRs, unexplained process deaths found in `logcat -d` since the previous look (or since
+  `prepare --record`). A process death inside a `lifecycle relaunch|kill`, `reset` or `install` window counts
+  as `expectedExits`.
+- `state` (`--state`): per-store counts, and the record-level IndexedDB and localStorage difference to the
+  previous `--state` look (PR4 snapshot/diff). Snapshots are saved as `snapshots/obs-N.json`, so
+  `ldev diff <explorationDir>:obs-1 <explorationDir>:obs-2` works too.
+- `channels` (observed / unobserved / not-requested), `gaps` and `limitations`.
+
+`assessment.status` is `COMPLETE` only when no gap exists, otherwise `INCONCLUSIVE`; `--require-complete`
+turns INCONCLUSIVE into exit 5. **It is never a PASS**: a quiet screen says nothing about the time between two
+invocations. Gaps: `webview-unreachable`, `logcat-unavailable`, `logcat-ring-overrun` (a main/system/events
+buffer no longer reaches back to the previous look), `logcat-no-baseline`, `device-clock-went-backwards`,
+`device-clock-jump`, `device-clock-unreadable`, `diagnostics-no-baseline` (operations ran before the first
+look), `diagnostics-ring-overflow`, `state-*`, `android-ui-unavailable`, `screenshot-failed`.
+
+`summary.json` (written by `finish`; also in its `data.exploration`) holds counts and short step descriptions
+only: operations (total/failed/interrupted), observations, new JS errors, crashes/ANRs, state change counts,
+`firstAnomaly` (the observation, and the operation before it), observations with gaps, actions after the last
+observation. Raw observations (with device text) stay in `observations/NNN.json` under `LDEV_HOME`.
+
+Limits: JavaScript `pageerror`/`console.error` between invocations are not streamed (only the persisted
+diagnostics log is read); no daemon. The first look of a session started without `--record` has no log
+baseline and reports it. Generating a scenario JSON from `ops.ndjson` is not implemented.

@@ -2,6 +2,8 @@ import { assertSerial } from './adb.js';
 import { inspectApk, installDebugApk } from './apk.js';
 import { applySetting, parseSettingRequest } from './deviceSettings.js';
 import { Journal } from './journal.js';
+import { Recorder, recordParams, type OpScope } from './explore.js';
+import { observe, resetDiagnosticsBaseline } from './observe.js';
 import { resetApp } from './reset.js';
 import { checkShellArgv } from './shellPolicy.js';
 import { attachProbe, expectVisible, inspect, pickerInspect, pickerSelect, swipe, tap } from './actions.js';
@@ -32,6 +34,8 @@ export interface CommandContext {
   values: Values;
   positionals: string[];
   deps: Deps;
+  /** The running operation of a recorded (`prepare --record`) session; null otherwise. */
+  recording?: OpScope | null;
 }
 
 export interface CommandOutput {
@@ -168,8 +172,8 @@ const COMMAND_TABLE: Record<string, CommandDef> = {
 
   prepare: {
     summary: 'Pin a device by --serial, record original rotation settings, create a DIRTY session',
-    usage: 'prepare --serial <adb serial> [--session <dir>] [--launch]',
-    options: { serial: text, session, launch: flag },
+    usage: 'prepare --serial <adb serial> [--session <dir>] [--launch] [--record]',
+    options: { serial: text, session, launch: flag, record: flag },
     positionals: { min: 0, max: 0 },
     touchesDevice: true,
     async run(context) {
@@ -179,9 +183,29 @@ const COMMAND_TABLE: Record<string, CommandDef> = {
       const paths = sessionPaths(str(context.values, 'session'), context.deps.cwd);
       const lock = acquireLock(paths.lock, 'prepare', context.deps.now);
       try {
-        const { report } = await prepareSession(context.deps, paths, serial, on(context.values, 'launch'));
+        const { report, run } = await prepareSession(context.deps, paths, serial, on(context.values, 'launch'));
+        let recording: Record<string, unknown> | undefined;
+        if (on(context.values, 'record')) {
+          // --record: operations and observations of this session are logged until finish (see explore.ts)
+          let startDeviceEpochMs: number | null = null;
+          try {
+            const seconds = await run.device.deviceEpochSeconds();
+            startDeviceEpochMs = seconds === null ? null : seconds * 1000;
+          } catch {
+            startDeviceEpochMs = null; // the first observation then has no log baseline and says so
+          }
+          const recorder = Recorder.create(context.deps, run.session, {
+            serial,
+            versionName: report.versionName,
+            versionCode: report.versionCode,
+            startDeviceEpochMs
+          });
+          const op = await recorder.begin('prepare', recordParams(context.values, []));
+          op.end({ ok: true, errorCode: null });
+          recording = { dir: recorder.dir, seq: op.seq };
+        }
         return {
-          data: { ...report, sessionRoot: paths.root, status: 'DIRTY' },
+          data: { ...report, sessionRoot: paths.root, status: 'DIRTY', ...(recording ? { recording } : {}) },
           summary: `session ${report.sessionId} prepared (DIRTY until finish)`
         };
       } finally {
@@ -246,6 +270,28 @@ const COMMAND_TABLE: Record<string, CommandDef> = {
       };
       if (!state.complete)
         output.failure = { code: 'INCOMPLETE', message: `State capture is incomplete: ${state.reasons.join('; ') || 'unknown'}` };
+      return output;
+    }
+  },
+
+  observe: {
+    summary: 'Look once at the screen, errors and (with --state) saved data; reports what was seen and what could not be; never a PASS',
+    usage: 'observe [--state] [--screenshot] [--require-complete] [--session <dir>]',
+    options: { session, state: flag, screenshot: flag, 'require-complete': flag },
+    positionals: { min: 0, max: 0 },
+    touchesDevice: true,
+    async run(context) {
+      const { values } = context;
+      const observation = await withSession(context, (run) =>
+        observe(run, { state: on(values, 'state'), screenshot: on(values, 'screenshot') }, context.recording ?? null)
+      );
+      const { status, anomalies } = observation.assessment;
+      const output: CommandOutput = {
+        data: { observation, containsDeviceText: true },
+        summary: `observation ${observation.id} ${status}${anomalies.length ? ` - anomalies: ${anomalies.join(', ')}` : ''}${observation.gaps.length ? ` - ${observation.gaps.length} gap(s)` : ''}`
+      };
+      if (status === 'INCONCLUSIVE' && on(values, 'require-complete'))
+        output.failure = { code: 'INCOMPLETE', message: `Observation is incomplete: ${observation.gaps.map((gap) => gap.kind).join(', ')}` };
       return output;
     }
   },
@@ -364,7 +410,11 @@ const COMMAND_TABLE: Record<string, CommandDef> = {
     positionals: { min: 0, max: 0 },
     touchesDevice: true,
     async run(context) {
-      const report = await withManagedSession(context, {}, resetApp);
+      const report = await withManagedSession(context, {}, async (run) => {
+        const result = await resetApp(run);
+        resetDiagnosticsBaseline(run.session.paths.root, run.session.record.id); // the app's log starts empty
+        return result;
+      });
       return { data: { ...report }, summary: 'app data cleared; no learner data remains' };
     }
   },

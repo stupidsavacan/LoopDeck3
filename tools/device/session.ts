@@ -44,6 +44,8 @@ export interface SessionRecord {
    */
   changedSettings?: Partial<Record<TrackedSettingKey, { original: string | null }>>;
   expectedApk?: ExpectedApk | null;
+  /** Present when `prepare --record` started an exploration: where its operation log and observations live. */
+  exploration?: { dir: string; startedAt: string; startDeviceEpochMs: number | null };
 }
 
 export interface SessionPaths {
@@ -112,6 +114,12 @@ function validate(raw: unknown): SessionRecord {
   if (raw.expectedApk !== undefined && raw.expectedApk !== null) {
     const apk = raw.expectedApk;
     if (!isRecord(apk) || typeof apk.sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(apk.sha256)) throw bad('expectedApk');
+  }
+  if (raw.exploration !== undefined) {
+    const exploration = raw.exploration;
+    if (!isRecord(exploration) || typeof exploration.dir !== 'string' || !exploration.dir || typeof exploration.startedAt !== 'string')
+      throw bad('exploration');
+    if (exploration.startDeviceEpochMs !== null && typeof exploration.startDeviceEpochMs !== 'number') throw bad('exploration');
   }
   return raw as unknown as SessionRecord;
 }

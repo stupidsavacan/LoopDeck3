@@ -411,6 +411,17 @@ export class AdbDevice {
     return { text: truncated ? Buffer.from(raw).subarray(-LIMITS.maxLogBytes).toString('utf8') : raw, truncated };
   }
 
+  /**
+   * Everything the log buffers still hold (not --pid scoped), one read, no streaming. The caller decides
+   * what is new: logcat is a ring buffer, so older lines may already be gone.
+   */
+  async logcatDump(): Promise<string> {
+    return await this.shellOk(['logcat', '-d', '-v', 'epoch,uid', '-b', 'main,system,crash,events'], {
+      maxBytes: 16 * 1024 * 1024,
+      timeoutMs: 30_000
+    });
+  }
+
   /** Device wall clock in whole epoch seconds, or null when it cannot be read. Anchors `logcat -T`. */
   async deviceEpochSeconds(): Promise<number | null> {
     const result = await this.shell(['date', '+%s']);
