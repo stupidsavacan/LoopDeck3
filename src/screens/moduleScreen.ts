@@ -4,6 +4,7 @@ import { buildQuizAnswerSources } from '../core/reviewPersistence';
 import type { ModuleInfo, StudySettings } from '../core/models';
 import { canAutoReverseQuestion, getModuleStudyQuestionModes, getStudyQuestionModeLabel } from '../core/questionPresentation';
 import { buildRangeOptions, createSession, listQuestionCategories, selectSessionQuestions, type QuizSession } from '../core/sessionEngine';
+import { getUnresolvedMistakeIds } from '../core/unresolvedMistakes';
 import { getModuleById, getQuestionsForModule } from '../packs/packResolver';
 
 import {
@@ -63,9 +64,7 @@ export async function renderModuleScreen(context: ScreenContext & { moduleId: st
   storageScope.packRevision = revisions.get(modulePackId ?? '') ?? 'builtin';
   storageScope.resetEpoch = revisions.get('') ?? '0';
   if (!isCurrent()) return;
-  const wrongIds = new Set(
-    attempts.filter((attempt) => attempt.answerMode !== 'flashcard' && attempt.result !== 'correct').map((attempt) => attempt.questionId)
-  );
+  const wrongIds = getUnresolvedMistakeIds(attempts);
   const bookmarkIds = new Set(bookmarks);
   const wrongQuestions = questions.filter((question) => wrongIds.has(question.id));
   const bookmarkedQuestions = questions.filter((question) => bookmarkIds.has(question.id));
