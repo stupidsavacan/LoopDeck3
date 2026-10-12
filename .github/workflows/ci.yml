@@ -113,3 +113,36 @@ jobs:
             LoopDeck3.html
           if-no-files-found: warn
           retention-days: 7
+  
+  single-file-webkit-qa:
+    name: Single-file WebKit QA (macOS)
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 20.19.0
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install dependencies and WebKit
+        run: |
+          npm ci --include=dev
+          npx playwright install webkit
+      - name: Build single-file HTML
+        run: npm run build:single
+      - name: Test flipped card rendering in WebKit
+        env:
+          QA_BROWSER: webkit
+        run: npx playwright test qa/flashcard-webkit.qa.mjs
+      - name: Upload WebKit QA evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: single-file-webkit-qa
+          path: |
+            qa-report/
+            qa-results/
+          if-no-files-found: warn
+          retention-days: 7
