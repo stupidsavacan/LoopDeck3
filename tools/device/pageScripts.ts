@@ -121,6 +121,119 @@ export function domProbe(arg: ProbeArg): ProbeResult {
   return { mode: 'snapshot', items, truncated: all.length > arg.max, viewport, href: window.location.href };
 }
 
+// --- observe probe (self-contained, serialized into the page) -----------------------
+
+export interface ObservedDomElement {
+  role: string | null;
+  name: string;
+  tag: string;
+  enabled: boolean;
+  /** Visible, enabled and of a kind a user can act on (button, link, form control, role=button...). */
+  actionable: boolean;
+  rect: { x: number; y: number; w: number; h: number };
+  /** Role + accessible name as read here (an approximation). `unique` only says no other listed element has the same pair. */
+  byRole: { role: string; name: string; unique: boolean } | null;
+  /** Present only when this selector was checked to match exactly this one element in the document. */
+  css: string | null;
+}
+
+export interface ObserveProbeResult {
+  href: string;
+  hash: string;
+  title: string;
+  elements: ObservedDomElement[];
+  /** Visible elements that did not fit under `max`, and elements skipped because they are not visible. */
+  truncated: number;
+  hidden: number;
+}
+
+/** What `ldev observe` lists from the page: visible elements with a locator only where one was verified. */
+export function observeProbe(arg: { max: number }): ObserveProbeResult {
+  const normalize = (value: string | null | undefined): string => (value ?? '').replace(/\s+/g, ' ').trim();
+  const roleOf = (element: Element): string | null => {
+    const explicit = element.getAttribute('role');
+    if (explicit) return explicit.split(/\s+/)[0];
+    const tag = element.tagName.toLowerCase();
+    if (tag === 'button' || tag === 'summary') return 'button';
+    if (tag === 'a') return 'link';
+    if (/^h[1-6]$/.test(tag)) return 'heading';
+    if (tag === 'select') return 'combobox';
+    if (tag === 'textarea') return 'textbox';
+    if (tag === 'input') {
+      const type = (element.getAttribute('type') || 'text').toLowerCase();
+      return type === 'checkbox' || type === 'radio' ? type : type === 'button' || type === 'submit' ? 'button' : 'textbox';
+    }
+    return null;
+  };
+  const isVisible = (element: Element): boolean => {
+    const rect = element.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return false;
+    for (let node: Element | null = element; node; node = node.parentElement) {
+      const style = window.getComputedStyle(node);
+      if (style.display === 'none' || style.visibility === 'hidden' || (style.opacity !== '' && Number(style.opacity) === 0)) return false;
+    }
+    return true;
+  };
+  const escapeIdent = (value: string): string => value.replace(/[^a-zA-Z0-9_-]/g, (char) => `\\${char}`);
+  const quote = (value: string): string => `"${value.replace(/["\\]/g, (char) => `\\${char}`)}"`;
+  const only = (selector: string, element: Element): boolean => {
+    try {
+      const found = document.querySelectorAll(selector);
+      return found.length === 1 && found[0] === element;
+    } catch {
+      return false;
+    }
+  };
+  const cssFor = (element: Element): string | null => {
+    const tag = element.tagName.toLowerCase();
+    const candidates: string[] = [];
+    const id = element.getAttribute('id');
+    if (id && /^[A-Za-z][A-Za-z0-9_-]*$/.test(id)) candidates.push(`#${escapeIdent(id)}`);
+    const testId = element.getAttribute('data-testid');
+    if (testId) candidates.push(`[data-testid=${quote(testId)}]`);
+    const label = element.getAttribute('aria-label');
+    if (label) candidates.push(`${tag}[aria-label=${quote(label)}]`);
+    const classes = Array.from(element.classList).filter((name) => /^[A-Za-z_-][A-Za-z0-9_-]*$/.test(name));
+    for (const name of classes) candidates.push(`${tag}.${escapeIdent(name)}`);
+    if (classes.length > 1) candidates.push(`${tag}${classes.slice(0, 3).map((name) => `.${escapeIdent(name)}`).join('')}`);
+    return candidates.find((candidate) => only(candidate, element)) ?? null;
+  };
+  const actionableRoles = new Set(['button', 'link', 'checkbox', 'radio', 'textbox', 'combobox', 'switch', 'tab', 'menuitem', 'option', 'slider']);
+
+  const all = Array.from(document.querySelectorAll('button,a[href],input,select,textarea,summary,[role],[data-testid],h1,h2,h3,h4,h5,h6'));
+  const visible = all.filter(isVisible);
+  const listed = visible.slice(0, arg.max);
+  const items = listed.map((element) => {
+    const rect = element.getBoundingClientRect();
+    const role = roleOf(element);
+    const name = normalize(element.getAttribute('aria-label') || element.textContent || element.getAttribute('title'));
+    const enabled = !(element as HTMLButtonElement).disabled && element.getAttribute('aria-disabled') !== 'true';
+    return {
+      role,
+      name: name.length > 120 ? `${name.slice(0, 119)}…` : name,
+      tag: element.tagName.toLowerCase(),
+      enabled,
+      actionable: enabled && role !== null && actionableRoles.has(role),
+      rect: { x: Math.round(rect.x), y: Math.round(rect.y), w: Math.round(rect.width), h: Math.round(rect.height) },
+      css: cssFor(element),
+      full: name
+    };
+  });
+  const elements: ObservedDomElement[] = items.map((item) => {
+    const same = items.filter((other) => other.role === item.role && other.full === item.full).length;
+    const { full, ...rest } = item;
+    return { ...rest, byRole: item.role && full ? { role: item.role, name: item.name, unique: same === 1 } : null };
+  });
+  return {
+    href: window.location.href,
+    hash: window.location.hash,
+    title: document.title,
+    elements,
+    truncated: visible.length - listed.length,
+    hidden: all.length - visible.length
+  };
+}
+
 // --- run scenario helpers (self-contained, serialized into the page) ---------------
 
 export interface DiagnosticsRead {
