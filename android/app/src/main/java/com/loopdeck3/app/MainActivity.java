@@ -271,6 +271,8 @@ public class MainActivity extends Activity {
         }
 
         webView.addJavascriptInterface(new LoopDeckBridge(), "LoopDeck3Host");
+        webView.addJavascriptInterface(new CloudBridge(this), "LoopDeckCloud");
+        CloudWorker.schedule(this);
         final WebViewAssetLoader assetLoader = new WebViewAssetLoader.Builder()
                 .addPathHandler("/assets/", new WebViewAssetLoader.AssetsPathHandler(this))
                 .build();
@@ -278,6 +280,15 @@ public class MainActivity extends Activity {
             @Override
             public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
                 WebResourceResponse local = assetLoader.shouldInterceptRequest(request.getUrl());
+                if (local != null) {
+                    Map<String, String> headers = new HashMap<>();
+                    if (local.getResponseHeaders() != null) headers.putAll(local.getResponseHeaders());
+                    String connect = BuildConfig.SYNC_API_ORIGIN.isEmpty() ? "'none'" : BuildConfig.SYNC_API_ORIGIN;
+                    headers.put("Content-Security-Policy", "default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src " + connect + "; object-src 'none'; base-uri 'none'; form-action 'none'");
+                    local.setResponseHeaders(headers);
+                    return local;
+                }
+                if (!request.isForMainFrame() && CloudPolicy.permits(BuildConfig.SYNC_API_ORIGIN, request.getUrl().toString(), request.getMethod())) return null;
                 return local != null ? local : new WebResourceResponse("text/plain", "UTF-8", 403, "Blocked", null, new ByteArrayInputStream(new byte[0]));
             }
             @Override
@@ -322,11 +333,9 @@ public class MainActivity extends Activity {
 
     private boolean shouldBlockNavigation(Uri uri) {
         if (uri == null) return true;
-        String url = uri.toString();
-        String scheme = uri.getScheme();
-        if ("file".equals(scheme)) return !url.startsWith(ASSET_BASE_URL);
-        if ("about".equals(scheme) || "blob".equals(scheme)) return false;
-        return true;
+        return !"https".equals(uri.getScheme()) || !"appassets.androidplatform.net".equals(uri.getHost())
+                || (uri.getPort() != -1 && uri.getPort() != 443) || uri.getUserInfo() != null
+                || uri.getQuery() != null || !"/assets/loopdeck/index.html".equals(uri.getPath());
     }
 
     private int stagedSaveCountLocked() {

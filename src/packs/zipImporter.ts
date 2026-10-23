@@ -1,4 +1,5 @@
 import JSZip from 'jszip';
+import { verifyZipIntegrity } from './zipIntegrity';
 import type { LoopDeckPack } from '../core/models';
 import { extensionOf, isSafeImageAssetRef, isSafeImageDataUrl } from './assetSafety';
 import { MAX_IMAGE_ASSET_BYTES, MAX_JSON_ENTRY_BYTES, validateImportFileSize } from './importLimits';
@@ -75,7 +76,7 @@ async function readReferencedAssets(
   return assets;
 }
 
-async function readLoopDeckZip(file: File): Promise<PackValidationResult> {
+async function readLoopDeckZip(file: File, strictIntegrity = false): Promise<PackValidationResult> {
   const fileIssues = validateContainerFile(file);
   if (fileIssues.some((issue) => issue.level === 'error')) return { ok: false, issues: fileIssues };
 
@@ -84,6 +85,7 @@ async function readLoopDeckZip(file: File): Promise<PackValidationResult> {
   if (inspection.issues.some((issue) => issue.level === 'error')) return { ok: false, issues: [...fileIssues, ...inspection.issues] };
 
   const zip = await JSZip.loadAsync(buffer);
+  if (strictIntegrity) await verifyZipIntegrity(zip, buffer, inspection.uncompressedBytesByPath);
   const paths = Object.values(zip.files)
     .filter((entry) => !entry.dir)
     .map((entry) => entry.name);
@@ -130,9 +132,9 @@ async function readLoopDeckJson(file: File): Promise<PackValidationResult> {
   };
 }
 
-export async function importLoopDeckZip(file: File): Promise<PackValidationResult> {
+export async function importLoopDeckZip(file: File, strictIntegrity = false): Promise<PackValidationResult> {
   try {
-    return await readLoopDeckZip(file);
+    return await readLoopDeckZip(file, strictIntegrity);
   } catch (error) {
     return {
       ok: false,

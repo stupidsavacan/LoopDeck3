@@ -1,3 +1,4 @@
+import type { RemoteCommit } from './cloudRecords';
 import { loadBuiltinPacks } from '../packs/builtinLoader';
 import { getQuestionsForModule, resolveActivePacks } from '../packs/packResolver';
 import { questionIdentity } from './packLearningState';
@@ -164,6 +165,10 @@ export class StudyRepository {
   }
   async saveImportedPackWithAssets(pack: LoopDeckPack, assets: ImportedPackAsset[], strategy: PackAssetWriteStrategy): Promise<void> {
     await savePackWithAssets(this.data, validatedPackForStorage(pack), assets, strategy);
+    notifyPackChanges(this.data.identity);
+  }
+  async saveImportedPackFromCloud(pack: LoopDeckPack, assets: ImportedPackAsset[], commit: RemoteCommit): Promise<void> {
+    await savePackWithAssets(this.data, validatedPackForStorage(pack), assets, 'replace', commit);
     notifyPackChanges(this.data.identity);
   }
   async getImportedPacks(): Promise<LoopDeckPack[]> {

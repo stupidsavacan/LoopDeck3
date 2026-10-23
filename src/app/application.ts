@@ -39,6 +39,23 @@ export class StudyApplication {
   private currentHash = '';
   private unsubscribeCatalog?: () => void;
   private catalogRefreshTimer?: number;
+  private catalogUpdatePending = false;
+  private deferredRoute?: AppRoute;
+
+  /** Keep a navigation click from entering study midway through an IDB commit. */
+  async applyCatalogUpdate(work: () => Promise<void>): Promise<boolean> {
+    if (!this.active || this.catalogUpdatePending || !['home', 'graphs'].includes(parseRoute(location.hash).name)) return false;
+    this.catalogUpdatePending = true;
+    try {
+      await work();
+      return true;
+    } finally {
+      this.catalogUpdatePending = false;
+      const next = this.deferredRoute;
+      this.deferredRoute = undefined;
+      if (next) this.navigate(next);
+    }
+  }
 
   private readonly catalogLoader: CatalogLoader;
   private readonly store: StudyRepository;
@@ -96,6 +113,10 @@ export class StudyApplication {
 
   navigate(route: AppRoute): void {
     if (!this.active) return;
+    if (this.catalogUpdatePending) {
+      this.deferredRoute = route;
+      return;
+    }
     const hash = routeHash(route);
     if (location.hash !== hash) history.pushState(null, '', hash);
     this.currentHash = hash;
