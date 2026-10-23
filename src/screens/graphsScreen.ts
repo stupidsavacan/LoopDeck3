@@ -1,12 +1,19 @@
 import type { ScreenContext } from '../app/context';
 import {
   buildAnalyticsOverview,
+  buildDueForecast,
+  buildMasteryGrid,
+  type DueForecastDay,
   type DailyStudyStat,
   type MistakeBreakdownItem,
   type MistakeTrendPoint,
   type ModuleStudyStat
 } from '../core/analyticsEngine';
+import { indexCardsByQuestion, type MasteryLevel } from '../core/mastery';
+import type { ModuleInfo, Question, ReviewCard } from '../core/models';
+import { activeReviewCards } from '../core/todayPlan';
 import { getActiveModules, getActiveQuestions } from '../packs/packResolver';
+import { LAST_MODULE_KEY } from '../storage/libraryState';
 
 import { button, clear, el } from '../ui/dom';
 import { appendIconLabel } from '../ui/icons';
@@ -33,6 +40,127 @@ function renderHeatmap(root: HTMLElement, stats: DailyStudyStat[], hasAttempts: 
     grid.append(cell);
   }
   card.append(grid, el('p', 'hint', '直近28日の回答数です。濃い日ほど多く解いています。'));
+  root.append(card);
+}
+
+const LEVEL_LABELS: Record<MasteryLevel, string> = { solid: '定着', learning: '学習中', weak: '弱い', unseen: '未学習' };
+const FORECAST_DAY = 2;
+
+function forecastLabel(offset: number): string {
+  return offset === 0 ? '今日' : offset === 1 ? '明日' : offset === 2 ? 'あさって' : `${offset}日後`;
+}
+
+function renderDueForecast(root: HTMLElement, forecast: DueForecastDay[], hasCards: boolean, startToday: () => void): void {
+  const card = el('section', 'card graph-card due-forecast');
+  card.append(el('h2', '', '復習の予定'));
+  if (!hasCards) {
+    card.append(el('p', 'empty', '問題を解くと、復習の予定がここに出ます。'));
+    root.append(card);
+    return;
+  }
+  const ahead = forecast[Math.min(FORECAST_DAY, forecast.length - 1)];
+  const today = forecast[0]?.due ?? 0;
+  card.append(
+    el(
+      'p',
+      'due-forecast-lead',
+      ahead.due > today
+        ? `このまま復習しないと、${forecastLabel(FORECAST_DAY)}には ${ahead.due}問 が期限切れになります。`
+        : today > 0
+          ? `今日が期限の復習が ${today}問 あります。`
+          : 'しばらく期限の来る復習はありません。'
+    )
+  );
+  const max = Math.max(1, ...forecast.map((day) => day.due));
+  const bars = el('div', 'due-forecast-bars');
+  for (const [offset, day] of forecast.entries()) {
+    const column = el('div', offset === FORECAST_DAY ? 'due-forecast-day is-focus' : 'due-forecast-day');
+    column.setAttribute('role', 'img');
+    column.setAttribute('aria-label', `${forecastLabel(offset)}: ${day.due}問`);
+    const bar = el('span', 'due-forecast-bar');
+    bar.style.height = `${Math.max(4, Math.round((day.due / max) * 100))}%`;
+    column.append(el('span', 'due-forecast-value', String(day.due)), bar, el('span', 'due-forecast-label', forecastLabel(offset)));
+    bars.append(column);
+  }
+  card.append(bars);
+  if (today > 0) {
+    const start = button('今日のループで復習する', 'btn primary');
+    start.onclick = startToday;
+    card.append(start);
+  }
+  root.append(card);
+}
+
+function renderMasteryMap(
+  root: HTMLElement,
+  modules: ModuleInfo[],
+  questionsById: ReadonlyMap<string, Question>,
+  cards: ReviewCard[]
+): void {
+  const card = el('section', 'card graph-card mastery-map');
+  card.append(el('h2', '', '習熟マップ'));
+  const cardsByQuestion = indexCardsByQuestion(cards);
+  const studied = modules.filter((module) => module.questionIds.some((id) => cardsByQuestion.has(id)));
+  if (!studied.length) {
+    card.append(el('p', 'empty', '問題を解くと、教材ごとの定着ぐあいが1問1マスで出ます。'));
+    root.append(card);
+    return;
+  }
+  let lastModule: string | null = null;
+  try {
+    lastModule = localStorage.getItem(LAST_MODULE_KEY);
+  } catch {
+    lastModule = null;
+  }
+  const field = el('label', 'mastery-select-field');
+  field.htmlFor = 'mastery-module';
+  field.append(el('span', '', '教材'));
+  const select = el('select', 'study-select') as HTMLSelectElement;
+  select.id = 'mastery-module';
+  for (const module of studied) {
+    const option = el('option', '', module.title) as HTMLOptionElement;
+    option.value = module.id;
+    select.append(option);
+  }
+  select.value = studied.some((module) => module.id === lastModule) ? (lastModule as string) : studied[0].id;
+  const body = el('div', 'mastery-body');
+  const legend = el('div', 'mastery-legend');
+  for (const level of ['unseen', 'weak', 'learning', 'solid'] as const) {
+    const item = el('span', 'mastery-legend-item');
+    item.append(el('span', `mastery-swatch level-${level}`), document.createTextNode(LEVEL_LABELS[level]));
+    legend.append(item);
+  }
+
+  function draw(): void {
+    const module = studied.find((item) => item.id === select.value) ?? studied[0];
+    body.replaceChildren(
+      ...buildMasteryGrid(module, questionsById, cardsByQuestion).map((category) => {
+        const total = category.cells.length;
+        const solidShare = total ? Math.round(((category.counts.solid + category.counts.learning * 0.5) / total) * 100) : 0;
+        const row = el('div', 'mastery-row');
+        const head = el('div', 'mastery-row-head');
+        head.append(el('span', 'mastery-row-title', category.category), el('span', 'mastery-row-percent', `${solidShare}%`));
+        const cells = el('div', 'mastery-cells');
+        cells.setAttribute('role', 'img');
+        cells.setAttribute(
+          'aria-label',
+          `${category.category}: ${(['solid', 'learning', 'weak', 'unseen'] as const).map((level) => `${LEVEL_LABELS[level]} ${category.counts[level]}問`).join('、')}`
+        );
+        for (const cell of category.cells) {
+          const mark = el('span', `mastery-cell level-${cell.level}`);
+          mark.title = `${cell.label}（${LEVEL_LABELS[cell.level]}）`;
+          cells.append(mark);
+        }
+        row.append(head, cells);
+        return row;
+      })
+    );
+  }
+  select.onchange = draw;
+  const controls = el('div', 'mastery-controls');
+  controls.append(field, select);
+  card.append(controls, legend, body);
+  draw();
   root.append(card);
 }
 
@@ -83,7 +211,7 @@ function renderTrend(root: HTMLElement, trend: MistakeTrendPoint[]): void {
     bar.setAttribute('aria-label', bar.title);
     bars.append(bar);
   }
-  card.append(bars, el('p', 'hint', '現時点では、復習キューの近似として日別のミス件数を表示しています。'));
+  card.append(bars, el('p', 'hint', '直近14日の、日ごとの不正解の数です。'));
   root.append(card);
 }
 
@@ -119,7 +247,12 @@ export async function renderGraphsScreen(context: ScreenContext): Promise<void> 
   if (!isCurrent()) return;
   const attempts = await studyStore.getAttempts();
   if (!isCurrent()) return;
-  const overview = buildAnalyticsOverview(attempts, getActiveModules(packView), getActiveQuestions(packView));
+  const allCards = await studyStore.getReviewCards();
+  if (!isCurrent()) return;
+  const questions = getActiveQuestions(packView);
+  const questionsById = new Map(questions.map((question) => [question.id, question]));
+  const cards = activeReviewCards(allCards, questionsById);
+  const overview = buildAnalyticsOverview(attempts, getActiveModules(packView), questions);
   clear(root);
 
   const screen = el('main', 'screen graphs-screen');
@@ -148,6 +281,13 @@ export async function renderGraphsScreen(context: ScreenContext): Promise<void> 
 
   const grid = el('section', 'graph-grid');
   renderHeatmap(grid, overview.dailyStudyStats, overview.totalAttempts > 0);
+  renderDueForecast(grid, buildDueForecast(cards), cards.length > 0, context.navigation.today);
+  renderMasteryMap(
+    grid,
+    getActiveModules(packView).filter((module) => module.questionIds.length > 0),
+    questionsById,
+    cards
+  );
   renderModuleStats(grid, overview.moduleStudyStats);
   renderTrend(grid, overview.mistakeTrend);
   renderBreakdown(grid, overview.mistakeBreakdown);
