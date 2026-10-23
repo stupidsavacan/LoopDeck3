@@ -1,0 +1,2 @@
+# The standalone build verifies the generated bundle's exact SHA-256.
+/generated/* text eol=lf
