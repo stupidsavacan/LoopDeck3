@@ -11,14 +11,26 @@ import { type QuestionImageAssetResolver } from '../packs/packAssetResolver';
 import { QuizController, type QuizPhase } from '../core/quizController';
 import type { QuizDataStore } from '../storage/storageTypes';
 import { button, clear, el, toast } from '../ui/dom';
-import { appendIconLabel } from '../ui/icons';
-import { appendQuizResult, renderQuestionImage, renderQuizMeta, renderSessionSummary } from '../ui/inlineQuizView';
+import { appendIconLabel, createUiIcon } from '../ui/icons';
+import {
+  appendQuizResult,
+  markChoiceResults,
+  renderNextActions,
+  renderQuestionImage,
+  renderQuizMeta,
+  renderSessionSummary,
+  type SessionNextSteps
+} from '../ui/inlineQuizView';
 import { renderQuestionVisualReferences } from '../ui/questionVisualReferences';
 
 export interface InlineQuizCallbacks {
   onSessionChange(session: QuizSession): void;
   onSessionCheckpoint?(session: QuizSession): void;
   onComplete(): void;
+  /** Leave mid-session; the checkpoint keeps the session resumable. */
+  onExit?(): void;
+  /** Offered on the completion card; without it the card only returns to the module. */
+  nextSteps?(session: QuizSession): SessionNextSteps;
 }
 export interface InlineQuizOptions {
   store: QuizDataStore;
@@ -54,9 +66,14 @@ export function renderInlineQuiz(
       el('p', '', `${session.queue.length}問の学習が終わりました。`),
       renderSessionSummary(session)
     );
-    const back = button('教材詳細に戻る', 'btn primary');
-    back.onclick = callbacks.onComplete;
-    done.append(back);
+    const steps = callbacks.nextSteps?.(session);
+    if (steps?.actions.length) {
+      done.append(renderNextActions(steps));
+    } else {
+      const back = button('教材詳細に戻る', 'btn primary');
+      back.onclick = callbacks.onComplete;
+      done.append(back);
+    }
     container.append(done);
     return;
   }
@@ -89,6 +106,7 @@ export function renderInlineQuiz(
   const controls = el('div', 'quiz-controls');
   const resultArea = el('div', 'result-area');
   let selectedAnswer: string | string[] = '';
+  const choiceButtons = new Map<HTMLButtonElement, string>();
   let answerAttempt: Attempt | undefined;
   let nextButton: HTMLButtonElement | undefined;
   let composing = false;
@@ -212,6 +230,7 @@ export function renderInlineQuiz(
     idleController?.dispose();
     idleController = undefined;
     lockAnswerControls();
+    markChoiceResults(choiceButtons, activeQuestion, answer, revealed);
     const { result, elapsedMs, nearMiss = false } = attempt;
 
     const wrongExplanation =
@@ -272,6 +291,7 @@ export function renderInlineQuiz(
           selectedAnswer = choice;
           record(choice);
         };
+        choiceButtons.set(choiceButton, choice);
         list.append(choiceButton);
       }
     } else {
@@ -281,6 +301,7 @@ export function renderInlineQuiz(
           selectedAnswer = choice.text;
           record(choice.text, false, choice);
         };
+        choiceButtons.set(choiceButton, choice.text);
         list.append(choiceButton);
       }
     }
@@ -300,6 +321,7 @@ export function renderInlineQuiz(
         selectedAnswer = [...selected];
         resetIdleReveal();
       };
+      choiceButtons.set(choiceButton, choice);
       list.append(choiceButton);
     }
     const submit = button('選択を確定', 'btn primary');
@@ -334,7 +356,19 @@ export function renderInlineQuiz(
   controls.classList.add('quiz-next-controls');
   controls.append(next);
 
-  card.append(renderQuizMeta(session, question), tools, el('h3', 'question-prompt', question.prompt));
+  const head = el('div', 'quiz-head');
+  if (callbacks.onExit) {
+    const exit = button('', 'btn ghost quiz-exit');
+    exit.append(createUiIcon('close', 'quiz-exit-svg'));
+    exit.setAttribute('aria-label', '学習を中断');
+    exit.title = '学習を中断（続きから再開できます）';
+    exit.onclick = () => {
+      if (isCurrentRender()) callbacks.onExit?.();
+    };
+    head.append(exit);
+  }
+  head.append(renderQuizMeta(session, question));
+  card.append(head, tools, el('h3', 'question-prompt', question.prompt));
   if (requestedAnswerFormat === 'choice' && answerMode === 'input') {
     card.append(el('p', 'notice', '安全な選択肢が不足しているため、この問題は入力で回答してください。'));
   }

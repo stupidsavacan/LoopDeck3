@@ -3,7 +3,15 @@ import { encodeStudyCategory } from '../core/studyCategory';
 import { buildQuizAnswerSources } from '../core/reviewPersistence';
 import type { ModuleInfo, StudySettings } from '../core/models';
 import { canAutoReverseQuestion, getModuleStudyQuestionModes, getStudyQuestionModeLabel } from '../core/questionPresentation';
-import { buildRangeOptions, createSession, listQuestionCategories, selectSessionQuestions, type QuizSession } from '../core/sessionEngine';
+import {
+  buildRangeOptions,
+  createSession,
+  filterStudyQuestions,
+  listQuestionCategories,
+  selectSessionQuestions,
+  type QuizSession
+} from '../core/sessionEngine';
+import { summarizeReviewSchedule } from '../core/scheduler';
 import { getModuleById, getQuestionsForModule } from '../packs/packResolver';
 
 import {
@@ -17,6 +25,7 @@ import { defaultStudySettings, runtimeSettings } from '../core/studySettings';
 import { readStudyPreferences, sanitizeStudyPreferences, writeStudyPreferences } from '../storage/studyPreferences';
 import { button, clear, el, toast } from '../ui/dom';
 import { appendIconLabel, createUiIcon, iconNameForModule } from '../ui/icons';
+import type { SessionNextSteps } from '../ui/inlineQuizView';
 import { moduleMeta } from '../ui/modulePresentation';
 import { renderInlineQuiz, disposeInlineQuizzes } from './inlineQuiz';
 import { renderFlashcardSession, disposeFlashcardSessions } from './flashcardSession';
@@ -285,7 +294,13 @@ export async function renderModuleScreen(context: ScreenContext & { moduleId: st
         onComplete: () => {
           clearSession();
           rerender();
-        }
+        },
+        onExit: () => {
+          // Disposing writes the last checkpoint, so the cover shows a resume button.
+          disposeInlineQuizzes(quizMount);
+          rerender();
+        },
+        nextSteps
       },
       { store: studyStore, isCurrent, resolveImageAsset: resolveImage }
     );
@@ -302,6 +317,57 @@ export async function renderModuleScreen(context: ScreenContext & { moduleId: st
   }
 
   start.onclick = () => startSession(settings, 'normal');
+
+  async function tomorrowPreview(): Promise<string | undefined> {
+    const activeIds = new Set(packView.questions.map((question) => question.id));
+    const cards = (await studyStore.getReviewCards()).filter((card) => activeIds.has(card.questionId));
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(12, 0, 0, 0);
+    const due = summarizeReviewSchedule(cards, tomorrow).dueToday;
+    return due > 0 ? `明日の復習予定：${due}問（すべての教材）` : '明日の復習予定はまだありません。';
+  }
+
+  function nextSteps(done: QuizSession): SessionNextSteps {
+    const missedIds = [...new Set(done.attempts.filter((attempt) => attempt.result !== 'correct').map((attempt) => attempt.questionId))];
+    const missed = missedIds.flatMap((id) => questionsById.get(id) ?? []);
+    const seen = new Set(done.queue.map((question) => question.id));
+    // Filter the whole module first so numbered ranges keep their original ordinals.
+    const eligible = filterStudyQuestions(questions, settings, { wrongQuestionIds: wrongIds, bookmarkedQuestionIds: bookmarkIds }).filter(
+      (question) => !seen.has(question.id)
+    );
+    const rest =
+      done.mode === 'normal' ? selectSessionQuestions(eligible, { ...settings, selectedRange: 'all', selectedCategory: 'all', filter: 'all' }) : [];
+    const actions: SessionNextSteps['actions'] = [];
+    if (missed.length) {
+      actions.push({
+        id: 'retry-mistakes',
+        label: `間違えた${missed.length}問だけもう一周`,
+        detail: '答えを見た問題も入ります',
+        primary: true,
+        run: () => mountSession(createSession(module, missed, done.settings, 'review', sessionQuestionPool))
+      });
+    }
+    if (rest.length) {
+      actions.push({
+        id: 'continue',
+        label: `続きの${rest.length}問`,
+        detail: '同じ条件で、今回出なかった問題',
+        primary: !missed.length,
+        run: () => mountSession(createSession(module, rest, runtimeSettings(settings), 'normal', sessionQuestionPool))
+      });
+    }
+    actions.push({
+      id: 'finish',
+      label: '今日はここまで',
+      detail: '教材の画面に戻ります',
+      run: () => {
+        clearSession();
+        rerender();
+      }
+    });
+    return { actions, preview: tomorrowPreview() };
+  }
 
   if (storedSession) {
     const resumeLabel =
