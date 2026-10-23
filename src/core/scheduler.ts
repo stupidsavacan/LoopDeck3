@@ -1,4 +1,4 @@
-import type { AnswerFormat, AnswerResult, ConcreteStudyQuestionMode, ReviewCard, ReviewLog, ReviewRating } from './models';
+import type { AnswerConfidence, AnswerFormat, AnswerResult, ConcreteStudyQuestionMode, ReviewCard, ReviewLog, ReviewRating } from './models';
 import { endOfLocalCalendarDay, startOfLocalCalendarDay } from './calendarDay';
 
 const DEFAULT_EASE = 2.5;
@@ -63,12 +63,19 @@ export function clampEase(ease: number): number {
   return Math.min(MAX_EASE, Math.max(MIN_EASE, ease));
 }
 
-export function inferReviewRating(result: AnswerResult, elapsedMs: number, answerMode: AnswerFormat = 'input'): ReviewRating {
+export function inferReviewRating(
+  result: AnswerResult,
+  elapsedMs: number,
+  answerMode: AnswerFormat = 'input',
+  confidence?: AnswerConfidence
+): ReviewRating {
   if (answerMode === 'flashcard') return result === 'correct' ? 'good' : 'again';
   if (result !== 'correct') return 'again';
+  // A correct guess is not knowledge yet; an unsure correct answer is never "easy".
+  if (confidence === 'guess') return 'hard';
   const [fast, slow] = answerMode === 'choice' ? [4500, 12000] : [7000, 20000];
-  if (elapsedMs <= fast) return 'easy';
   if (elapsedMs >= slow) return 'hard';
+  if (elapsedMs <= fast) return confidence === 'unsure' ? 'good' : 'easy';
   return 'good';
 }
 

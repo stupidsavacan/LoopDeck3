@@ -3507,3 +3507,49 @@ body:has(.cloud-sync-control) .today-hero-top .today-date {
   background: #e3c25b;
   transform: translateX(-50%);
 }
+
+/* Confidence before answering */
+.confidence-picker {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 14px;
+  padding: 12px;
+  border: 1px solid var(--editorial-line);
+  border-radius: 16px;
+  background: var(--editorial-surface);
+}
+
+.confidence-label {
+  color: #4a5263;
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.confidence-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.confidence-option {
+  min-height: 44px;
+  border: 1px solid #d5d9e1;
+  border-radius: 12px;
+  background: #fff;
+  color: var(--editorial-ink);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.confidence-option[aria-pressed='true'] {
+  border-color: var(--editorial-ink);
+  background: var(--editorial-ink);
+  color: #fff;
+}
+
+.confidence-option:disabled {
+  cursor: default;
+  opacity: 0.7;
+}

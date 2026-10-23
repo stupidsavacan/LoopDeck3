@@ -1,7 +1,7 @@
 import { writeDebugLog } from '../debug/debugLog';
 import { judgeInputAnswer, judgeQuestion, normalizeAnswerForQuestion } from '../core/answerJudge';
 import { buildGeneratedChoiceOptions, type GeneratedChoiceOption } from '../core/choiceGenerator';
-import type { Attempt, Question } from '../core/models';
+import type { AnswerConfidence, Attempt, Question } from '../core/models';
 import { createIdleRevealController, type IdleRevealController } from '../core/idleRevealController';
 import { resolveQuizAnswerMode } from '../core/quizAnswer';
 import { createQuizBookmarkButton } from '../ui/quizBookmark';
@@ -48,6 +48,44 @@ export function disposeInlineQuizzes(root: HTMLElement): void {
     renderCleanupByContainer.get(container)?.();
   }
 }
+const CONFIDENCE_OPTIONS: Array<[AnswerConfidence, string]> = [
+  ['sure', '自信あり'],
+  ['unsure', 'うろ覚え'],
+  ['guess', 'わからない']
+];
+
+/** Asked before answering; うろ覚え is preselected so it never blocks the answer. */
+function createConfidencePicker(onChange: () => void): { element: HTMLElement; value(): AnswerConfidence; lock(): void } {
+  let selected: AnswerConfidence = 'unsure';
+  const element = el('div', 'confidence-picker');
+  element.setAttribute('role', 'group');
+  element.setAttribute('aria-label', '答える前に、どれくらい自信がありますか');
+  element.append(el('span', 'confidence-label', 'どれくらい自信がある？'));
+  const options = el('div', 'confidence-options');
+  const buttons = CONFIDENCE_OPTIONS.map(([value, label]) => {
+    const option = button(label, 'confidence-option');
+    option.onclick = () => {
+      selected = value;
+      sync();
+      onChange();
+    };
+    return [value, option] as const;
+  });
+  const sync = () => {
+    for (const [value, option] of buttons) option.setAttribute('aria-pressed', String(value === selected));
+  };
+  sync();
+  options.append(...buttons.map(([, option]) => option));
+  element.append(options);
+  return {
+    element,
+    value: () => selected,
+    lock: () => {
+      for (const [, option] of buttons) option.disabled = true;
+    }
+  };
+}
+
 export function renderInlineQuiz(
   container: HTMLElement,
   session: QuizSession,
@@ -240,12 +278,13 @@ export function renderInlineQuiz(
           )
         : undefined;
     const confusedWith = feedback?.matchKind === 'lookup' || feedback?.matchKind === 'exact_origin' ? feedback.matchedQuestionId : undefined;
-    const attempt = controller.answer(answer, revealed, confusedWith);
+    const attempt = controller.answer(answer, revealed, { confusedWithQuestionId: confusedWith, confidence: confidencePicker?.value() });
     if (!attempt) return;
     answerAttempt = attempt;
     idleController?.dispose();
     idleController = undefined;
     lockAnswerControls();
+    confidencePicker?.lock();
     markChoiceResults(choiceButtons, activeQuestion, answer, revealed);
     const { result, elapsedMs, nearMiss = false } = attempt;
     const wrongExplanation = result === 'wrong' ? feedback : undefined;
@@ -272,6 +311,7 @@ export function renderInlineQuiz(
   }
 
   const bookmark = createQuizBookmarkButton(question.id, isCurrentRender, studyStore);
+  const confidencePicker = session.settings.askConfidence ? createConfidencePicker(resetIdleReveal) : undefined;
 
   if (session.settings.showExample && question.example) answerArea.append(el('p', 'example-line', question.example));
   if (answerMode === 'input') {
@@ -399,6 +439,7 @@ export function renderInlineQuiz(
   if (image) card.append(image);
   const visualReferences = renderQuestionVisualReferences(question);
   if (visualReferences) card.append(visualReferences);
+  if (confidencePicker) card.append(confidencePicker.element);
   card.append(answerArea, controls, resultArea);
   container.append(card);
   window.requestAnimationFrame(() => {

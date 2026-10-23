@@ -76,7 +76,7 @@ function validSettings(value: unknown): value is StudySettings {
     !(typeof settings.questionLimit === 'number' && Number.isSafeInteger(settings.questionLimit) && settings.questionLimit > 0)
   )
     return false;
-  for (const key of ['autoRevealAfterIdle', 'showExample', 'showNumber', 'showCategory']) {
+  for (const key of ['autoRevealAfterIdle', 'showExample', 'showNumber', 'showCategory', 'askConfidence']) {
     if (settings[key] !== undefined && typeof settings[key] !== 'boolean') return false;
   }
   for (const key of ['selectedRange', 'selectedCategory']) {

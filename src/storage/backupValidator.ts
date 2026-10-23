@@ -120,6 +120,8 @@ export function parseAttempt(value: unknown, index: number): Attempt {
     fail(`${path}.questionMode is unsupported.`);
   if (value.confusedWithQuestionId !== undefined && !nonEmptyString(value.confusedWithQuestionId))
     fail(`${path}.confusedWithQuestionId must be a non-empty string.`);
+  if (value.confidence !== undefined && value.confidence !== 'sure' && value.confidence !== 'unsure' && value.confidence !== 'guess')
+    fail(`${path}.confidence is unsupported.`);
 
   return {
     attemptId: value.attemptId,
@@ -137,7 +139,8 @@ export function parseAttempt(value: unknown, index: number): Attempt {
     ...(value.priorityDelta !== undefined ? { priorityDelta: value.priorityDelta } : {}),
     ...(value.answerMode !== undefined ? { answerMode: value.answerMode as AnswerFormat } : {}),
     ...(value.questionMode !== undefined ? { questionMode: value.questionMode as ConcreteStudyQuestionMode } : {}),
-    ...(value.confusedWithQuestionId !== undefined ? { confusedWithQuestionId: value.confusedWithQuestionId } : {})
+    ...(value.confusedWithQuestionId !== undefined ? { confusedWithQuestionId: value.confusedWithQuestionId } : {}),
+    ...(value.confidence !== undefined ? { confidence: value.confidence as Attempt['confidence'] } : {})
   };
 }
 
