@@ -191,3 +191,16 @@ export function renderSessionSummary(session: QuizSession, now = Date.now()): HT
   summary.append(stats);
   return summary;
 }
+
+export function renderSessionMistakes(questions: Question[]): HTMLElement {
+  const section = el('section', 'session-mistakes');
+  section.append(el('h4', '', `今回のミス ${questions.length}問`));
+  const list = el('ol', 'session-mistake-list');
+  for (const question of questions) {
+    const item = el('li', 'session-mistake');
+    item.append(el('span', 'session-mistake-prompt', question.prompt), el('strong', '', answerToText(getCorrectAnswer(question))));
+    list.append(item);
+  }
+  section.append(list);
+  return section;
+}

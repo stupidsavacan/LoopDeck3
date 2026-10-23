@@ -64,7 +64,9 @@
 }
 
 @keyframes loopdeck-spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .quiz-meta-wrap {
@@ -113,6 +115,44 @@
 .summary-stat strong {
   color: var(--primary-dark);
   font-size: 1.08rem;
+}
+
+.session-mistakes {
+  margin: 0 0 14px;
+}
+
+.session-mistakes h4 {
+  margin: 0 0 8px;
+  font-size: 0.95rem;
+}
+
+.session-mistake-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.session-mistake {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card-soft);
+  overflow-wrap: anywhere;
+}
+
+.session-mistake-prompt {
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.session-done-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .visually-hidden {

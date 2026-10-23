@@ -5,14 +5,20 @@ import type { Attempt, Question } from '../core/models';
 import { createIdleRevealController, type IdleRevealController } from '../core/idleRevealController';
 import { resolveQuizAnswerMode } from '../core/quizAnswer';
 import { createQuizBookmarkButton } from '../ui/quizBookmark';
-import { currentQuestion, isSessionComplete, type QuizSession } from '../core/sessionEngine';
+import {
+  currentQuestion,
+  isSessionComplete,
+  restartWithSessionMistakes,
+  sessionMistakeQuestions,
+  type QuizSession
+} from '../core/sessionEngine';
 import { buildWrongAnswerFeedback } from '../core/wrongAnswerExplanation';
 import { type QuestionImageAssetResolver } from '../packs/packAssetResolver';
 import { QuizController, type QuizPhase } from '../core/quizController';
 import type { QuizDataStore } from '../storage/storageTypes';
 import { button, clear, el, toast } from '../ui/dom';
 import { appendIconLabel } from '../ui/icons';
-import { appendQuizResult, renderQuestionImage, renderQuizMeta, renderSessionSummary } from '../ui/inlineQuizView';
+import { appendQuizResult, renderQuestionImage, renderQuizMeta, renderSessionMistakes, renderSessionSummary } from '../ui/inlineQuizView';
 import { renderQuestionVisualReferences } from '../ui/questionVisualReferences';
 
 export interface InlineQuizCallbacks {
@@ -54,9 +60,21 @@ export function renderInlineQuiz(
       el('p', '', `${session.queue.length}問の学習が終わりました。`),
       renderSessionSummary(session)
     );
-    const back = button('教材詳細に戻る', 'btn primary');
+    const isCurrentDone = () => renderTokenByContainer.get(container) === renderToken && (options.isCurrent?.() ?? true);
+    const mistakes = sessionMistakeQuestions(session);
+    const actions = el('div', 'session-done-actions');
+    if (mistakes.length) {
+      done.append(renderSessionMistakes(mistakes));
+      const retry = button(`ミスだけもう一度 (${mistakes.length}問)`, 'btn primary');
+      retry.onclick = () => {
+        if (isCurrentDone()) callbacks.onSessionChange(restartWithSessionMistakes(session));
+      };
+      actions.append(retry);
+    }
+    const back = button('教材詳細に戻る', mistakes.length ? 'btn' : 'btn primary');
     back.onclick = callbacks.onComplete;
-    done.append(back);
+    actions.append(back);
+    done.append(actions);
     container.append(done);
     return;
   }

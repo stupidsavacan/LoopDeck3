@@ -176,3 +176,30 @@ export function advanceSession(session: QuizSession, attempt?: Attempt, sessionE
 export function isSessionComplete(session: QuizSession): boolean {
   return session.index >= session.queue.length;
 }
+/** Start a new round over the same concrete queue, optionally keeping only questions with a matching attempt. */
+export function restartSessionRound(session: QuizSession, keep?: (attempt: Attempt) => boolean, now = Date.now()): QuizSession {
+  const key = (id: string, mode = 'as_stored') => JSON.stringify([id, mode]);
+  const kept = keep ? new Set(session.attempts.filter(keep).map((attempt) => key(attempt.questionId, attempt.questionMode))) : undefined;
+  const queue = kept ? session.queue.filter((question) => kept.has(key(question.id, question.activeStudyMode))) : [...session.queue];
+  return {
+    ...session,
+    queue,
+    index: 0,
+    attempts: [],
+    startedAt: now,
+    sessionElapsedMs: 0,
+    sessionSegmentStartedAt: now,
+    currentStartedAt: now,
+    currentElapsedMs: 0,
+    currentHiddenTimeExcludedMs: 0
+  };
+}
+const isSessionMistake = (attempt: Attempt): boolean => attempt.result !== 'correct';
+/** Questions answered wrong or revealed in this round, in queue order. */
+export function sessionMistakeQuestions(session: QuizSession): Question[] {
+  return restartSessionRound(session, isSessionMistake).queue;
+}
+/** Start a new round with only the questions answered wrong or revealed in this round. */
+export function restartWithSessionMistakes(session: QuizSession, now = Date.now()): QuizSession {
+  return restartSessionRound(session, isSessionMistake, now);
+}
