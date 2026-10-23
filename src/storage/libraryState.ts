@@ -6,6 +6,9 @@ export const LAST_MODULE_KEY = 'loopdeck3.library.last-module';
 /** Set before opening a module from the resume banner; the module screen resumes once and clears it. */
 export const AUTO_RESUME_KEY = 'loopdeck3.library.autoresume';
 
+/** How the home shelf shows modules: 'cards' (default) or 'shelf' (book spines). */
+export const LIBRARY_VIEW_KEY = 'loopdeck3.library.view';
+
 /** Monday (YYYY-MM-DD) of the last week whose recap the home screen already offered. */
 export const WEEKLY_SEEN_KEY = 'loopdeck3.weekly.seen';
 
