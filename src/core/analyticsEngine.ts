@@ -1,5 +1,6 @@
-import { localCalendarDayKey, recentLocalCalendarDayKeys } from './calendarDay';
-import type { Attempt, ModuleInfo, Question } from './models';
+import { endOfLocalCalendarDay, localCalendarDayKey, recentLocalCalendarDayKeys } from './calendarDay';
+import { questionMasteryLevel, type MasteryLevel } from './mastery';
+import type { Attempt, ModuleInfo, Question, ReviewCard } from './models';
 import { analyzeProblems, answerModeFor, timingBand, type ReviewAttemptAggregation } from './reviewEngine';
 
 export interface DailyStudyStat {
@@ -81,6 +82,58 @@ export function buildDailyStudyStats(attempts: Attempt[], days = 28, now = new D
     ...item,
     accuracy: item.attempts ? item.correct / item.attempts : 0
   }));
+}
+
+export interface MasteryCell {
+  questionId: string;
+  label: string;
+  level: MasteryLevel;
+}
+
+export interface MasteryCategory {
+  category: string;
+  cells: MasteryCell[];
+  counts: Record<MasteryLevel, number>;
+}
+
+const UNCATEGORIZED = 'その他';
+
+/** One cell per question of a module, grouped by category in the module's own order. */
+export function buildMasteryGrid(
+  module: Pick<ModuleInfo, 'questionIds'>,
+  questionsById: ReadonlyMap<string, Question>,
+  cardsByQuestion: ReadonlyMap<string, ReviewCard[]>
+): MasteryCategory[] {
+  const byCategory = new Map<string, MasteryCategory>();
+  for (const questionId of new Set(module.questionIds)) {
+    const question = questionsById.get(questionId);
+    if (!question) continue;
+    const category = question.category?.trim() || UNCATEGORIZED;
+    const entry = byCategory.get(category) ?? { category, cells: [], counts: { unseen: 0, weak: 0, learning: 0, solid: 0 } };
+    const level = questionMasteryLevel(cardsByQuestion.get(questionId));
+    entry.cells.push({ questionId, label: question.prompt, level });
+    entry.counts[level] += 1;
+    byCategory.set(category, entry);
+  }
+  return [...byCategory.values()];
+}
+
+export interface DueForecastDay {
+  date: string;
+  /** Cards that will be due by the end of this day if nothing is reviewed until then. */
+  due: number;
+}
+
+export function buildDueForecast(cards: readonly ReviewCard[], days = 7, now = new Date()): DueForecastDay[] {
+  const dueTimes = cards
+    .filter((card) => !card.suspended && card.state !== 'suspended' && card.dueAt)
+    .map((card) => Date.parse(card.dueAt ?? ''))
+    .filter((time) => Number.isFinite(time));
+  return Array.from({ length: Math.max(1, days) }, (_, offset) => {
+    const day = new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset);
+    const end = endOfLocalCalendarDay(day);
+    return { date: localCalendarDayKey(day), due: dueTimes.filter((time) => time <= end).length };
+  });
 }
 
 /** Consecutive study days ending today, or yesterday when today has no answers yet. */

@@ -3053,3 +3053,146 @@ body:has(.cloud-sync-control) .today-hero-top .today-date {
 .rival-back {
   min-height: 48px !important;
 }
+
+/* Analytics: due forecast and mastery map */
+.due-forecast-lead {
+  margin: 0 0 12px;
+  font-size: 0.95rem;
+  font-weight: 850;
+  line-height: 1.6;
+}
+
+.due-forecast-bars {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+  height: 150px;
+  margin-bottom: 14px;
+}
+
+.due-forecast-day {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  justify-items: center;
+  align-items: end;
+  gap: 4px;
+  min-width: 0;
+}
+
+.due-forecast-value {
+  font-size: 0.72rem;
+  font-weight: 850;
+  font-variant-numeric: tabular-nums;
+}
+
+.due-forecast-bar {
+  width: 100%;
+  max-width: 34px;
+  align-self: end;
+  border-radius: 8px 8px 3px 3px;
+  background: #c6cfe4;
+}
+
+.due-forecast-day.is-focus .due-forecast-bar {
+  background: var(--editorial-orange);
+}
+
+.due-forecast-label {
+  color: #4a5263;
+  font-size: 0.66rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.mastery-controls {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.mastery-select-field {
+  font-size: 0.82rem;
+  font-weight: 850;
+}
+
+.mastery-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 14px;
+  color: #4a5263;
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+
+.mastery-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.mastery-swatch,
+.mastery-cell {
+  display: block;
+  border-radius: 3px;
+}
+
+.mastery-swatch {
+  width: 12px;
+  height: 12px;
+}
+
+.mastery-body {
+  display: grid;
+  gap: 14px;
+}
+
+.mastery-row {
+  display: grid;
+  gap: 6px;
+}
+
+.mastery-row-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 0.8rem;
+  font-weight: 850;
+}
+
+.mastery-row-title {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.mastery-row-percent {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.mastery-cells {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(12px, 1fr));
+  gap: 3px;
+}
+
+.mastery-cell {
+  aspect-ratio: 1;
+}
+
+/* Lightness steps keep the four levels apart without relying on hue. */
+.level-unseen {
+  background: #e2e5eb;
+}
+
+.level-weak {
+  background: #e8590c;
+}
+
+.level-learning {
+  background: #8fa6ff;
+}
+
+.level-solid {
+  background: #1f3fd1;
+}
