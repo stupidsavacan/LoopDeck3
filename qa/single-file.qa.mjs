@@ -168,7 +168,7 @@ test('combined text image and visual references fit phone and desktop screens', 
     await page.getByRole('button', { name: '次へ', exact: true }).click();
   }
   await info.attach('combined-layout-measurements', { body: JSON.stringify(measurements, null, 2), contentType: 'application/json' });
-  await page.getByRole('button', { name: '教材詳細に戻る', exact: true }).click();
+  await page.getByRole('button', { name: /^今日はここまで/ }).click();
   // Returning reloads the module asynchronously; do not toggle the departing screen's details.
   await expect(page.locator('.quiz-mount .quiz-card.done')).toHaveCount(0);
   await page.locator('.v2-customize > summary').click();
@@ -439,7 +439,7 @@ test('images, all question types, resize, session persistence and double submit'
     await page.getByRole('button', { name: '次へ', exact: true }).click();
     if (i === 0) { await page.reload(); await page.getByRole('button', { name: /再開/ }).click(); }
   }
-  await expect(page.getByRole('button', { name: '教材詳細に戻る' })).toBeVisible();
+  await expect(page.getByRole('button', { name: /^今日はここまで/ })).toBeVisible();
   const count = await page.evaluate(() => new Promise(resolve => { const r = indexedDB.open('loopdeck3-learning'); r.onsuccess = () => { const studyStore = r.result; const q = studyStore.transaction('attempts').objectStore('attempts').count(); q.onsuccess = () => { resolve(q.result); studyStore.close(); }; }; }));
   expect(count).toBe(12);
 });

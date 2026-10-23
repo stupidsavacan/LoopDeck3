@@ -1,5 +1,6 @@
-import { getCorrectAnswer } from '../core/answerJudge';
+import { getCorrectAnswer, judgeInputAnswer, normalizeAnswer } from '../core/answerJudge';
 import type { Attempt, Question } from '../core/models';
+import { getPresentedStudyPair, type StudyPair } from '../core/questionPresentation';
 import { elapsedForSession, type QuizSession } from '../core/sessionEngine';
 import type { WrongAnswerExplanation } from '../core/wrongAnswerExplanation';
 import { isSafeImageAssetRef, isSafeImageDataUrl } from '../packs/assetSafety';
@@ -50,11 +51,61 @@ function pairText(explanation: WrongAnswerExplanation): string | undefined {
   return `${front.label}: ${front.text} / ${back.label}: ${back.text}${aliasNote}${roleNote}`;
 }
 
-function appendWrongAnswerExplanation(container: HTMLElement, explanation: WrongAnswerExplanation | undefined): void {
+function matchedSideOf(explanation: WrongAnswerExplanation): 'front' | 'back' {
+  return explanation.matchRole === 'front' || explanation.matchRole === 'front_alias' ? 'front' : 'back';
+}
+
+/** The table shows the details, so one plain sentence says where the answer came from. */
+function confusionNote(explanation: WrongAnswerExplanation, pair: StudyPair): string {
+  const alias =
+    explanation.matchRole === 'acceptable_answer' ||
+    explanation.matchRole === 'accepted_answer' ||
+    explanation.matchRole === 'front_alias' ||
+    explanation.matchRole === 'back_alias';
+  const label = pair[matchedSideOf(explanation)].label;
+  return `「${explanation.value}」は、右の問題の「${label}」${alias ? 'の別の言い方' : ''}です。`;
+}
+
+function confusionCell(heading: string, pair: StudyPair, matchedSide?: 'front' | 'back'): HTMLElement {
+  const cell = el('div', 'confusion-column');
+  cell.append(el('span', 'confusion-heading', heading));
+  for (const side of ['front', 'back'] as const) {
+    const row = el('div', side === matchedSide ? 'confusion-side is-match' : 'confusion-side');
+    row.append(el('span', 'confusion-label', pair[side].label), el('strong', 'confusion-text', pair[side].text));
+    cell.append(row);
+  }
+  return cell;
+}
+
+/** Side-by-side view of the current question and the question the learner's answer belongs to. */
+export function renderConfusionTable(current: Question, explanation: WrongAnswerExplanation): HTMLElement | undefined {
+  if ((explanation.matchKind !== 'lookup' && explanation.matchKind !== 'exact_origin') || !explanation.pair) return undefined;
+  const matchedSide = matchedSideOf(explanation);
+  const table = el('div', 'confusion-table');
+  table.setAttribute('role', 'group');
+  table.setAttribute('aria-label', '問題の比較');
+  table.append(
+    confusionCell('この問題', getPresentedStudyPair(current)),
+    confusionCell(`「${explanation.value}」が答えの問題`, explanation.pair, matchedSide)
+  );
+  return table;
+}
+
+function appendWrongAnswerExplanation(container: HTMLElement, question: Question, explanation: WrongAnswerExplanation | undefined): void {
   if (!explanation) return;
   const label = wrongAnswerLabel(explanation.source);
   if (explanation.matchKind === 'not_found' || !explanation.found) {
     appendExplanation(container, 'wrong-answer-explanation', label, wrongAnswerFallback(explanation.source));
+    return;
+  }
+
+  const table = renderConfusionTable(question, explanation);
+  if (table && explanation.pair) {
+    const block = el('div', 'explanation wrong-answer-explanation');
+    const intro = el('p');
+    intro.append(el('strong', '', `${label}：`), document.createTextNode(confusionNote(explanation, explanation.pair)));
+    block.append(intro, table);
+    container.append(block);
     return;
   }
 
@@ -75,9 +126,6 @@ function appendWrongAnswerExplanation(container: HTMLElement, explanation: Wrong
 
   const matched = explanation.matchedAnswer ?? explanation.value;
   appendExplanation(container, 'wrong-answer-explanation', label, pairText(explanation) ?? matched);
-  if (explanation.explanation) {
-    appendExplanation(container, 'wrong-answer-supplement', '\u88dc\u8db3', explanation.explanation);
-  }
 }
 
 export function appendQuizResult(
@@ -96,8 +144,123 @@ export function appendQuizResult(
   );
   if (nearMiss) resultBox.append(el('span', 'near-miss-note', 'かなり近い答えです。復習優先度は軽めに記録しました。'));
   container.append(resultBox);
-  if (question.explanation) appendExplanation(container, 'correct-answer-explanation', '正解の解説', question.explanation);
-  if (result === 'wrong') appendWrongAnswerExplanation(container, wrongExplanation);
+  appendResultTabs(container, resultPanels(question, result, wrongExplanation));
+}
+
+interface ResultPanel {
+  id: 'correct' | 'picked' | 'more';
+  label: string;
+  fill(panel: HTMLElement): void;
+}
+
+function resultPanels(question: Question, result: Attempt['result'], wrongExplanation?: WrongAnswerExplanation): ResultPanel[] {
+  const panels: ResultPanel[] = [];
+  const correctText = question.explanation;
+  if (correctText) {
+    panels.push({
+      id: 'correct',
+      label: '正解の解説',
+      fill: (panel) => appendExplanation(panel, 'correct-answer-explanation', '正解の解説', correctText)
+    });
+  }
+  if (result !== 'wrong' || !wrongExplanation) return panels;
+  panels.push({
+    id: 'picked',
+    label: wrongExplanation.source === 'choice' ? '選んだ答え' : '入力した答え',
+    fill: (panel) => appendWrongAnswerExplanation(panel, question, wrongExplanation)
+  });
+  const supplement = wrongExplanation.found && wrongExplanation.matchKind !== 'ambiguous' ? wrongExplanation.explanation : undefined;
+  if (supplement) {
+    panels.push({
+      id: 'more',
+      label: '補足',
+      fill: (panel) => appendExplanation(panel, 'wrong-answer-supplement', '補足', supplement)
+    });
+  }
+  return panels;
+}
+
+let resultTabSequence = 0;
+
+/** Several explanations become tabs; the learner's own answer opens first after a miss. */
+function appendResultTabs(container: HTMLElement, panels: ResultPanel[]): void {
+  if (panels.length <= 1) {
+    panels[0]?.fill(container);
+    return;
+  }
+  const prefix = `result-tab-${++resultTabSequence}`;
+  const initial = Math.max(
+    0,
+    panels.findIndex((panel) => panel.id === 'picked')
+  );
+  const tabs = el('div', 'result-tabs');
+  const list = el('div', 'result-tab-list');
+  list.setAttribute('role', 'tablist');
+  list.setAttribute('aria-label', '解説');
+  const buttons: HTMLButtonElement[] = [];
+  const bodies: HTMLElement[] = [];
+
+  const select = (index: number, focus = false) => {
+    buttons.forEach((tab, tabIndex) => {
+      const selected = tabIndex === index;
+      tab.setAttribute('aria-selected', String(selected));
+      tab.tabIndex = selected ? 0 : -1;
+      bodies[tabIndex].hidden = !selected;
+    });
+    if (focus) buttons[index].focus();
+  };
+
+  panels.forEach((panel, index) => {
+    const tab = el('button', 'result-tab', panel.label) as HTMLButtonElement;
+    tab.type = 'button';
+    tab.id = `${prefix}-${panel.id}`;
+    tab.dataset.panel = panel.id;
+    tab.setAttribute('role', 'tab');
+    tab.setAttribute('aria-controls', `${tab.id}-panel`);
+    tab.onclick = () => select(index);
+    tab.onkeydown = (event) => {
+      if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
+      event.preventDefault();
+      const step = event.key === 'ArrowRight' ? 1 : -1;
+      select((index + step + panels.length) % panels.length, true);
+    };
+    const body = el('div', 'result-tab-panel');
+    body.id = `${tab.id}-panel`;
+    body.dataset.panel = panel.id;
+    body.setAttribute('role', 'tabpanel');
+    body.setAttribute('aria-labelledby', tab.id);
+    panel.fill(body);
+    buttons.push(tab);
+    bodies.push(body);
+    list.append(tab);
+  });
+  tabs.append(list, ...bodies);
+  container.append(tabs);
+  select(initial);
+}
+
+function isCorrectChoice(question: Question, choice: string): boolean {
+  if (question.type === 'multi_select')
+    return question.correctChoices.some((answer) => normalizeAnswer(answer) === normalizeAnswer(choice));
+  return judgeInputAnswer(question, choice);
+}
+
+/** After answering, show which choice was right and which one the learner picked. */
+export function markChoiceResults(
+  buttons: ReadonlyMap<HTMLButtonElement, string>,
+  question: Question,
+  answer: string | string[],
+  revealed: boolean
+): void {
+  const picked = new Set(revealed ? [] : Array.isArray(answer) ? answer : [answer]);
+  for (const [choiceButton, choice] of buttons) {
+    const correct = isCorrectChoice(question, choice);
+    const chosen = picked.has(choice);
+    if (!correct && !chosen) continue;
+    choiceButton.classList.add(correct ? 'is-correct' : 'is-wrong-pick');
+    if (chosen) choiceButton.classList.add('is-picked');
+    choiceButton.append(el('span', 'choice-mark', correct ? (chosen ? '正解・あなたの答え' : '正解') : 'あなたの答え'));
+  }
 }
 
 function fallback(message: string): HTMLElement {
@@ -159,6 +322,16 @@ export function renderQuizMeta(session: QuizSession, question: Question): HTMLEl
   return wrap;
 }
 
+function summaryGrid(items: Array<[string, string]>, className = 'session-summary-grid'): HTMLElement {
+  const grid = el('div', className);
+  for (const [label, value] of items) {
+    const item = el('div', 'summary-stat');
+    item.append(el('span', '', label), el('strong', '', value));
+    grid.append(item);
+  }
+  return grid;
+}
+
 export function renderSessionSummary(session: QuizSession, now = Date.now()): HTMLElement {
   const attempts = session.attempts;
   const correct = attempts.filter((attempt) => attempt.result === 'correct').length;
@@ -171,23 +344,73 @@ export function renderSessionSummary(session: QuizSession, now = Date.now()): HT
   const average = answered > 0 ? attempts.reduce((sum, attempt) => sum + attempt.elapsedMs, 0) / answered : 0;
 
   const summary = el('div', 'session-summary');
-  const stats = el('div', 'session-summary-grid');
-  const items: Array<[string, string]> = [
-    ['学習問題数', `${session.queue.length}問`],
-    ['回答記録', `${answered}件`],
-    ['正答率', `${accuracy}%`],
-    ['正解', `${correct}問`],
-    ['ミス', `${wrong}問`],
-    ['答え表示', `${revealed}問`],
-    ['ニアミス', `${nearMiss}問`],
-    ['所要時間', formatDuration(elapsed)],
-    ['平均回答時間', answered > 0 ? `${Math.round(average / 100) / 10}秒 / 問` : '記録なし']
-  ];
-  for (const [label, value] of items) {
-    const item = el('div', 'summary-stat');
-    item.append(el('span', '', label), el('strong', '', value));
-    stats.append(item);
-  }
-  summary.append(stats);
+  summary.append(
+    summaryGrid(
+      [
+        ['正解', `${correct}問`],
+        ['ミス', `${wrong}問`],
+        ['所要時間', formatDuration(elapsed)]
+      ],
+      'session-summary-grid session-summary-main'
+    )
+  );
+  const more = el('details', 'session-summary-more');
+  more.append(
+    el('summary', '', '詳しい記録'),
+    summaryGrid([
+      ['正答率', `${accuracy}%`],
+      ['答え表示', `${revealed}問`],
+      ['ニアミス', `${nearMiss}問`],
+      ['学習問題数', `${session.queue.length}問`],
+      ['回答記録', `${answered}件`],
+      ['平均回答時間', answered > 0 ? `${Math.round(average / 100) / 10}秒 / 問` : '記録なし']
+    ])
+  );
+  summary.append(more);
   return summary;
+}
+
+export interface SessionNextAction {
+  id: 'retry-mistakes' | 'continue' | 'finish';
+  label: string;
+  detail?: string;
+  primary?: boolean;
+  run(): void;
+}
+
+export interface SessionNextSteps {
+  actions: SessionNextAction[];
+  /** One line about tomorrow's reviews; resolves after the summary is already on screen. */
+  preview?: Promise<string | undefined>;
+}
+
+/** The end of a session offers what to do next instead of only a way back. */
+export function renderNextActions(steps: SessionNextSteps): HTMLElement {
+  const section = el('section', 'next-actions');
+  section.setAttribute('aria-label', '次にやること');
+  section.append(el('h4', 'next-actions-title', '次にやること'));
+  const list = el('div', 'next-actions-list');
+  for (const action of steps.actions) {
+    const item = el('button', action.primary ? 'next-action primary' : 'next-action') as HTMLButtonElement;
+    item.type = 'button';
+    item.dataset.action = action.id;
+    item.append(el('strong', 'next-action-label', action.label));
+    if (action.detail) item.append(el('span', 'next-action-detail', action.detail));
+    item.onclick = () => action.run();
+    list.append(item);
+  }
+  section.append(list);
+  if (steps.preview) {
+    const preview = el('p', 'next-preview');
+    preview.hidden = true;
+    section.append(preview);
+    void steps.preview
+      .then((text) => {
+        if (!text) return;
+        preview.textContent = text;
+        preview.hidden = false;
+      })
+      .catch(() => undefined);
+  }
+  return section;
 }

@@ -66,11 +66,13 @@ describe('renderInlineQuiz wrong answer feedback', () => {
 
     const feedback = container.querySelector('.wrong-answer-explanation')?.textContent ?? '';
     expect(feedback).toContain('\u9078\u3093\u3060\u7b54\u3048\u306b\u3064\u3044\u3066');
-    expect(feedback).toContain('\u554f\u984c:');
-    expect(feedback).toContain('\u5149\u5408\u6210');
-    expect(feedback).toContain('\u7b54\u3048:');
-    expect(feedback).toContain(chloroplast);
-    expect(feedback).toContain('\u8907\u6570\u306e\u767b\u9332\u6b04\u306b\u4e00\u81f4');
+    const columns = [...container.querySelectorAll('.confusion-table .confusion-column')].map((column) => column.textContent ?? '');
+    expect(columns).toHaveLength(2);
+    expect(columns[0]).toContain(mitochondria);
+    expect(columns[1]).toContain('\u5149\u5408\u6210');
+    expect(columns[1]).toContain(chloroplast);
+    expect(container.querySelector('.confusion-column + .confusion-column .is-match')?.textContent).toContain(chloroplast);
+    expect(feedback).toContain('右の問題の「答え」');
     expect(container.querySelector('.wrong-answer-supplement')?.textContent).toContain(chloroplastExplanation);
     expect(feedback).not.toContain('\u89e3\u8aac\u306f\u672a\u767b\u9332');
   });
@@ -153,8 +155,9 @@ describe('renderInlineQuiz wrong answer feedback', () => {
       const feedback = container.querySelector('.wrong-answer-explanation')?.textContent ?? '';
       expect(feedback).toContain('pollen-second');
       expect(feedback).not.toContain('pollen-first');
-      expect(feedback).toContain('\u82f1\u8a9e:');
-      expect(feedback).toContain('\u65e5\u672c\u8a9e:');
+      const labels = [...container.querySelectorAll('.confusion-label')].map((label) => label.textContent);
+      expect(labels).toContain('\u82f1\u8a9e');
+      expect(labels).toContain('\u65e5\u672c\u8a9e');
     } finally {
       random.mockRestore();
     }

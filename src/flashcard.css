@@ -132,6 +132,21 @@
   padding: 34px 0 16px;
   touch-action: pan-y;
 }
+/* Swipe direction tint; --lean-* are set from 0 to 1 while dragging or judging. */
+.flashcard-stage::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 28px;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    rgba(233, 80, 97, calc(var(--lean-again, 0) * 0.14)),
+    rgba(233, 80, 97, 0) 45%,
+    rgba(59, 105, 0, 0) 55%,
+    rgba(59, 105, 0, calc(var(--lean-known, 0) * 0.14))
+  );
+}
 .flashcard-stack {
   position: relative;
   width: min(640px, 100%);

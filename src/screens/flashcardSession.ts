@@ -155,6 +155,7 @@ export function renderFlashcardSession(
         exitFinished = false;
         wrap.style.opacity = '1';
         wrap.style.transform = 'none';
+        setLean(0);
         wrap.style.transition = 'transform 180ms cubic-bezier(.2,.8,.2,1), opacity 180ms ease';
         clear(status);
         status.append(el('p', 'issue error', '判定を保存できませんでした。再試行してください。'));
@@ -187,11 +188,17 @@ export function renderFlashcardSession(
       if (controller.phase === 'saved') controller.advance();
     }, 270);
   }
+  /** Tints the stage toward the side the card is heading: -1 = again, 1 = known. */
+  function setLean(value: number): void {
+    stage.style.setProperty('--lean-known', String(Math.max(0, value)));
+    stage.style.setProperty('--lean-again', String(Math.max(0, -value)));
+  }
   function judge(isKnown: boolean): void {
     if (locked || !isCurrent() || !controller.canAnswer) return;
     if (!controller.gradeFlashcard(isKnown)) return;
     locked = true;
     judgmentKnown = isKnown;
+    setLean(isKnown ? 1 : -1);
     wrap.setAttribute('aria-disabled', 'true');
     for (const control of [again, flipButton, known]) control.disabled = true;
     void controller.save();
@@ -219,6 +226,7 @@ export function renderFlashcardSession(
     knownLabel.style.opacity = againLabel.style.opacity = '0';
     knownLabel.classList.remove('show');
     againLabel.classList.remove('show');
+    setLean(0);
   }
   function pointerDown(event: PointerEvent): void {
     if (locked || !isCurrent() || pointerId !== null || event.button !== 0) return;
@@ -239,6 +247,7 @@ export function renderFlashcardSession(
     const bounded = Math.max(-180, Math.min(180, dx));
     wrap.style.transform = `translate3d(${bounded}px, ${Math.abs(bounded) * 0.015}px, 0) rotate(${bounded * 0.025}deg)`;
     const alpha = Math.min(1, Math.abs(bounded) / 95);
+    setLean(Math.sign(bounded) * alpha);
     for (const [label, visible] of [
       [knownLabel, bounded > 0],
       [againLabel, bounded < 0]

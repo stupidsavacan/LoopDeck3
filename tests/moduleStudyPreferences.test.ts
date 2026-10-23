@@ -281,9 +281,7 @@ describe('module screen study preferences', () => {
     next.click();
     await settle(20);
 
-    [...root.querySelectorAll<HTMLButtonElement>('button')]
-      .find((button) => button.textContent === '\u6559\u6750\u8a73\u7d30\u306b\u623b\u308b')!
-      .click();
+    root.querySelector<HTMLButtonElement>('[data-action="finish"]')!.click();
     await settle();
 
     expect(localStorage.getItem(`loopdeck3.session.${JSON.stringify([pack.packId, moduleInfo.id])}`)).toBeNull();
