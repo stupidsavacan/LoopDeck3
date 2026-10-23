@@ -29,8 +29,20 @@ import type { SessionNextSteps } from '../ui/inlineQuizView';
 import { moduleMeta } from '../ui/modulePresentation';
 import { renderInlineQuiz, disposeInlineQuizzes } from './inlineQuiz';
 import { renderFlashcardSession, disposeFlashcardSessions } from './flashcardSession';
+import { AUTO_RESUME_KEY } from '../storage/libraryState';
 
 type ToggleSettingKey = 'shuffle' | 'autoNext' | 'autoRevealAfterIdle' | 'showExample' | 'showNumber' | 'showCategory';
+
+/** The home resume banner asks for one automatic resume of this module. */
+function takeAutoResume(moduleId: string): boolean {
+  try {
+    if (sessionStorage.getItem(AUTO_RESUME_KEY) !== moduleId) return false;
+    sessionStorage.removeItem(AUTO_RESUME_KEY);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 function makeSelect(labelText: string, className = 'study-select'): { wrap: HTMLElement; select: HTMLSelectElement } {
   const wrap = el('label', 'field-label');
@@ -385,6 +397,7 @@ export async function renderModuleScreen(context: ScreenContext & { moduleId: st
       mountSession(session);
     };
     actions.append(resume);
+    if (takeAutoResume(module.id)) resume.click();
   }
 
   if (wrongQuestions.length) {

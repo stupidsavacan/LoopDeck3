@@ -1,7 +1,7 @@
 /** Clear only study state; keep unrelated app preferences and other applications' keys. */
 export function clearBrowserStudyState(packId?: string): boolean {
   try {
-    const prefixes = ['loopdeck3.session.', 'loopdeck3.preferences.'];
+    const prefixes = ['loopdeck3.session.', 'loopdeck3.preferences.', 'loopdeck3.today.'];
     const keys = Array.from({ length: localStorage.length }, (_, index) => localStorage.key(index)).filter(
       (key): key is string => key !== null
     );

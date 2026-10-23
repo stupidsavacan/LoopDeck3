@@ -5,6 +5,7 @@ import { createQuestionImageAssetResolver } from '../packs/packAssetResolver';
 import { studyStore, type StudyRepository } from '../storage/studyRepository';
 import { renderHomeScreen } from '../screens/homeScreen';
 import { renderModuleScreen } from '../screens/moduleScreen';
+import { renderTodayScreen } from '../screens/todayScreen';
 import { renderReviewCenter } from '../screens/reviewCenter';
 import { renderGraphsScreen } from '../screens/graphsScreen';
 import { renderImportScreen } from '../screens/importScreen';
@@ -174,6 +175,9 @@ export class StudyApplication {
         case 'home':
           renderHomeScreen(context);
           break;
+        case 'today':
+          await renderTodayScreen(context);
+          break;
         case 'module':
           await renderModuleScreen({ ...context, moduleId: route.moduleId });
           break;
@@ -205,7 +209,7 @@ export class StudyApplication {
   }
 
   private appendShell(route: AppRoute, navigation: Navigation): void {
-    if (route.name === 'module' || route.name === 'debugLog') return;
+    if (route.name === 'module' || route.name === 'today' || route.name === 'debugLog') return;
     this.root.append(
       renderBottomNav(
         route.name === 'home' || route.name === 'review' || route.name === 'graphs' ? route.name : undefined,
