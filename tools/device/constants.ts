@@ -24,7 +24,7 @@ export const APP_METADATA_STORES: readonly string[] = ['contentMetadata'];
  * the catalog-changes broadcast) is app metadata and is only reported. tests/deviceManagement.test.ts
  * fails when src/ gains a `loopdeck3.*` key that is in neither list, so this stays honest.
  */
-export const USER_LOCAL_STORAGE_KEYS: readonly string[] = ['loopdeck3.review.scope', 'loopdeck3.library.last-module'];
+export const USER_LOCAL_STORAGE_KEYS: readonly string[] = ['loopdeck3.review.scope', 'loopdeck3.library.last-module', 'loopdeck3.weekly.seen'];
 export const USER_LOCAL_STORAGE_PREFIXES: readonly string[] = [
   'loopdeck3.session.',
   'loopdeck3.preferences.',

@@ -5,6 +5,7 @@ import { buildExamPlan, examCountdownLabel, examFolders, examLoopOptions, neares
 import { indexCardsByQuestion, moduleMastery } from '../core/mastery';
 import type { ModuleInfo, ReviewCard } from '../core/models';
 import { activeReviewCards, buildTodayPlan } from '../core/todayPlan';
+import { buildWeeklyRecap, weekStartOf } from '../core/weeklyRecap';
 import { getActiveModules, getActiveQuestions } from '../packs/packResolver';
 import { readExamSettings } from '../storage/examPlans';
 import { listStoredSessionSummaries, type StoredSessionSummary } from '../storage/sessionStorage';
@@ -12,8 +13,9 @@ import { button, clear, el } from '../ui/dom';
 import { createUiIcon, iconNameForModule } from '../ui/icons';
 import { moduleMeta } from '../ui/modulePresentation';
 import { renderTodayHero, renderTodayHeroLoading } from '../ui/todayHero';
+import { openWeeklyStory } from '../ui/weeklyStory';
 import { buildHomeFolders, homeModuleMatches, type HomeFolder } from './homeFolders';
-import { AUTO_RESUME_KEY, LAST_MODULE_KEY as HOME_LAST_MODULE_KEY, TODAY_MODULE_ID } from '../storage/libraryState';
+import { AUTO_RESUME_KEY, LAST_MODULE_KEY as HOME_LAST_MODULE_KEY, TODAY_MODULE_ID, WEEKLY_SEEN_KEY } from '../storage/libraryState';
 const HOME_IN_PLAYER_KEY = 'loopdeck3.library.in-player';
 const FOLDER_STATE_PREFIX = 'loopdeck3.library.folders.';
 
@@ -105,6 +107,7 @@ export function renderHomeScreen(context: ScreenContext): void {
   const screen = el('main', 'screen home-screen');
   let hero = renderTodayHeroLoading();
   const resumeSlot = el('div', 'resume-slot');
+  const weeklySlot = el('div', 'resume-slot weekly-slot');
   const shelfHeading = el('h2', 'home-section-heading', '自分で選ぶ');
   const progressByModule = new Map<string, ModuleProgress>();
   const examLabels = new Map<string, string>();
@@ -327,6 +330,24 @@ export function renderHomeScreen(context: ScreenContext): void {
       .sort((a, b) => Date.parse(b.savedAt) - Date.parse(a.savedAt))[0];
     if (latest) renderResumeBanner(latest, now);
 
+    // Once per week, offer the recap of the week that just ended.
+    const lastWeek = weekStartOf(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7));
+    const recap = buildWeeklyRecap(attempts, visibleModules, new Map(questions.map((question) => [question.id, question])), lastWeek);
+    if (recap.answered > 0 && safeGetStorage(WEEKLY_SEEN_KEY) !== recap.weekStart) {
+      const offer = button('', 'resume-banner weekly-banner');
+      const icon = el('span', 'resume-banner-icon weekly-banner-icon');
+      icon.append(createUiIcon('chart', 'resume-banner-svg'));
+      const text = el('span', 'resume-banner-text');
+      text.append(el('strong', '', '先週のふりかえり'), el('span', '', `${recap.studyDays}日学習 · ${recap.answered}問`));
+      offer.append(icon, text, el('span', 'resume-banner-action', '見る'));
+      offer.onclick = () => {
+        safeSetStorage(WEEKLY_SEEN_KEY, recap.weekStart);
+        weeklySlot.replaceChildren();
+        openWeeklyStory(recap, '先週のあなた');
+      };
+      weeklySlot.replaceChildren(offer);
+    }
+
     const due = dueTodayByModule(activeCards, now);
     for (const module of visibleModules) {
       progressByModule.set(module.id, { ratio: moduleMastery(module, cardsByQuestion).ratio, dueToday: due.get(module.id) ?? 0 });
@@ -334,7 +355,7 @@ export function renderHomeScreen(context: ScreenContext): void {
     for (const [moduleId, nodes] of progressNodes) for (const node of nodes) if (screen.contains(node)) fillProgress(node, moduleId);
   }
 
-  screen.append(hero, resumeSlot, shelfHeading, toolbar, list);
+  screen.append(hero, resumeSlot, weeklySlot, shelfHeading, toolbar, list);
   root.append(screen);
   renderList();
   void loadStudyState().catch(() => {

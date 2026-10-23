@@ -12,6 +12,8 @@ import {
 import { indexCardsByQuestion, type MasteryLevel } from '../core/mastery';
 import type { ModuleInfo, Question, ReviewCard } from '../core/models';
 import { activeReviewCards } from '../core/todayPlan';
+import { buildWeeklyRecap } from '../core/weeklyRecap';
+import { openWeeklyStory } from '../ui/weeklyStory';
 import { getActiveModules, getActiveQuestions } from '../packs/packResolver';
 import { LAST_MODULE_KEY } from '../storage/libraryState';
 
@@ -277,7 +279,10 @@ export async function renderGraphsScreen(context: ScreenContext): Promise<void> 
     el('span', '', `正解 ${overview.correct}`),
     el('span', '', `ミス ${overview.mistakes}`)
   );
-  hero.append(stats);
+  const weekly = button('今週のふりかえり', 'btn weekly-open');
+  weekly.onclick = () =>
+    openWeeklyStory(buildWeeklyRecap(attempts, getActiveModules(packView), questionsById, new Date()), '今週のあなた');
+  hero.append(stats, weekly);
 
   const grid = el('section', 'graph-grid');
   renderHeatmap(grid, overview.dailyStudyStats, overview.totalAttempts > 0);
