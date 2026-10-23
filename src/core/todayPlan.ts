@@ -2,6 +2,7 @@ import { endOfLocalCalendarDay, localCalendarDayKey, startOfLocalCalendarDay } f
 import { indexCardsByQuestion } from './mastery';
 import type { Attempt, ModuleInfo, Question, ReviewCard } from './models';
 import { getSupportedStudyQuestionModes, presentQuestionForStudy } from './questionPresentation';
+import { buildRivalPairs, placeRivalsTogether } from './rivalPairs';
 import { buildSrsReviewQueue } from './scheduler';
 
 export const DEFAULT_FRESH_COUNT = 10;
@@ -59,7 +60,7 @@ function unseenQuestions(module: ModuleInfo, questionsById: ReadonlyMap<string, 
   });
 }
 
-/** Today's loop: due reviews first, then new questions from one module. */
+/** Today's loop: due reviews first (confused pairs side by side), then new questions from one module. */
 export function buildTodayPlan(input: TodayPlanInput): TodayPlan {
   const now = input.now ?? new Date();
   const questionsById = new Map(input.questions.map((question) => [question.id, question]));
@@ -80,7 +81,7 @@ export function buildTodayPlan(input: TodayPlanInput): TodayPlan {
   const fresh = focusModule ? unseenQuestions(focusModule, questionsById, seen).slice(0, input.freshCount ?? DEFAULT_FRESH_COUNT) : [];
 
   return {
-    review,
+    review: placeRivalsTogether(review, buildRivalPairs(input.attempts)),
     fresh,
     focusModule,
     estimatedMinutes: Math.ceil(((review.length + fresh.length) * ESTIMATED_SECONDS_PER_QUESTION) / 60),

@@ -68,12 +68,17 @@ export class QuizController {
     this.excludedMs += elapsed;
     this.checkpoint();
   }
-  answer(input: string | string[], revealed = false): Attempt | undefined {
+  /** `confusedWithQuestionId` is kept only when the answer turns out wrong. */
+  answer(input: string | string[], revealed = false, confusedWithQuestionId?: string): Attempt | undefined {
     if (!this.canAnswer) return undefined;
     const { question } = this.options;
     const nearMiss = !revealed && typeof input === 'string' && question.type !== 'multi_select' && isNearMissAnswer(question, input);
     const result = revealed ? 'revealed' : judgeQuestion(question, input) ? 'correct' : 'wrong';
-    return this.record(result, revealed ? '' : Array.isArray(input) ? [...input] : input, nearMiss);
+    const attempt = this.record(result, revealed ? '' : Array.isArray(input) ? [...input] : input, nearMiss);
+    if (result === 'wrong' && confusedWithQuestionId && confusedWithQuestionId !== question.id) {
+      attempt.confusedWithQuestionId = confusedWithQuestionId;
+    }
+    return attempt;
   }
   gradeFlashcard(known: boolean): Attempt | undefined {
     if (!this.canAnswer || this.options.answerMode !== 'flashcard') return undefined;

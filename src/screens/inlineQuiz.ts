@@ -1,12 +1,13 @@
 import { writeDebugLog } from '../debug/debugLog';
-import { judgeInputAnswer, normalizeAnswerForQuestion } from '../core/answerJudge';
+import { judgeInputAnswer, judgeQuestion, normalizeAnswerForQuestion } from '../core/answerJudge';
 import { buildGeneratedChoiceOptions, type GeneratedChoiceOption } from '../core/choiceGenerator';
 import type { Attempt, Question } from '../core/models';
 import { createIdleRevealController, type IdleRevealController } from '../core/idleRevealController';
 import { resolveQuizAnswerMode } from '../core/quizAnswer';
 import { createQuizBookmarkButton } from '../ui/quizBookmark';
 import { currentQuestion, isSessionComplete, type QuizSession } from '../core/sessionEngine';
-import { buildWrongAnswerFeedback } from '../core/wrongAnswerExplanation';
+import { getPresentedStudyPair } from '../core/questionPresentation';
+import { buildWrongAnswerFeedback, type WrongAnswerExplanation } from '../core/wrongAnswerExplanation';
 import { type QuestionImageAssetResolver } from '../packs/packAssetResolver';
 import { QuizController, type QuizPhase } from '../core/quizController';
 import type { QuizDataStore } from '../storage/storageTypes';
@@ -22,6 +23,7 @@ import {
   type SessionNextSteps
 } from '../ui/inlineQuizView';
 import { renderQuestionVisualReferences } from '../ui/questionVisualReferences';
+import { renderRivalDetour } from '../ui/rivalDetour';
 
 export interface InlineQuizCallbacks {
   onSessionChange(session: QuizSession): void;
@@ -224,17 +226,10 @@ export function renderInlineQuiz(
   }
 
   function record(answer: string | string[], revealed = false, generatedChoice?: GeneratedChoiceOption): void {
-    const attempt = controller.answer(answer, revealed);
-    if (!attempt) return;
-    answerAttempt = attempt;
-    idleController?.dispose();
-    idleController = undefined;
-    lockAnswerControls();
-    markChoiceResults(choiceButtons, activeQuestion, answer, revealed);
-    const { result, elapsedMs, nearMiss = false } = attempt;
-
-    const wrongExplanation =
-      !revealed && result === 'wrong' && typeof answer === 'string'
+    if (!controller.canAnswer) return;
+    // Looked up before grading so a confusion with another question is saved with the attempt.
+    const feedback =
+      !revealed && typeof answer === 'string' && !judgeQuestion(activeQuestion, answer)
         ? buildWrongAnswerFeedback(
             answerMode === 'input' ? 'input' : 'choice',
             answer,
@@ -244,8 +239,36 @@ export function renderInlineQuiz(
             generatedChoice?.origin
           )
         : undefined;
-    appendQuizResult(resultArea, activeQuestion, result, elapsedMs, nearMiss, wrongExplanation);
+    const confusedWith = feedback?.matchKind === 'lookup' || feedback?.matchKind === 'exact_origin' ? feedback.matchedQuestionId : undefined;
+    const attempt = controller.answer(answer, revealed, confusedWith);
+    if (!attempt) return;
+    answerAttempt = attempt;
+    idleController?.dispose();
+    idleController = undefined;
+    lockAnswerControls();
+    markChoiceResults(choiceButtons, activeQuestion, answer, revealed);
+    const { result, elapsedMs, nearMiss = false } = attempt;
+    const wrongExplanation = result === 'wrong' ? feedback : undefined;
+    appendQuizResult(resultArea, activeQuestion, result, elapsedMs, nearMiss, wrongExplanation, wrongExplanation ? openDetour : undefined);
     void controller.save();
+  }
+
+  /** Practice the confused pair without leaving this question; the answered card comes back as it was. */
+  function openDetour(feedback: WrongAnswerExplanation): void {
+    if (!isCurrentRender() || !feedback.pair) return;
+    card.hidden = true;
+    const presented = getPresentedStudyPair(activeQuestion);
+    const answeredFront = feedback.matchRole === 'front' || feedback.matchRole === 'front_alias';
+    const rival = answeredFront
+      ? { prompt: feedback.pair.back.text, answer: feedback.pair.front.text }
+      : { prompt: feedback.pair.front.text, answer: feedback.pair.back.text };
+    const detour = renderRivalDetour({ prompt: presented.front.text, answer: presented.back.text }, rival, () => {
+      detour.remove();
+      card.hidden = false;
+      card.scrollIntoView?.({ block: 'start' });
+    });
+    container.append(detour);
+    detour.scrollIntoView?.({ block: 'start' });
   }
 
   const bookmark = createQuizBookmarkButton(question.id, isCurrentRender, studyStore);

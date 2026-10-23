@@ -91,7 +91,12 @@ export function renderConfusionTable(current: Question, explanation: WrongAnswer
   return table;
 }
 
-function appendWrongAnswerExplanation(container: HTMLElement, question: Question, explanation: WrongAnswerExplanation | undefined): void {
+function appendWrongAnswerExplanation(
+  container: HTMLElement,
+  question: Question,
+  explanation: WrongAnswerExplanation | undefined,
+  onDetour?: (explanation: WrongAnswerExplanation) => void
+): void {
   if (!explanation) return;
   const label = wrongAnswerLabel(explanation.source);
   if (explanation.matchKind === 'not_found' || !explanation.found) {
@@ -105,6 +110,12 @@ function appendWrongAnswerExplanation(container: HTMLElement, question: Question
     const intro = el('p');
     intro.append(el('strong', '', `${label}：`), document.createTextNode(confusionNote(explanation, explanation.pair)));
     block.append(intro, table);
+    if (onDetour) {
+      const detour = el('button', 'btn rival-open', '寄り道して見分ける') as HTMLButtonElement;
+      detour.type = 'button';
+      detour.onclick = () => onDetour(explanation);
+      block.append(detour);
+    }
     container.append(block);
     return;
   }
@@ -134,7 +145,8 @@ export function appendQuizResult(
   result: Attempt['result'],
   elapsedMs: number,
   nearMiss = false,
-  wrongExplanation?: WrongAnswerExplanation
+  wrongExplanation?: WrongAnswerExplanation,
+  onDetour?: (explanation: WrongAnswerExplanation) => void
 ): void {
   const resultBox = el('div', result === 'correct' ? 'result correct' : 'result wrong');
   resultBox.append(
@@ -144,7 +156,7 @@ export function appendQuizResult(
   );
   if (nearMiss) resultBox.append(el('span', 'near-miss-note', 'かなり近い答えです。復習優先度は軽めに記録しました。'));
   container.append(resultBox);
-  appendResultTabs(container, resultPanels(question, result, wrongExplanation));
+  appendResultTabs(container, resultPanels(question, result, wrongExplanation, onDetour));
 }
 
 interface ResultPanel {
@@ -153,7 +165,12 @@ interface ResultPanel {
   fill(panel: HTMLElement): void;
 }
 
-function resultPanels(question: Question, result: Attempt['result'], wrongExplanation?: WrongAnswerExplanation): ResultPanel[] {
+function resultPanels(
+  question: Question,
+  result: Attempt['result'],
+  wrongExplanation?: WrongAnswerExplanation,
+  onDetour?: (explanation: WrongAnswerExplanation) => void
+): ResultPanel[] {
   const panels: ResultPanel[] = [];
   const correctText = question.explanation;
   if (correctText) {
@@ -167,7 +184,7 @@ function resultPanels(question: Question, result: Attempt['result'], wrongExplan
   panels.push({
     id: 'picked',
     label: wrongExplanation.source === 'choice' ? '選んだ答え' : '入力した答え',
-    fill: (panel) => appendWrongAnswerExplanation(panel, question, wrongExplanation)
+    fill: (panel) => appendWrongAnswerExplanation(panel, question, wrongExplanation, onDetour)
   });
   const supplement = wrongExplanation.found && wrongExplanation.matchKind !== 'ambiguous' ? wrongExplanation.explanation : undefined;
   if (supplement) {
