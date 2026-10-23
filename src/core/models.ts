@@ -158,6 +158,8 @@ export interface Attempt {
   priorityDelta?: number;
   answerMode?: AnswerFormat;
   questionMode?: ConcreteStudyQuestionMode;
+  /** A wrong answer that is the answer of this other question: the two are being confused. */
+  confusedWithQuestionId?: string;
 }
 
 export interface QuizAnswerSource {

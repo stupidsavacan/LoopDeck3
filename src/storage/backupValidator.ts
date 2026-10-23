@@ -118,6 +118,8 @@ export function parseAttempt(value: unknown, index: number): Attempt {
     (typeof value.questionMode !== 'string' || !QUESTION_MODES.has(value.questionMode as ConcreteStudyQuestionMode))
   )
     fail(`${path}.questionMode is unsupported.`);
+  if (value.confusedWithQuestionId !== undefined && !nonEmptyString(value.confusedWithQuestionId))
+    fail(`${path}.confusedWithQuestionId must be a non-empty string.`);
 
   return {
     attemptId: value.attemptId,
@@ -134,7 +136,8 @@ export function parseAttempt(value: unknown, index: number): Attempt {
     ...(value.hiddenTimeExcludedMs !== undefined ? { hiddenTimeExcludedMs: value.hiddenTimeExcludedMs } : {}),
     ...(value.priorityDelta !== undefined ? { priorityDelta: value.priorityDelta } : {}),
     ...(value.answerMode !== undefined ? { answerMode: value.answerMode as AnswerFormat } : {}),
-    ...(value.questionMode !== undefined ? { questionMode: value.questionMode as ConcreteStudyQuestionMode } : {})
+    ...(value.questionMode !== undefined ? { questionMode: value.questionMode as ConcreteStudyQuestionMode } : {}),
+    ...(value.confusedWithQuestionId !== undefined ? { confusedWithQuestionId: value.confusedWithQuestionId } : {})
   };
 }
 
