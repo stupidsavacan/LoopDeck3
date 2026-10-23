@@ -6,6 +6,7 @@ import { readContentEpoch } from './packEpoch';
 import { exportBackup } from './backupExport';
 import { recoverReviewCard, recoverReviewRows } from './reviewRecovery';
 import { buildReviewPersistence } from '../core/reviewPersistence';
+import { reviseReviewRating, type CorrectRating } from '../core/scheduler';
 import type { Attempt, ConcreteStudyQuestionMode, LoopDeckPack, QuizAnswerSource, ReviewCard, ReviewLog } from '../core/models';
 import type { ImportedPackAsset, PackAssetWriteStrategy } from '../packs/packTypes';
 
@@ -23,7 +24,7 @@ import { importBackup } from './backupStorage';
 import { notifyPackChanges, subscribePackChanges } from './packChanges';
 import type { BackupImportMode } from './storageTypes';
 
-import type { StudyBackup, StoredPackAsset } from './storageTypes';
+import type { SavedReview, StudyBackup, StoredPackAsset } from './storageTypes';
 
 async function deleteAttemptsByResult(database: LocalDatabase, results: Attempt['result'][]): Promise<void> {
   await database.transact('attempts', 'readwrite', (tx) => {
@@ -49,8 +50,9 @@ export class StudyRepository {
   async addAttempt(attempt: Attempt): Promise<void> {
     await this.data.request('attempts', 'readwrite', (store) => store.put(attempt));
   }
-  async recordAnswer(attempt: Attempt, source?: QuizAnswerSource): Promise<void> {
+  async recordAnswer(attempt: Attempt, source?: QuizAnswerSource): Promise<SavedReview | void> {
     let failure: unknown;
+    let saved: SavedReview | undefined;
     try {
       await this.data.transact(
         ['attempts', 'reviewCards', 'reviewLogs', ...(source ? (['packs', 'packAssets', 'contentMetadata'] as const) : [])],
@@ -82,6 +84,7 @@ export class StudyRepository {
                     attempts.add(attempt);
                     cards.put(card);
                     tx.objectStore('reviewLogs').add(log);
+                    saved = { card, log };
                   } catch (error) {
                     abort(error);
                   }
@@ -134,6 +137,44 @@ export class StudyRepository {
     } catch (error) {
       throw failure ?? error;
     }
+    return saved;
+  }
+  async reviseAnswerRating(attemptId: string, rating: CorrectRating): Promise<SavedReview> {
+    let failure: unknown;
+    let revised: SavedReview | undefined;
+    try {
+      await this.data.transact(['reviewCards', 'reviewLogs'], 'readwrite', (tx) => {
+        const abort = (error: unknown) => {
+          failure = error;
+          tx.abort();
+        };
+        const logs = tx.objectStore('reviewLogs');
+        const cards = tx.objectStore('reviewCards');
+        const logRequest = logs.get(`answer:${attemptId}`);
+        logRequest.onsuccess = () => {
+          const log = logRequest.result as ReviewLog | undefined;
+          if (!log) {
+            abort(new Error('この回答の記録が見つかりません。'));
+            return;
+          }
+          const cardRequest = cards.get([log.questionId, log.questionMode ?? 'as_stored']);
+          cardRequest.onsuccess = () => {
+            try {
+              const result = reviseReviewRating(recoverReviewCard(cardRequest.result), log, rating);
+              cards.put(result.card);
+              logs.put(result.log);
+              revised = result;
+            } catch (error) {
+              abort(error);
+            }
+          };
+        };
+      });
+    } catch (error) {
+      throw failure ?? error;
+    }
+    if (!revised) throw failure ?? new Error('判定を変更できませんでした。');
+    return revised;
   }
   async getAttempts(): Promise<Attempt[]> {
     return (await this.data.all<Attempt>('attempts')).filter((row) => !row.contentRetired);

@@ -1,11 +1,13 @@
 import { getCorrectAnswer, judgeInputAnswer, normalizeAnswer } from '../core/answerJudge';
 import type { Attempt, Question } from '../core/models';
 import { getPresentedStudyPair, type StudyPair } from '../core/questionPresentation';
+import { correctRatingIntervals, type CorrectRating } from '../core/scheduler';
 import { elapsedForSession, type QuizSession } from '../core/sessionEngine';
 import type { WrongAnswerExplanation } from '../core/wrongAnswerExplanation';
 import { isSafeImageAssetRef, isSafeImageDataUrl } from '../packs/assetSafety';
 import type { QuestionImageAssetResolver } from '../packs/packAssetResolver';
-import { el } from '../ui/dom';
+import type { SavedReview } from '../storage/storageTypes';
+import { button, el } from '../ui/dom';
 
 const IMAGE_MISSING_MESSAGE = '画像参照は保持されていますが、画像ファイルが見つかりません。';
 const IMAGE_UNSAFE_MESSAGE = '画像参照は保持されています。表示は未実装または安全でない参照のためスキップしました。';
@@ -19,12 +21,6 @@ function wrongAnswerLabel(source: WrongAnswerExplanation['source']): string {
   return source === 'choice'
     ? '\u9078\u3093\u3060\u7b54\u3048\u306b\u3064\u3044\u3066'
     : '\u5165\u529b\u3057\u305f\u7b54\u3048\u306b\u3064\u3044\u3066';
-}
-
-function wrongAnswerFallback(source: WrongAnswerExplanation['source']): string {
-  return source === 'choice'
-    ? '\u3053\u306e\u9078\u629e\u80a2\u306f\u3001\u3053\u306e\u554f\u984c\u306e\u7b54\u3048\u3067\u306f\u3042\u308a\u307e\u305b\u3093\u3002'
-    : '\u5165\u529b\u3057\u305f\u7b54\u3048\u306f\u3001\u3053\u306e\u554f\u984c\u306e\u7b54\u3048\u3067\u306f\u3042\u308a\u307e\u305b\u3093\u3002';
 }
 
 function appendExplanation(container: HTMLElement, className: string, label: string, text: string): void {
@@ -91,18 +87,19 @@ export function renderConfusionTable(current: Question, explanation: WrongAnswer
   return table;
 }
 
+/** The marks on the options already say the pick was wrong; a panel only earns its place by saying more. */
+function hasWrongAnswerInsight(explanation: WrongAnswerExplanation): boolean {
+  return explanation.found && explanation.matchKind !== 'not_found';
+}
+
 function appendWrongAnswerExplanation(
   container: HTMLElement,
   question: Question,
   explanation: WrongAnswerExplanation | undefined,
   onDetour?: (explanation: WrongAnswerExplanation) => void
 ): void {
-  if (!explanation) return;
+  if (!explanation || !hasWrongAnswerInsight(explanation)) return;
   const label = wrongAnswerLabel(explanation.source);
-  if (explanation.matchKind === 'not_found' || !explanation.found) {
-    appendExplanation(container, 'wrong-answer-explanation', label, wrongAnswerFallback(explanation.source));
-    return;
-  }
 
   const table = renderConfusionTable(question, explanation);
   if (table && explanation.pair) {
@@ -143,7 +140,6 @@ export function appendQuizResult(
   container: HTMLElement,
   question: Question,
   result: Attempt['result'],
-  elapsedMs: number,
   nearMiss = false,
   wrongExplanation?: WrongAnswerExplanation,
   onDetour?: (explanation: WrongAnswerExplanation) => void
@@ -151,12 +147,80 @@ export function appendQuizResult(
   const resultBox = el('div', result === 'correct' ? 'result correct' : 'result wrong');
   resultBox.append(
     el('strong', '', result === 'revealed' ? '答え表示' : result === 'correct' ? '正解' : '不正解'),
-    el('span', '', `答え：${answerToText(getCorrectAnswer(question))}`),
-    el('small', '', `${Math.round(elapsedMs / 100) / 10}秒`)
+    el('span', '', `答え：${answerToText(getCorrectAnswer(question))}`)
   );
   if (nearMiss) resultBox.append(el('span', 'near-miss-note', 'かなり近い答えです。復習優先度は軽めに記録しました。'));
   container.append(resultBox);
   appendResultTabs(container, resultPanels(question, result, wrongExplanation, onDetour));
+}
+
+const RATING_CHOICES: Array<[CorrectRating, string]> = [
+  ['hard', 'あやふや'],
+  ['good', 'ふつう'],
+  ['easy', '楽勝']
+];
+
+export function describeInterval(days: number): string {
+  if (days <= 0) return '今日中';
+  if (days === 1) return '明日';
+  if (days < 30) return `${days}日後`;
+  return `約${Math.round(days / 30)}か月後`;
+}
+
+/**
+ * Says when the card comes back. A correct answer is rated from its speed without asking,
+ * and the learner can pick another feel in one tap when the speed told the wrong story.
+ */
+export function renderReviewSchedule(
+  review: SavedReview,
+  onRevise?: (rating: CorrectRating) => Promise<SavedReview | undefined>
+): HTMLElement {
+  const box = el('div', 'review-schedule');
+  box.setAttribute('aria-live', 'polite');
+  const line = el('p', 'review-schedule-line');
+  const fill = (current: SavedReview) => {
+    box.dataset.rating = current.log.rating;
+    line.replaceChildren();
+    if (current.log.rating === 'again') {
+      line.append(document.createTextNode('間違えた問題は、10分後から復習に並びます'));
+      return;
+    }
+    line.append(document.createTextNode('次の復習は '), el('strong', '', describeInterval(current.log.nextIntervalDays)));
+  };
+  fill(review);
+  box.append(line);
+  if (!onRevise || review.log.rating === 'again') return box;
+
+  const intervals = correctRatingIntervals(review.log);
+  const group = el('div', 'rating-choices');
+  group.setAttribute('role', 'group');
+  group.setAttribute('aria-label', '手ごたえ（回答の速さから判定。違えば選び直せます）');
+  group.append(el('span', 'rating-choices-label', '手ごたえ'));
+  const options = RATING_CHOICES.map(([rating, label]) => {
+    const option = button('', 'rating-choice');
+    option.append(el('span', 'rating-choice-name', label), el('span', 'rating-choice-when', describeInterval(intervals[rating])));
+    option.dataset.rating = rating;
+    return option;
+  });
+  const sync = (current: SavedReview) => {
+    for (const option of options) option.setAttribute('aria-pressed', String(option.dataset.rating === current.log.rating));
+  };
+  sync(review);
+  for (const option of options) {
+    option.onclick = async () => {
+      const rating = option.dataset.rating as CorrectRating;
+      if (option.getAttribute('aria-pressed') === 'true') return;
+      for (const other of options) other.disabled = true;
+      const revised = await onRevise(rating);
+      for (const other of options) other.disabled = false;
+      if (!revised) return;
+      fill(revised);
+      sync(revised);
+    };
+  }
+  group.append(...options);
+  box.append(group);
+  return box;
 }
 
 interface ResultPanel {
@@ -180,7 +244,7 @@ function resultPanels(
       fill: (panel) => appendExplanation(panel, 'correct-answer-explanation', '正解の解説', correctText)
     });
   }
-  if (result !== 'wrong' || !wrongExplanation) return panels;
+  if (result !== 'wrong' || !wrongExplanation || !hasWrongAnswerInsight(wrongExplanation)) return panels;
   panels.push({
     id: 'picked',
     label: wrongExplanation.source === 'choice' ? '選んだ答え' : '入力した答え',

@@ -163,6 +163,9 @@ export interface Attempt {
   /** A wrong answer that is the answer of this other question: the two are being confused. */
   confusedWithQuestionId?: string;
   confidence?: AnswerConfidence;
+  /** Characters the learner had to read (prompt and choices); widens the fast/slow timing bands. */
+  readingChars?: number;
+  hintUsed?: boolean;
 }
 
 export interface QuizAnswerSource {

@@ -19,10 +19,6 @@ export function speechLanguage(text: string): 'ja-JP' | 'en-US' {
   return JAPANESE.test(text) ? 'ja-JP' : 'en-US';
 }
 
-export function speechAvailable(): boolean {
-  return (synthesis()?.getVoices().length ?? 0) > 0;
-}
-
 /** Calls `ready` once voices exist, now or when the browser finishes loading them. */
 export function whenSpeechReady(ready: () => void): void {
   const speech = synthesis();

@@ -40,7 +40,8 @@ for (const [width, height] of [[320, 568], [360, 800]]) {
 
     const choices = page.locator('.choice-btn');
     await expect(choices).toHaveCount(4);
-    const longChoice = choices.nth(1);
+    // Options are shuffled, so the long one is found by its text.
+    const longChoice = choices.filter({ hasText: 'UnbrokenEnglishToken' }).first();
     await expect(longChoice).toContainText('長い日本語教材名');
     await expect(longChoice).toContainText('ABC');
     await expect(longChoice).toContainText('UnbrokenEnglishToken');
@@ -50,6 +51,8 @@ for (const [width, height] of [[320, 568], [360, 800]]) {
       const root = document.documentElement;
       const buttons = [...document.querySelectorAll('.choice-btn')];
       if (buttons.length !== 4) throw new Error(`Expected 4 choices, got ${buttons.length}`);
+      const longIndex = buttons.findIndex(button => button.textContent.includes('UnbrokenEnglishToken'));
+      const shortIndex = buttons.findIndex(button => !button.textContent.includes('UnbrokenEnglishToken'));
       const rects = buttons.map(button => {
         const rect = button.getBoundingClientRect();
         return {
@@ -64,7 +67,9 @@ for (const [width, height] of [[320, 568], [360, 800]]) {
       return {
         viewportWidth: root.clientWidth,
         documentScrollWidth: root.scrollWidth,
-        overflowWrap: getComputedStyle(buttons[1]).overflowWrap,
+        overflowWrap: getComputedStyle(buttons[longIndex]).overflowWrap,
+        long: rects[longIndex],
+        short: rects[shortIndex],
         rects,
       };
     });
@@ -76,8 +81,8 @@ for (const [width, height] of [[320, 568], [360, 800]]) {
       expect(rect.right).toBeLessThanOrEqual(metrics.viewportWidth + 2);
       expect(rect.scrollWidth).toBeLessThanOrEqual(rect.clientWidth + 1);
     }
-    expect(metrics.rects[1].width).toBeCloseTo(metrics.rects[0].width, 0);
-    expect(metrics.rects[1].height).toBeGreaterThan(metrics.rects[0].height);
+    expect(metrics.long.width).toBeCloseTo(metrics.short.width, 0);
+    expect(metrics.long.height).toBeGreaterThan(metrics.short.height);
 
     for (let i = 0; i < 4; i += 1) {
       const choice = choices.nth(i);

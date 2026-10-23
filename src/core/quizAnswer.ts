@@ -1,7 +1,7 @@
 import { getCorrectAnswer } from './answerJudge';
 import type { GeneratedChoiceOption } from './choiceGenerator';
 import type { AnswerConfidence, AnswerFormat, Attempt, Question } from './models';
-import { scoreAttemptDelta } from './reviewEngine';
+import { scoreAttemptDelta, type AnswerSignals } from './reviewEngine';
 
 export function resolveQuizAnswerMode(
   question: Question,
@@ -23,7 +23,8 @@ export function buildQuizAttempt(
   answerMode: AnswerFormat,
   hiddenTimeExcludedMs: number,
   nearMiss = false,
-  confidence?: AnswerConfidence
+  confidence?: AnswerConfidence,
+  signals: AnswerSignals = {}
 ): Attempt {
   return {
     attemptId: `${Date.now()}-${crypto.randomUUID()}`,
@@ -37,10 +38,11 @@ export function buildQuizAttempt(
     mode,
     nearMiss,
     hiddenTimeExcludedMs,
-    priorityDelta: scoreAttemptDelta(result, nearMiss, elapsedMs, answerMode, confidence),
+    priorityDelta: scoreAttemptDelta(result, nearMiss, elapsedMs, answerMode, confidence, signals),
     answerMode,
     questionMode: question.activeStudyMode ?? 'as_stored',
-    ...(confidence ? { confidence } : {})
+    ...(confidence ? { confidence } : {}),
+    ...(signals.readingChars ? { readingChars: signals.readingChars } : {}),
+    ...(signals.hintUsed ? { hintUsed: true } : {})
   };
 }
-

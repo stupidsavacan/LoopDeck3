@@ -1,4 +1,13 @@
-import type { AnswerConfidence, AnswerFormat, AnswerResult, ConcreteStudyQuestionMode, ReviewCard, ReviewLog, ReviewRating } from './models';
+import type {
+  AnswerConfidence,
+  AnswerFormat,
+  AnswerResult,
+  ConcreteStudyQuestionMode,
+  ReviewCard,
+  ReviewLog,
+  ReviewRating
+} from './models';
+import { timingThresholds } from './answerTiming';
 import { endOfLocalCalendarDay, startOfLocalCalendarDay } from './calendarDay';
 
 const DEFAULT_EASE = 2.5;
@@ -63,20 +72,34 @@ export function clampEase(ease: number): number {
   return Math.min(MAX_EASE, Math.max(MIN_EASE, ease));
 }
 
+export interface RatingContext {
+  readingChars?: number;
+  hintUsed?: boolean;
+  /** The card has never been reviewed before this answer. */
+  firstReview?: boolean;
+}
+
+/**
+ * Rates an answer without asking the learner, so studying never stops for a self-grading step.
+ * The learner can still correct a correct answer's rating afterwards with reviseReviewRating.
+ */
 export function inferReviewRating(
   result: AnswerResult,
   elapsedMs: number,
   answerMode: AnswerFormat = 'input',
-  confidence?: AnswerConfidence
+  confidence?: AnswerConfidence,
+  context: RatingContext = {}
 ): ReviewRating {
   if (answerMode === 'flashcard') return result === 'correct' ? 'good' : 'again';
   if (result !== 'correct') return 'again';
-  // A correct guess is not knowledge yet; an unsure correct answer is never "easy".
-  if (confidence === 'guess') return 'hard';
-  const [fast, slow] = answerMode === 'choice' ? [4500, 12000] : [7000, 20000];
+  // A correct guess, or one reached through the hint, is not knowledge yet.
+  if (confidence === 'guess' || context.hintUsed) return 'hard';
+  const { fast, slow } = timingThresholds(answerMode, context.readingChars);
   if (elapsedMs >= slow) return 'hard';
-  if (elapsedMs <= fast) return confidence === 'unsure' ? 'good' : 'easy';
-  return 'good';
+  if (elapsedMs > fast) return 'good';
+  // Picking the right option the first time it is seen can be recognition or luck, so it is never "easy".
+  if (confidence === 'unsure' || (context.firstReview && answerMode === 'choice')) return 'good';
+  return 'easy';
 }
 
 export function createReviewCard(
@@ -200,6 +223,55 @@ export function applyReviewRating(
   };
 
   return { card: next, log };
+}
+
+export type CorrectRating = Exclude<ReviewRating, 'again'>;
+
+function correctRatingEase(previousEase: number, rating: CorrectRating): number {
+  if (rating === 'hard') return clampEase(previousEase - 0.15);
+  if (rating === 'easy') return clampEase(previousEase + 0.15);
+  return previousEase;
+}
+
+/** Days until the next review for each rating a correct answer could have had. */
+export function correctRatingIntervals(log: Pick<ReviewLog, 'previousEase' | 'previousIntervalDays'>): Record<CorrectRating, number> {
+  const interval = (rating: CorrectRating) =>
+    nextIntervalDays(log.previousIntervalDays, correctRatingEase(log.previousEase, rating), rating);
+  return { hard: interval('hard'), good: interval('good'), easy: interval('easy') };
+}
+
+/** Only a correct answer whose card has not been reviewed again since can change its rating. */
+export function canReviseReviewRating(card: ReviewCard, log: ReviewLog): boolean {
+  return (
+    log.rating !== 'again' &&
+    card.questionId === log.questionId &&
+    (card.questionMode ?? 'as_stored') === log.questionMode &&
+    card.lastReviewedAt === log.reviewedAt
+  );
+}
+
+/**
+ * Re-schedules a correct answer with the rating the learner chose instead of the inferred one.
+ * Correct ratings share every counter, so only ease, interval and due date are recomputed from the log.
+ */
+export function reviseReviewRating(card: ReviewCard, log: ReviewLog, rating: CorrectRating, now = new Date()): ReviewScheduleResult {
+  if (!canReviseReviewRating(card, log)) throw new Error('This answer can no longer be re-rated.');
+  const ease = correctRatingEase(log.previousEase, rating);
+  const intervalDays = nextIntervalDays(log.previousIntervalDays, ease, rating);
+  const next: ReviewCard = {
+    ...card,
+    ease,
+    intervalDays,
+    dueAt: iso(addDays(new Date(log.reviewedAt), intervalDays)),
+    state: 'review',
+    updatedAt: iso(now)
+  };
+  if (isMastered(next)) next.state = 'mastered';
+  if (next.suspended) next.state = 'suspended';
+  return {
+    card: next,
+    log: { ...log, rating, nextState: next.state, nextDueAt: next.dueAt, nextIntervalDays: intervalDays, nextEase: ease }
+  };
 }
 
 export function bucketReviewCards(cards: ReviewCard[], now = new Date()): ReviewBuckets {

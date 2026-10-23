@@ -1,6 +1,7 @@
 import { isNearMissAnswer, judgeQuestion } from './answerJudge';
 import type { AnswerConfidence, AnswerFormat, Attempt, Question } from './models';
 import { buildQuizAttempt } from './quizAnswer';
+import type { AnswerSignals } from './reviewEngine';
 import { advanceSession, elapsedForCurrent, elapsedForSession, type QuizSession } from './sessionEngine';
 
 export type QuizPhase = 'answering' | 'pending' | 'saving' | 'failed' | 'saved' | 'advanced' | 'disposed';
@@ -9,12 +10,17 @@ export interface QuizControllerOptions {
   question: Question;
   answerMode: AnswerFormat;
   isCurrent(): boolean;
-  persist(attempt: Attempt): Promise<void>;
+  persist(attempt: Attempt): Promise<unknown>;
   onAdvance(session: QuizSession): void;
   onCheckpoint?(session: QuizSession): void;
   onCheckpointError(error: unknown): void;
   onPersistenceChange(phase: 'saving' | 'failed' | 'saved', error?: unknown): void;
+  /** A correct answer will move on by itself after `delayMs` unless the learner holds it. */
+  onAutoAdvanceScheduled?(delayMs: number): void;
 }
+
+/** Long enough to see the result and reach for the explanation before the next question replaces it. */
+export const AUTO_ADVANCE_DELAY_MS = 1400;
 
 /** One question's state machine. No DOM, IndexedDB or screen dependency. */
 export class QuizController {
@@ -72,7 +78,7 @@ export class QuizController {
   answer(
     input: string | string[],
     revealed = false,
-    extras: { confusedWithQuestionId?: string; confidence?: AnswerConfidence } = {}
+    extras: { confusedWithQuestionId?: string; confidence?: AnswerConfidence } & AnswerSignals = {}
   ): Attempt | undefined {
     if (!this.canAnswer) return undefined;
     const { question } = this.options;
@@ -83,7 +89,8 @@ export class QuizController {
       result,
       revealed ? '' : Array.isArray(input) ? [...input] : input,
       nearMiss,
-      revealed ? undefined : extras.confidence
+      revealed ? undefined : extras.confidence,
+      { readingChars: extras.readingChars, hintUsed: revealed ? undefined : extras.hintUsed }
     );
     if (result === 'wrong' && confusedWithQuestionId && confusedWithQuestionId !== question.id) {
       attempt.confusedWithQuestionId = confusedWithQuestionId;
@@ -94,7 +101,13 @@ export class QuizController {
     if (!this.canAnswer || this.options.answerMode !== 'flashcard') return undefined;
     return this.record(known ? 'correct' : 'wrong', '', false);
   }
-  private record(result: Attempt['result'], input: string | string[], nearMiss: boolean, confidence?: AnswerConfidence): Attempt {
+  private record(
+    result: Attempt['result'],
+    input: string | string[],
+    nearMiss: boolean,
+    confidence?: AnswerConfidence,
+    signals: AnswerSignals = {}
+  ): Attempt {
     const { question, session, answerMode } = this.options;
     this.attempt = buildQuizAttempt(
       question,
@@ -105,7 +118,8 @@ export class QuizController {
       answerMode,
       session.currentHiddenTimeExcludedMs + this.excluded(),
       nearMiss,
-      confidence
+      confidence,
+      signals
     );
     this.state = 'pending';
     return this.attempt;
@@ -137,8 +151,16 @@ export class QuizController {
       this.options.answerMode !== 'flashcard' &&
       this.attempt.result === 'correct' &&
       this.options.session.settings.autoNext
-    )
-      this.autoNext = setTimeout(() => this.advance(), 650);
+    ) {
+      this.autoNext = setTimeout(() => this.advance(), AUTO_ADVANCE_DELAY_MS);
+      this.options.onAutoAdvanceScheduled?.(AUTO_ADVANCE_DELAY_MS);
+    }
+  }
+  /** The learner is reading or acting on the result, so only their own tap moves on. */
+  holdAutoAdvance(): boolean {
+    if (this.autoNext === undefined) return false;
+    this.clearTimer();
+    return true;
   }
   advance(): void {
     if (this.state !== 'saved' || !this.options.isCurrent()) return;

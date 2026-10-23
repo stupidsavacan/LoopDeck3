@@ -10,7 +10,8 @@ import { getPresentedStudyPair } from '../core/questionPresentation';
 import { buildWrongAnswerFeedback, type WrongAnswerExplanation } from '../core/wrongAnswerExplanation';
 import { type QuestionImageAssetResolver } from '../packs/packAssetResolver';
 import { QuizController, type QuizPhase } from '../core/quizController';
-import type { QuizDataStore } from '../storage/storageTypes';
+import { countReadingChars } from '../core/answerTiming';
+import type { QuizDataStore, SavedReview } from '../storage/storageTypes';
 import { button, clear, el, toast } from '../ui/dom';
 import { appendIconLabel, createUiIcon } from '../ui/icons';
 import {
@@ -19,6 +20,7 @@ import {
   renderNextActions,
   renderQuestionImage,
   renderQuizMeta,
+  renderReviewSchedule,
   renderSessionSummary,
   type SessionNextSteps
 } from '../ui/inlineQuizView';
@@ -50,6 +52,20 @@ export function disposeInlineQuizzes(root: HTMLElement): void {
     renderCleanupByContainer.get(container)?.();
   }
 }
+function shuffled<T>(items: readonly T[]): T[] {
+  const copy = [...items];
+  for (let index = copy.length - 1; index > 0; index -= 1) {
+    const target = Math.floor(Math.random() * (index + 1));
+    [copy[index], copy[target]] = [copy[target], copy[index]];
+  }
+  return copy;
+}
+
+/** Typing, or a control that handles its own keys, keeps the keyboard; shortcuts apply everywhere else. */
+function ownsKeyboard(target: EventTarget | null): boolean {
+  return target instanceof HTMLElement && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT|BUTTON|SUMMARY)$/.test(target.tagName));
+}
+
 const CONFIDENCE_OPTIONS: Array<[AnswerConfidence, string]> = [
   ['sure', '自信あり'],
   ['unsure', 'うろ覚え'],
@@ -126,20 +142,24 @@ export function renderInlineQuiz(
   const requestedAnswerFormat = session.settings.answerFormat ?? 'auto';
   const preferredAnswerFormat = session.preferredFormatByModuleId?.get(question.moduleId) ?? session.module.preferredAnswerFormat;
   const shouldGenerateChoices =
-    question.type === 'input' && (requestedAnswerFormat === 'choice' || (requestedAnswerFormat === 'auto' && preferredAnswerFormat === 'choice'));
+    question.type === 'input' &&
+    (requestedAnswerFormat === 'choice' || (requestedAnswerFormat === 'auto' && preferredAnswerFormat === 'choice'));
   const generatedChoices =
     question.type === 'input' && shouldGenerateChoices
       ? buildGeneratedChoiceOptions(question, session.choicePool, 4, Math.random, session.choiceCandidateIndex)
       : undefined;
   const seenNativeChoices = new Set<string>();
+  // The answer is listed first in the data, so the order is shuffled or the first option would always be right.
   const nativeChoices =
     question.type === 'choice'
-      ? [question.answer, ...question.choices].filter((choice) => {
-          const key = normalizeAnswerForQuestion(question, choice);
-          if (!key || seenNativeChoices.has(key) || (choice !== question.answer && judgeInputAnswer(question, choice))) return false;
-          seenNativeChoices.add(key);
-          return true;
-        })
+      ? shuffled(
+          [question.answer, ...question.choices].filter((choice) => {
+            const key = normalizeAnswerForQuestion(question, choice);
+            if (!key || seenNativeChoices.has(key) || (choice !== question.answer && judgeInputAnswer(question, choice))) return false;
+            seenNativeChoices.add(key);
+            return true;
+          })
+        )
       : [];
   const answerMode = resolveQuizAnswerMode(question, requestedAnswerFormat, generatedChoices, nativeChoices.length);
   const card = el('section', 'quiz-card');
@@ -153,6 +173,13 @@ export function renderInlineQuiz(
   let nextButton: HTMLButtonElement | undefined;
   let composing = false;
   let idleController: IdleRevealController | undefined;
+  let hintUsed = false;
+  let savedReview: SavedReview | undefined;
+  const readingChars = countReadingChars(question.prompt, [
+    ...nativeChoices,
+    ...(generatedChoices ?? []).map((choice) => choice.text),
+    ...(question.type === 'multi_select' ? question.choices : [])
+  ]);
 
   function isCurrentRender(): boolean {
     return renderTokenByContainer.get(container) === renderToken && container.contains(card) && (options.isCurrent?.() ?? true);
@@ -163,7 +190,9 @@ export function renderInlineQuiz(
     question: activeQuestion,
     answerMode,
     isCurrent: isCurrentRender,
-    persist: (attempt) => studyStore.recordAnswer(attempt, session.sourceByQuestionId?.get(attempt.questionId)),
+    persist: async (attempt) => {
+      savedReview = (await studyStore.recordAnswer(attempt, session.sourceByQuestionId?.get(attempt.questionId))) ?? undefined;
+    },
     onAdvance: (next) => {
       cleanup();
       callbacks.onSessionChange(next);
@@ -179,14 +208,28 @@ export function renderInlineQuiz(
       });
       toast('回答は保存済みですが、再開位置を保存できませんでした。');
     },
-    onPersistenceChange: handlePersistenceChange
+    onPersistenceChange: handlePersistenceChange,
+    onAutoAdvanceScheduled: (delayMs) => {
+      if (!nextButton) return;
+      nextButton.style.setProperty('--auto-advance-ms', `${delayMs}ms`);
+      nextButton.classList.add('is-auto-advancing');
+    }
   });
+
+  /** Any touch on the answered card means the learner is reading; the next question waits for their tap. */
+  function holdAutoAdvance(event?: Event): void {
+    if (event?.target instanceof Node && nextButton?.contains(event.target)) return;
+    if (controller.holdAutoAdvance()) nextButton?.classList.remove('is-auto-advancing');
+  }
 
   function stopObserving(): void {
     idleController?.dispose();
     idleController = undefined;
     document.removeEventListener('visibilitychange', handleVisibilityChange);
+    document.removeEventListener('keydown', handleShortcut);
     window.removeEventListener('pagehide', handlePageHide);
+    window.removeEventListener('wheel', holdAutoAdvance);
+    window.removeEventListener('touchmove', holdAutoAdvance);
   }
 
   function cleanup(): void {
@@ -221,6 +264,21 @@ export function renderInlineQuiz(
   function handlePageHide(): void {
     controller.checkpoint();
   }
+  /** Number keys pick an option and Enter or Space moves on, so a keyboard never needs the mouse. */
+  function handleShortcut(event: KeyboardEvent): void {
+    if (!isCurrentRender() || event.altKey || event.ctrlKey || event.metaKey || ownsKeyboard(event.target)) return;
+    if (controller.canAnswer && /^[1-9]$/.test(event.key)) {
+      const option = [...choiceButtons.keys()][Number(event.key) - 1];
+      if (!option || option.disabled) return;
+      event.preventDefault();
+      option.click();
+      return;
+    }
+    if ((event.key === 'Enter' || event.key === ' ') && nextButton && !nextButton.hidden && !nextButton.disabled) {
+      event.preventDefault();
+      nextQuestion();
+    }
+  }
 
   function lockAnswerControls(): void {
     answerArea.querySelectorAll<HTMLInputElement | HTMLButtonElement>('input, button').forEach((control) => {
@@ -242,6 +300,8 @@ export function renderInlineQuiz(
         nextButton.disabled = false;
         nextButton.hidden = false;
       }
+      card.classList.add('is-answered');
+      showReviewSchedule();
       return;
     }
     console.error('Failed to persist answer/SRS state', error);
@@ -280,8 +340,14 @@ export function renderInlineQuiz(
             generatedChoice?.origin
           )
         : undefined;
-    const confusedWith = feedback?.matchKind === 'lookup' || feedback?.matchKind === 'exact_origin' ? feedback.matchedQuestionId : undefined;
-    const attempt = controller.answer(answer, revealed, { confusedWithQuestionId: confusedWith, confidence: confidencePicker?.value() });
+    const confusedWith =
+      feedback?.matchKind === 'lookup' || feedback?.matchKind === 'exact_origin' ? feedback.matchedQuestionId : undefined;
+    const attempt = controller.answer(answer, revealed, {
+      confusedWithQuestionId: confusedWith,
+      confidence: confidencePicker?.value(),
+      readingChars,
+      hintUsed
+    });
     if (!attempt) return;
     answerAttempt = attempt;
     idleController?.dispose();
@@ -289,10 +355,46 @@ export function renderInlineQuiz(
     lockAnswerControls();
     confidencePicker?.lock();
     markChoiceResults(choiceButtons, activeQuestion, answer, revealed);
-    const { result, elapsedMs, nearMiss = false } = attempt;
+    const { result, nearMiss = false } = attempt;
     const wrongExplanation = result === 'wrong' ? feedback : undefined;
-    appendQuizResult(resultArea, activeQuestion, result, elapsedMs, nearMiss, wrongExplanation, wrongExplanation ? openDetour : undefined);
+    appendQuizResult(resultArea, activeQuestion, result, nearMiss, wrongExplanation, wrongExplanation ? openDetour : undefined);
     void controller.save();
+  }
+
+  /** Where the answer put the card, with a one-tap correction for a correct answer the timing misjudged. */
+  function showReviewSchedule(): void {
+    const review = savedReview;
+    const attempt = answerAttempt;
+    if (!review || !attempt) return;
+    const revise = studyStore.reviseAnswerRating?.bind(studyStore);
+    const schedule = renderReviewSchedule(
+      review,
+      attempt.result === 'correct' && revise
+        ? async (rating) => {
+            holdAutoAdvance();
+            if (!isCurrentRender()) return undefined;
+            try {
+              const revised = await revise(attempt.attemptId, rating);
+              savedReview = revised;
+              return revised;
+            } catch (error) {
+              writeDebugLog({
+                level: 'warn',
+                area: 'quizPersistence',
+                code: 'RATING-REVISE-FAILED',
+                userMessage: '判定を変更できませんでした。',
+                detail: String(error)
+              });
+              toast('判定を変更できませんでした。');
+              return undefined;
+            }
+          }
+        : undefined
+    );
+    resultArea.querySelector('.review-schedule')?.remove();
+    const resultBox = resultArea.querySelector('.result');
+    if (resultBox) resultBox.after(schedule);
+    else resultArea.prepend(schedule);
   }
 
   /** Practice the confused pair without leaving this question; the answered card comes back as it was. */
@@ -403,6 +505,7 @@ export function renderInlineQuiz(
   hint.onclick = () => {
     if (!isCurrentRender() || !hintText || resultArea.querySelector('.hint-panel')) return;
     resultArea.prepend(el('p', 'hint-panel', hintText));
+    hintUsed = true;
     resetIdleReveal();
   };
   const reveal = button('', 'btn ghost');
@@ -464,7 +567,12 @@ export function renderInlineQuiz(
     container.scrollIntoView?.({ block: 'start', inline: 'nearest', behavior: 'auto' });
   });
   document.addEventListener('visibilitychange', handleVisibilityChange);
+  document.addEventListener('keydown', handleShortcut);
   window.addEventListener('pagehide', handlePageHide);
+  card.addEventListener('pointerdown', holdAutoAdvance);
+  card.addEventListener('focusin', holdAutoAdvance);
+  window.addEventListener('wheel', holdAutoAdvance, { passive: true });
+  window.addEventListener('touchmove', holdAutoAdvance, { passive: true });
   renderCleanupByContainer.set(container, cleanup);
   if (session.settings.autoRevealAfterIdle) {
     idleController = createIdleRevealController({
