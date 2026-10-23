@@ -83,6 +83,19 @@ export function buildDailyStudyStats(attempts: Attempt[], days = 28, now = new D
   }));
 }
 
+/** Consecutive study days ending today, or yesterday when today has no answers yet. */
+export function currentStreak(attempts: Attempt[], now = new Date()): number {
+  const days = new Set(attempts.flatMap((attempt) => parseAttemptDay(attempt) ?? []));
+  const cursor = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  if (!days.has(localCalendarDayKey(cursor))) cursor.setDate(cursor.getDate() - 1);
+  let streak = 0;
+  while (days.has(localCalendarDayKey(cursor))) {
+    streak += 1;
+    cursor.setDate(cursor.getDate() - 1);
+  }
+  return streak;
+}
+
 export function buildModuleStudyStats(attempts: Attempt[], modules: ModuleInfo[]): ModuleStudyStat[] {
   const moduleTitles = new Map(modules.map((module) => [module.id, module.title]));
   const byModule = new Map<string, ModuleStudyStat & { elapsedTotal: number }>();

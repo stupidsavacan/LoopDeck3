@@ -94,7 +94,17 @@ function isConcreteStudyQuestionMode(value: unknown): value is ConcreteStudyQues
   return value === 'as_stored' || value === 'front_to_back' || value === 'back_to_front';
 }
 
-export function readStoredSession(moduleId: string, byId: Map<string, Question>, scope?: SessionStorageScope): StoredSession | undefined {
+export interface ReadStoredSessionOptions {
+  /** Today's loop mixes modules, so its questions are not required to belong to `moduleId`. */
+  mixedModules?: boolean;
+}
+
+export function readStoredSession(
+  moduleId: string,
+  byId: Map<string, Question>,
+  scope?: SessionStorageScope,
+  options: ReadStoredSessionOptions = {}
+): StoredSession | undefined {
   try {
     const raw = localStorage.getItem(sessionStorageKey(moduleId, scope));
     if (!raw) return undefined;
@@ -118,7 +128,8 @@ export function readStoredSession(moduleId: string, byId: Map<string, Question>,
         if (!item || typeof item.questionId !== 'string' || !isConcreteStudyQuestionMode(item.questionMode)) return false;
         const question = byId.get(item.questionId);
         return (
-          question?.moduleId === moduleId &&
+          question !== undefined &&
+          (options.mixedModules || question.moduleId === moduleId) &&
           getSupportedStudyQuestionModes(question).includes(item.questionMode) &&
           item.revision === questionRevision(question)
         );
@@ -147,7 +158,9 @@ export function readStoredSession(moduleId: string, byId: Map<string, Question>,
     parsed.attempts = parsed.attempts.map(parseAttempt);
     if (
       parsed.attempts.some(
-        (attempt) => attempt.moduleId !== moduleId || !parsed.questions?.some((question) => question.questionId === attempt.questionId)
+        (attempt) =>
+          (!options.mixedModules && attempt.moduleId !== moduleId) ||
+          !parsed.questions?.some((question) => question.questionId === attempt.questionId)
       )
     )
       return undefined;
@@ -218,6 +231,49 @@ export function saveStoredSession(moduleId: string, session: QuizSession, scope?
     return true;
   } catch {
     return false;
+  }
+}
+
+export interface StoredSessionSummary {
+  packId?: string;
+  moduleId: string;
+  index: number;
+  total: number;
+  savedAt: string;
+}
+
+/**
+ * Lightweight listing of saved sessions for the home screen. Full validation
+ * (content identity, revisions) still happens when the module itself opens.
+ */
+export function listStoredSessionSummaries(): StoredSessionSummary[] {
+  const prefix = 'loopdeck3.session.';
+  try {
+    const summaries: StoredSessionSummary[] = [];
+    for (let index = 0; index < localStorage.length; index += 1) {
+      const key = localStorage.key(index);
+      if (!key?.startsWith(prefix)) continue;
+      let packId: string | undefined;
+      let moduleId = key.slice(prefix.length);
+      try {
+        const identity: unknown = JSON.parse(moduleId);
+        if (Array.isArray(identity) && identity.length === 2 && typeof identity[0] === 'string' && typeof identity[1] === 'string')
+          [packId, moduleId] = identity;
+      } catch {
+        // Unscoped keys carry the module id directly.
+      }
+      try {
+        const stored = JSON.parse(localStorage.getItem(key) ?? 'null') as Partial<StoredSession> | null;
+        if (stored?.format !== 'loopdeck3.session' || stored.version !== 1 || !Array.isArray(stored.questions)) continue;
+        if (!Number.isSafeInteger(stored.index) || typeof stored.savedAt !== 'string') continue;
+        summaries.push({ packId, moduleId, index: stored.index as number, total: stored.questions.length, savedAt: stored.savedAt });
+      } catch {
+        // A corrupt entry is ignored here and reported when its module opens.
+      }
+    }
+    return summaries;
+  } catch {
+    return [];
   }
 }
 

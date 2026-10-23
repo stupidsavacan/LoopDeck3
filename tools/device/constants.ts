@@ -28,12 +28,15 @@ export const USER_LOCAL_STORAGE_KEYS: readonly string[] = ['loopdeck3.review.sco
 export const USER_LOCAL_STORAGE_PREFIXES: readonly string[] = [
   'loopdeck3.session.',
   'loopdeck3.preferences.',
-  'loopdeck3.library.folders.'
+  'loopdeck3.library.folders.',
+  'loopdeck3.today.'
 ];
 export const APP_LOCAL_STORAGE_KEYS: readonly string[] = [
   'loopdeck3.diagnostics',
   'loopdeck3.library.in-player',
-  'loopdeck3.catalog-changes'
+  'loopdeck3.catalog-changes',
+  // A one-shot sessionStorage flag from the home resume banner; never learner data.
+  'loopdeck3.library.autoresume'
 ];
 
 /** Where raw run evidence lives: outside the repository. */

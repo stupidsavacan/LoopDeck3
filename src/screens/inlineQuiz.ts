@@ -82,9 +82,9 @@ export function renderInlineQuiz(
   if (!question) return;
   const activeQuestion: Question = question;
   const requestedAnswerFormat = session.settings.answerFormat ?? 'auto';
+  const preferredAnswerFormat = session.preferredFormatByModuleId?.get(question.moduleId) ?? session.module.preferredAnswerFormat;
   const shouldGenerateChoices =
-    question.type === 'input' &&
-    (requestedAnswerFormat === 'choice' || (requestedAnswerFormat === 'auto' && session.module.preferredAnswerFormat === 'choice'));
+    question.type === 'input' && (requestedAnswerFormat === 'choice' || (requestedAnswerFormat === 'auto' && preferredAnswerFormat === 'choice'));
   const generatedChoices =
     question.type === 'input' && shouldGenerateChoices
       ? buildGeneratedChoiceOptions(question, session.choicePool, 4, Math.random, session.choiceCandidateIndex)

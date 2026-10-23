@@ -3,11 +3,12 @@ import type { QuestionImageAssetResolver } from '../packs/packAssetResolver';
 import type { ResolvedPackView } from '../packs/packResolver';
 
 export type AppRoute =
-  | { name: 'home' | 'review' | 'import' | 'graphs' | 'pdfWorksheet' | 'debugLog' }
+  | { name: 'home' | 'today' | 'review' | 'import' | 'graphs' | 'pdfWorksheet' | 'debugLog' }
   | { name: 'module'; moduleId: string };
 
 export interface Navigation {
   home(): void;
+  today(): void;
   module(moduleId: string): void;
   review(): void;
   import(): void;
@@ -26,7 +27,7 @@ export interface ScreenContext {
   refreshCatalog(): Promise<void>;
 }
 
-const routes = { home: 'home', review: 'review', import: 'import', graphs: 'graphs', 'pdf-worksheet': 'pdfWorksheet', 'debug-log': 'debugLog' } as const;
+const routes = { home: 'home', today: 'today', review: 'review', import: 'import', graphs: 'graphs', 'pdf-worksheet': 'pdfWorksheet', 'debug-log': 'debugLog' } as const;
 
 export function parseRoute(hash: string): AppRoute {
   const value = hash.replace(/^#\/?/, '');
@@ -50,6 +51,7 @@ export function routeHash(route: AppRoute): string {
 export function navigationFor(navigate: (route: AppRoute) => void): Navigation {
   return {
     home: () => navigate({ name: 'home' }),
+    today: () => navigate({ name: 'today' }),
     module: (moduleId) => navigate({ name: 'module', moduleId }),
     review: () => navigate({ name: 'review' }),
     import: () => navigate({ name: 'import' }),

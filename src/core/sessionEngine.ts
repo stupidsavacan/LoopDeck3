@@ -1,5 +1,5 @@
 import { buildChoiceCandidateIndex, type ChoiceCandidateIndex } from './choiceGenerator';
-import type { Attempt, ModuleInfo, Question, QuizAnswerSource, StudySettings } from './models';
+import type { AnswerFormat, Attempt, ModuleInfo, Question, QuizAnswerSource, StudySettings } from './models';
 import { decodeStudyCategory } from './studyCategory';
 import { getSupportedStudyQuestionModes, presentQuestionForStudy, resolveConcreteStudyQuestionMode } from './questionPresentation';
 import { buildWrongAnswerLookupIndexForStudyMode, type WrongAnswerLookupIndex } from './wrongAnswerExplanation';
@@ -9,6 +9,8 @@ export interface QuizSession {
   queue: Question[];
   choicePool: Question[];
   sourceByQuestionId?: ReadonlyMap<string, QuizAnswerSource>;
+  /** For sessions mixing modules: each question follows its own module's preferred answer format. */
+  preferredFormatByModuleId?: ReadonlyMap<string, AnswerFormat>;
   choiceCandidateIndex: ChoiceCandidateIndex;
   wrongAnswerLookupIndex: WrongAnswerLookupIndex;
   index: number;
