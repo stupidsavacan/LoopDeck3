@@ -29,7 +29,8 @@ export const USER_LOCAL_STORAGE_PREFIXES: readonly string[] = [
   'loopdeck3.session.',
   'loopdeck3.preferences.',
   'loopdeck3.library.folders.',
-  'loopdeck3.today.'
+  'loopdeck3.today.',
+  'loopdeck3.exams.'
 ];
 export const APP_LOCAL_STORAGE_KEYS: readonly string[] = [
   'loopdeck3.diagnostics',

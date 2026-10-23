@@ -3,7 +3,9 @@ import type { Attempt, ConcreteStudyQuestionMode, ModuleInfo, Question, ReviewCa
 import { presentQuestionForStudy } from '../core/questionPresentation';
 import { buildQuizAnswerSources } from '../core/reviewPersistence';
 import { createSession, type QuizSession } from '../core/sessionEngine';
-import { buildTodayPlan, DEFAULT_FRESH_COUNT, todayKey, type TodayPlan } from '../core/todayPlan';
+import { examFolders, examLoopOptions, nearestExamPlan } from '../core/examPlan';
+import { indexCardsByQuestion } from '../core/mastery';
+import { activeReviewCards, buildTodayPlan, DEFAULT_FRESH_COUNT, todayKey, type TodayPlan } from '../core/todayPlan';
 import { getActiveModules, getActiveQuestions } from '../packs/packResolver';
 import {
   readStoredSession,
@@ -12,6 +14,7 @@ import {
   sessionStorageScope,
   type SessionStorageScope
 } from '../storage/sessionStorage';
+import { readExamSettings } from '../storage/examPlans';
 import { LAST_MODULE_KEY, TODAY_MODULE_ID } from '../storage/libraryState';
 import { button, clear, el, toast } from '../ui/dom';
 import { appendIconLabel } from '../ui/icons';
@@ -120,6 +123,14 @@ export async function renderTodayScreen(context: ScreenContext): Promise<void> {
     return scope;
   }
 
+  const examOptions = examLoopOptions(
+    nearestExamPlan(
+      examFolders(catalog.packs, modules),
+      readExamSettings(),
+      indexCardsByQuestion(activeReviewCards(cards, questionsById))
+    )
+  );
+
   function freshPlan(extraAttempts: Attempt[] = [], reviewCards: ReviewCard[] = cards, reviewLimit?: number): TodayPlan {
     return buildTodayPlan({
       questions,
@@ -127,6 +138,7 @@ export async function renderTodayScreen(context: ScreenContext): Promise<void> {
       cards: reviewCards,
       attempts: [...attempts, ...extraAttempts],
       focusModuleId: safeGet(LAST_MODULE_KEY) ?? undefined,
+      ...examOptions,
       reviewLimit
     });
   }

@@ -2573,3 +2573,314 @@ body:has(.cloud-sync-control) .today-date {
   display: grid;
   gap: 12px;
 }
+
+/* Exam countdown: hero chip, folder link and the plan screen */
+.today-hero-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+body:has(.cloud-sync-control) .today-hero-top {
+  padding-right: 44px;
+}
+
+body:has(.cloud-sync-control) .today-hero-top .today-date {
+  padding-right: 0;
+}
+
+.today-exam-chip {
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid rgba(199, 255, 85, 0.4);
+  border-radius: 999px;
+  background: rgba(199, 255, 85, 0.12);
+  color: var(--editorial-lime);
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.home-screen .folder-exam {
+  min-height: 36px;
+  margin: -6px 0 12px 2px;
+  padding: 0 12px;
+  border: 1px dashed #b5bccb;
+  border-radius: 999px;
+  background: transparent;
+  color: #4a5263;
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.home-screen .folder-exam.has-exam {
+  border-style: solid;
+  border-color: var(--editorial-blue);
+  background: #e6ecff;
+  color: var(--editorial-blue-ink);
+}
+
+.exam-body {
+  display: grid;
+  gap: 16px;
+}
+
+.exam-title {
+  display: grid;
+  gap: 2px;
+}
+
+.exam-title .eyebrow {
+  margin: 0;
+}
+
+.exam-title h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 950;
+}
+
+.exam-hero {
+  display: grid;
+  gap: 6px;
+  padding: 22px;
+  border-radius: 26px;
+  background: var(--editorial-blue);
+  color: #fff;
+}
+
+.exam-date {
+  margin: 0;
+  color: #e6ecff;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.exam-countdown {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 900;
+}
+
+.exam-countdown strong {
+  font-size: 4.2rem;
+  font-weight: 950;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.exam-summary {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.7;
+}
+
+.exam-readiness-list {
+  display: grid;
+  gap: 14px;
+}
+
+.exam-readiness-row {
+  display: grid;
+  gap: 6px;
+}
+
+.exam-readiness-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.exam-readiness-title {
+  min-width: 0;
+  font-size: 0.9rem;
+  font-weight: 850;
+  overflow-wrap: anywhere;
+}
+
+.exam-tag {
+  flex: none;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 900;
+}
+
+.exam-tag.on-track {
+  background: #e6ecff;
+  color: var(--editorial-blue-ink);
+}
+
+.exam-tag.behind {
+  background: #fff0e3;
+  color: var(--editorial-orange-ink);
+}
+
+.exam-bar {
+  position: relative;
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e2e5eb;
+}
+
+.exam-bar-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+  background: var(--editorial-blue);
+}
+
+.exam-bar-goal {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--editorial-ink);
+}
+
+.exam-readiness-meta {
+  color: #4a5263;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.exam-schedule {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(58px, 1fr));
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.exam-day {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  padding: 10px 4px;
+  border: 1px solid var(--editorial-line);
+  border-radius: 12px;
+  background: var(--editorial-surface);
+}
+
+.exam-day-label {
+  color: #4a5263;
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+
+.exam-day-value {
+  font-size: 0.86rem;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
+.exam-day:first-child {
+  border-color: var(--editorial-ink);
+  background: var(--editorial-lime);
+}
+
+.exam-day.is-rest {
+  background: #f4f5f8;
+}
+
+.exam-day.is-review {
+  background: #e6ecff;
+}
+
+.exam-day.is-exam {
+  border-color: var(--editorial-ink);
+  background: var(--editorial-ink);
+}
+
+.exam-day.is-exam .exam-day-label,
+.exam-day.is-exam .exam-day-value {
+  color: var(--editorial-lime);
+}
+
+.exam-start {
+  margin-top: 4px;
+}
+
+.exam-form {
+  display: grid;
+  gap: 14px;
+}
+
+.exam-date-row {
+  display: grid;
+  gap: 6px;
+}
+
+.exam-date-field {
+  font-size: 0.85rem;
+  font-weight: 850;
+}
+
+.exam-date-input {
+  min-height: 48px;
+  padding: 0 12px;
+  border: 1px solid var(--editorial-line);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--editorial-ink);
+  font: inherit;
+}
+
+.exam-rest {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.exam-rest legend {
+  margin-bottom: 8px;
+  padding: 0;
+  font-size: 0.85rem;
+  font-weight: 850;
+}
+
+.exam-rest-days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.exam-rest-day {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  min-height: 56px;
+  padding: 6px 0;
+  border: 1px solid var(--editorial-line);
+  border-radius: 12px;
+  background: #fff;
+  font-size: 0.8rem;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.exam-rest-day input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+}
+
+.exam-intro {
+  margin: 0;
+  color: #4a5263;
+  font-size: 0.9rem;
+  line-height: 1.7;
+}
