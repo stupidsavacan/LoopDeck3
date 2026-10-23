@@ -24,6 +24,8 @@ import {
 } from '../ui/inlineQuizView';
 import { renderQuestionVisualReferences } from '../ui/questionVisualReferences';
 import { renderRivalDetour } from '../ui/rivalDetour';
+import { speak, stopSpeaking, whenSpeechReady } from '../platform/speech';
+import { getCorrectAnswer } from '../core/answerJudge';
 
 export interface InlineQuizCallbacks {
   onSessionChange(session: QuizSession): void;
@@ -200,6 +202,7 @@ export function renderInlineQuiz(
       });
     }
     stopObserving();
+    stopSpeaking();
     controller.dispose();
     if (renderTokenByContainer.get(container) === renderToken) {
       renderTokenByContainer.delete(container);
@@ -407,8 +410,19 @@ export function renderInlineQuiz(
   reveal.setAttribute('aria-label', '答えを見る');
   reveal.onclick = () => record(selectedAnswer, true);
 
+  // Hidden until the browser reports a voice, so devices without one never see a dead button.
+  const readAloud = button('', 'btn ghost speak-button');
+  appendIconLabel(readAloud, 'speaker', '読み上げ');
+  readAloud.setAttribute('aria-label', '読み上げ');
+  readAloud.hidden = true;
+  readAloud.onclick = () => {
+    if (!isCurrentRender()) return;
+    const correct = getCorrectAnswer(activeQuestion);
+    speak(answerAttempt ? (Array.isArray(correct) ? correct.join('、') : correct) : activeQuestion.prompt);
+  };
+
   const tools = el('div', 'v2-quiz-tools');
-  tools.append(bookmark, hint, reveal);
+  tools.append(bookmark, hint, reveal, readAloud);
 
   const next = button('', 'btn prototype-next-ready');
   appendIconLabel(next, 'arrowRight', '次へ', 'end');
@@ -442,6 +456,9 @@ export function renderInlineQuiz(
   if (confidencePicker) card.append(confidencePicker.element);
   card.append(answerArea, controls, resultArea);
   container.append(card);
+  whenSpeechReady(() => {
+    if (isCurrentRender()) readAloud.hidden = false;
+  });
   window.requestAnimationFrame(() => {
     if (!isCurrentRender()) return;
     container.scrollIntoView?.({ block: 'start', inline: 'nearest', behavior: 'auto' });

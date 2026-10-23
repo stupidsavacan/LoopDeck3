@@ -3553,3 +3553,8 @@ body:has(.cloud-sync-control) .today-hero-top .today-date {
   cursor: default;
   opacity: 0.7;
 }
+
+/* Read-aloud joins the quiz tools only when the device has a voice. */
+.v2-quiz-tools:has(> .speak-button:not([hidden])) {
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+}
