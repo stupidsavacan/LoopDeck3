@@ -10,6 +10,9 @@ export interface TodayHeroSummary {
   freshCount: number;
   focusTitle?: string;
   estimatedMinutes: number;
+  /** Countdown to the nearest exam, e.g. 「一学期中間テストまで 9日」. */
+  examLabel?: string;
+  onExam?(): void;
   /** A loop left midway today: position and length of the saved session. */
   resume?: { index: number; total: number };
   onStart(): void;
@@ -82,7 +85,7 @@ export function renderTodayHero(summary: TodayHeroSummary): HTMLElement {
   const copy = el('div', 'today-hero-copy');
   if (summary.resume) {
     copy.append(
-      el('h1', 'today-heading', '続きから始めよう。'),
+      el('h1', 'today-heading', '続きから。'),
       el('p', 'today-plan', `今日のループ ${done}/${total}問まで進んでいます。`)
     );
   } else if (remaining > 0) {
@@ -102,7 +105,14 @@ export function renderTodayHero(summary: TodayHeroSummary): HTMLElement {
     );
   }
   body.append(ring(done, total, summary.resume ? 'ループの進み' : '今日の回答'), copy);
-  hero.append(el('p', 'today-date', dateLabel(summary.now, summary.streak)), body);
+  const top = el('div', 'today-hero-top');
+  top.append(el('p', 'today-date', dateLabel(summary.now, summary.streak)));
+  if (summary.examLabel) {
+    const chip = button(summary.examLabel, 'today-exam-chip');
+    if (summary.onExam) chip.onclick = summary.onExam;
+    top.append(chip);
+  }
+  hero.append(top, body);
 
   if (remaining > 0) {
     const start = button('', 'today-start');

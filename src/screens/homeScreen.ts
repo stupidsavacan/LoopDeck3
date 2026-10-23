@@ -1,10 +1,12 @@
 import type { ScreenContext } from '../app/context';
 import { currentStreak } from '../core/analyticsEngine';
 import { endOfLocalCalendarDay, startOfLocalCalendarDay } from '../core/calendarDay';
+import { buildExamPlan, examCountdownLabel, examFolders, examLoopOptions, nearestExamPlan } from '../core/examPlan';
 import { indexCardsByQuestion, moduleMastery } from '../core/mastery';
 import type { ModuleInfo, ReviewCard } from '../core/models';
 import { activeReviewCards, buildTodayPlan } from '../core/todayPlan';
 import { getActiveModules, getActiveQuestions } from '../packs/packResolver';
+import { readExamSettings } from '../storage/examPlans';
 import { listStoredSessionSummaries, type StoredSessionSummary } from '../storage/sessionStorage';
 import { button, clear, el } from '../ui/dom';
 import { createUiIcon, iconNameForModule } from '../ui/icons';
@@ -105,6 +107,7 @@ export function renderHomeScreen(context: ScreenContext): void {
   const resumeSlot = el('div', 'resume-slot');
   const shelfHeading = el('h2', 'home-section-heading', '自分で選ぶ');
   const progressByModule = new Map<string, ModuleProgress>();
+  const examLabels = new Map<string, string>();
   const progressNodes = new Map<string, HTMLElement[]>();
 
   const toolbar = el('div', 'toolbar');
@@ -190,6 +193,7 @@ export function renderHomeScreen(context: ScreenContext): void {
     for (const tag of folder.tags) folderTags.append(el('span', '', tag));
     titleBox.append(folderTags);
     head.append(titleBox, el('div', 'folder-count', `${modules.length}件`));
+    const exam = renderFolderExam(folder);
 
     const content = el('div', isOpen ? 'folder-content open' : 'folder-content');
     if (isOpen) for (const module of modules) content.append(renderModuleCard(module));
@@ -197,8 +201,26 @@ export function renderHomeScreen(context: ScreenContext): void {
       setFolderOpen(folder, !isOpen);
       renderList();
     };
-    shell.append(head, content);
+    shell.append(head, exam, content);
     return shell;
+  }
+
+  const examSlots = new Map<string, HTMLElement>();
+
+  function renderFolderExam(folder: HomeFolder): HTMLElement {
+    const link = button('', 'folder-exam');
+    link.onclick = () => context.navigation.exam(folder.id);
+    examSlots.set(folder.id, link);
+    fillFolderExam(folder.id);
+    return link;
+  }
+
+  function fillFolderExam(folderId: string): void {
+    const link = examSlots.get(folderId);
+    if (!link) return;
+    const label = examLabels.get(folderId);
+    link.textContent = label ?? '試験日を設定';
+    link.classList.toggle('has-exam', Boolean(label));
   }
 
   function renderList(): void {
@@ -260,12 +282,24 @@ export function renderHomeScreen(context: ScreenContext): void {
     const now = new Date();
     const questions = getActiveQuestions(packView);
     const activeCards = activeReviewCards(cards, new Map(questions.map((question) => [question.id, question])));
+    const cardsByQuestion = indexCardsByQuestion(activeCards);
+    const folders = examFolders(packView.packs, visibleModules);
+    const examSettings = readExamSettings();
+    for (const folder of folders) {
+      const setting = examSettings[folder.id];
+      if (!setting) continue;
+      const examPlan = buildExamPlan(folder, setting, cardsByQuestion, now);
+      if (examPlan.daysLeft >= 0) examLabels.set(folder.id, examPlan.daysLeft === 0 ? '試験は今日' : `試験まで ${examPlan.daysLeft}日`);
+    }
+    for (const folderId of examSlots.keys()) fillFolderExam(folderId);
+    const nearest = nearestExamPlan(folders, examSettings, cardsByQuestion, now);
     const plan = buildTodayPlan({
       questions,
       modules: visibleModules,
       cards: activeCards,
       attempts,
       focusModuleId: safeGetStorage(HOME_LAST_MODULE_KEY) ?? undefined,
+      ...examLoopOptions(nearest),
       now
     });
     const saved = listStoredSessionSummaries().filter((summary) => summary.index < summary.total);
@@ -281,6 +315,8 @@ export function renderHomeScreen(context: ScreenContext): void {
       focusTitle: plan.focusModule?.title,
       estimatedMinutes: plan.estimatedMinutes,
       resume: today ? { index: today.index, total: today.total } : undefined,
+      examLabel: nearest ? examCountdownLabel(nearest) : undefined,
+      onExam: nearest ? () => context.navigation.exam(nearest.folder.id) : undefined,
       onStart: context.navigation.today
     });
     hero.replaceWith(next);
@@ -291,7 +327,6 @@ export function renderHomeScreen(context: ScreenContext): void {
       .sort((a, b) => Date.parse(b.savedAt) - Date.parse(a.savedAt))[0];
     if (latest) renderResumeBanner(latest, now);
 
-    const cardsByQuestion = indexCardsByQuestion(activeCards);
     const due = dueTodayByModule(activeCards, now);
     for (const module of visibleModules) {
       progressByModule.set(module.id, { ratio: moduleMastery(module, cardsByQuestion).ratio, dueToday: due.get(module.id) ?? 0 });
