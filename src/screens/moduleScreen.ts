@@ -31,7 +31,7 @@ import { renderInlineQuiz, disposeInlineQuizzes } from './inlineQuiz';
 import { renderFlashcardSession, disposeFlashcardSessions } from './flashcardSession';
 import { AUTO_RESUME_KEY } from '../storage/libraryState';
 
-type ToggleSettingKey = 'shuffle' | 'autoNext' | 'autoRevealAfterIdle' | 'showExample' | 'showNumber' | 'showCategory';
+type ToggleSettingKey = 'shuffle' | 'autoNext' | 'autoRevealAfterIdle' | 'showExample' | 'showNumber' | 'showCategory' | 'askConfidence';
 
 /** The home resume banner asks for one automatic resume of this module. */
 function takeAutoResume(moduleId: string): boolean {
@@ -249,7 +249,8 @@ export async function renderModuleScreen(context: ScreenContext & { moduleId: st
     ['autoRevealAfterIdle', '10秒無操作で答えを表示'],
     ['showExample', '例文表示'],
     ['showNumber', '番号表示'],
-    ['showCategory', 'カテゴリ表示']
+    ['showCategory', 'カテゴリ表示'],
+    ['askConfidence', '回答前に自信を選ぶ']
   ];
   const autoToggles: HTMLInputElement[] = [];
   for (const [key, label] of toggles) {
@@ -257,7 +258,7 @@ export async function renderModuleScreen(context: ScreenContext & { moduleId: st
     const input = document.createElement('input');
     input.type = 'checkbox';
     input.checked = Boolean(settings[key]);
-    if (key === 'autoNext' || key === 'autoRevealAfterIdle') autoToggles.push(input);
+    if (key === 'autoNext' || key === 'autoRevealAfterIdle' || key === 'askConfidence') autoToggles.push(input);
     input.onchange = () => {
       settings[key] = input.checked;
       persistStudyPreferences();
@@ -268,7 +269,7 @@ export async function renderModuleScreen(context: ScreenContext & { moduleId: st
   const flashcardNotice = el(
     'p',
     'flashcard-toggle-notice',
-    'カード：タップで表裏を切り替え、左へスワイプで「知らない」、右へスワイプで「知ってる」。カードの向きは「出題形式」を使います。自動で次へ・無操作で答えを表示は適用されません。'
+    'カード：タップで表裏を切り替え、左へスワイプで「知らない」、右へスワイプで「知ってる」。カードの向きは「出題形式」を使います。自動で次へ・無操作で答えを表示・回答前の自信の選択は適用されません。'
   );
   function updateFlashcardToggles(): void {
     const flashcard = settings.answerFormat === 'flashcard';

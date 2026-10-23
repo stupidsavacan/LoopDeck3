@@ -1,5 +1,5 @@
 import { isNearMissAnswer, judgeQuestion } from './answerJudge';
-import type { AnswerFormat, Attempt, Question } from './models';
+import type { AnswerConfidence, AnswerFormat, Attempt, Question } from './models';
 import { buildQuizAttempt } from './quizAnswer';
 import { advanceSession, elapsedForCurrent, elapsedForSession, type QuizSession } from './sessionEngine';
 
@@ -68,13 +68,23 @@ export class QuizController {
     this.excludedMs += elapsed;
     this.checkpoint();
   }
-  /** `confusedWithQuestionId` is kept only when the answer turns out wrong. */
-  answer(input: string | string[], revealed = false, confusedWithQuestionId?: string): Attempt | undefined {
+  /** `confusedWithQuestionId` is kept only when the answer turns out wrong; confidence only for real answers. */
+  answer(
+    input: string | string[],
+    revealed = false,
+    extras: { confusedWithQuestionId?: string; confidence?: AnswerConfidence } = {}
+  ): Attempt | undefined {
     if (!this.canAnswer) return undefined;
     const { question } = this.options;
+    const { confusedWithQuestionId } = extras;
     const nearMiss = !revealed && typeof input === 'string' && question.type !== 'multi_select' && isNearMissAnswer(question, input);
     const result = revealed ? 'revealed' : judgeQuestion(question, input) ? 'correct' : 'wrong';
-    const attempt = this.record(result, revealed ? '' : Array.isArray(input) ? [...input] : input, nearMiss);
+    const attempt = this.record(
+      result,
+      revealed ? '' : Array.isArray(input) ? [...input] : input,
+      nearMiss,
+      revealed ? undefined : extras.confidence
+    );
     if (result === 'wrong' && confusedWithQuestionId && confusedWithQuestionId !== question.id) {
       attempt.confusedWithQuestionId = confusedWithQuestionId;
     }
@@ -84,7 +94,7 @@ export class QuizController {
     if (!this.canAnswer || this.options.answerMode !== 'flashcard') return undefined;
     return this.record(known ? 'correct' : 'wrong', '', false);
   }
-  private record(result: Attempt['result'], input: string | string[], nearMiss: boolean): Attempt {
+  private record(result: Attempt['result'], input: string | string[], nearMiss: boolean, confidence?: AnswerConfidence): Attempt {
     const { question, session, answerMode } = this.options;
     this.attempt = buildQuizAttempt(
       question,
@@ -94,7 +104,8 @@ export class QuizController {
       session.mode,
       answerMode,
       session.currentHiddenTimeExcludedMs + this.excluded(),
-      nearMiss
+      nearMiss,
+      confidence
     );
     this.state = 'pending';
     return this.attempt;

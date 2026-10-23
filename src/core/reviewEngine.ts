@@ -1,5 +1,5 @@
 import { normalizeAnswer, normalizeAnswerForQuestion } from './answerJudge';
-import type { AnswerFormat, AnswerResult, Attempt, Question } from './models';
+import type { AnswerConfidence, AnswerFormat, AnswerResult, Attempt, Question } from './models';
 
 export interface ReviewItem {
   question: Question;
@@ -100,18 +100,30 @@ export function timingBand(elapsedMs: number, answerMode: AnswerFormat = 'input'
   return 'normal';
 }
 
-export function scoreAttemptDelta(result: AnswerResult, nearMiss: boolean, elapsedMs: number, answerMode: AnswerFormat = 'input'): number {
+export function scoreAttemptDelta(
+  result: AnswerResult,
+  nearMiss: boolean,
+  elapsedMs: number,
+  answerMode: AnswerFormat = 'input',
+  confidence?: AnswerConfidence
+): number {
   if (result === 'revealed') return 10;
   if (answerMode === 'flashcard') return result === 'correct' ? -2 : 6;
+  // Being sure and wrong points at a firm misconception, which is worth reviewing first.
+  if (result === 'wrong' && confidence === 'sure') return 12;
   if (result === 'wrong' && nearMiss) return 4;
   if (result === 'wrong') return timingBand(elapsedMs, answerMode) === 'fast' ? 8 : 6;
+  if (confidence === 'guess') return 3;
   if (timingBand(elapsedMs, answerMode) === 'fast') return -4;
   if (timingBand(elapsedMs, answerMode) === 'slow') return 3;
   return -2;
 }
 
 function attemptDelta(attempt: Attempt): number {
-  return attempt.priorityDelta ?? scoreAttemptDelta(attempt.result, Boolean(attempt.nearMiss), attempt.elapsedMs, answerModeFor(attempt));
+  return (
+    attempt.priorityDelta ??
+    scoreAttemptDelta(attempt.result, Boolean(attempt.nearMiss), attempt.elapsedMs, answerModeFor(attempt), attempt.confidence)
+  );
 }
 
 function reviewLabel(score: number): ReviewItem['label'] {

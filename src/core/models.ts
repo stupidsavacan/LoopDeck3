@@ -2,6 +2,8 @@ export type QuestionType = 'input' | 'choice' | 'multi_select';
 export type AnswerResult = 'correct' | 'wrong' | 'revealed';
 export type AnswerFormat = 'auto' | 'choice' | 'input' | 'flashcard';
 export type StudyFilter = 'all' | 'wrong' | 'bookmarked';
+/** How sure the learner said they were before answering. */
+export type AnswerConfidence = 'sure' | 'unsure' | 'guess';
 
 export type ConcreteStudyQuestionMode = 'as_stored' | 'front_to_back' | 'back_to_front';
 export type StudyQuestionMode = ConcreteStudyQuestionMode | 'mixed';
@@ -160,6 +162,7 @@ export interface Attempt {
   questionMode?: ConcreteStudyQuestionMode;
   /** A wrong answer that is the answer of this other question: the two are being confused. */
   confusedWithQuestionId?: string;
+  confidence?: AnswerConfidence;
 }
 
 export interface QuizAnswerSource {
@@ -225,4 +228,6 @@ export interface StudySettings {
   showExample?: boolean;
   showNumber?: boolean;
   showCategory?: boolean;
+  /** Ask 自信あり／うろ覚え／わからない before each answer. */
+  askConfidence?: boolean;
 }
