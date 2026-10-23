@@ -15,7 +15,13 @@ import { moduleMeta } from '../ui/modulePresentation';
 import { renderTodayHero, renderTodayHeroLoading } from '../ui/todayHero';
 import { openWeeklyStory } from '../ui/weeklyStory';
 import { buildHomeFolders, homeModuleMatches, type HomeFolder } from './homeFolders';
-import { AUTO_RESUME_KEY, LAST_MODULE_KEY as HOME_LAST_MODULE_KEY, TODAY_MODULE_ID, WEEKLY_SEEN_KEY } from '../storage/libraryState';
+import {
+  AUTO_RESUME_KEY,
+  LAST_MODULE_KEY as HOME_LAST_MODULE_KEY,
+  LIBRARY_VIEW_KEY,
+  TODAY_MODULE_ID,
+  WEEKLY_SEEN_KEY
+} from '../storage/libraryState';
 const HOME_IN_PLAYER_KEY = 'loopdeck3.library.in-player';
 const FOLDER_STATE_PREFIX = 'loopdeck3.library.folders.';
 
@@ -64,6 +70,9 @@ function displayTags(module: ModuleInfo): string[] {
   return [...meta.tags, `${module.questionIds.length}問`].slice(0, 5);
 }
 
+/** Spines at or above this mastery get the gold edge. */
+const MASTERED_SPINE_RATIO = 0.9;
+
 interface ModuleProgress {
   ratio: number;
   dueToday: number;
@@ -108,7 +117,27 @@ export function renderHomeScreen(context: ScreenContext): void {
   let hero = renderTodayHeroLoading();
   const resumeSlot = el('div', 'resume-slot');
   const weeklySlot = el('div', 'resume-slot weekly-slot');
-  const shelfHeading = el('h2', 'home-section-heading', '自分で選ぶ');
+  let view: 'cards' | 'shelf' = safeGetStorage(LIBRARY_VIEW_KEY) === 'shelf' ? 'shelf' : 'cards';
+  const shelfHeading = el('div', 'home-section-row');
+  const viewToggle = el('div', 'library-view-toggle');
+  viewToggle.setAttribute('role', 'group');
+  viewToggle.setAttribute('aria-label', '教材の表示');
+  const viewButtons = (['cards', 'shelf'] as const).map((value) => {
+    const option = button(value === 'cards' ? 'カード' : '背表紙', 'library-view-option');
+    option.onclick = () => {
+      view = value;
+      safeSetStorage(LIBRARY_VIEW_KEY, value);
+      syncViewButtons();
+      renderList();
+    };
+    return [value, option] as const;
+  });
+  function syncViewButtons(): void {
+    for (const [value, option] of viewButtons) option.setAttribute('aria-pressed', String(value === view));
+  }
+  syncViewButtons();
+  viewToggle.append(...viewButtons.map(([, option]) => option));
+  shelfHeading.append(el('h2', 'home-section-heading', '自分で選ぶ'), viewToggle);
   const progressByModule = new Map<string, ModuleProgress>();
   const examLabels = new Map<string, string>();
   const progressNodes = new Map<string, HTMLElement[]>();
@@ -128,6 +157,12 @@ export function renderHomeScreen(context: ScreenContext): void {
     const progress = progressByModule.get(moduleId);
     if (!progress) return;
     const percent = Math.round(progress.ratio * 100);
+    if (node.classList.contains('module-spine')) {
+      node.style.setProperty('--mastery', `${percent}%`);
+      node.classList.toggle('is-mastered', progress.ratio >= MASTERED_SPINE_RATIO);
+      node.setAttribute('aria-label', `${node.dataset.title ?? ''} ${node.dataset.count ?? ''}問 習熟${percent}%`);
+      return;
+    }
     const bar = el('span', 'module-progress-bar');
     const fill = el('span', 'module-progress-fill');
     fill.style.width = `${percent}%`;
@@ -173,6 +208,24 @@ export function renderHomeScreen(context: ScreenContext): void {
     return card;
   }
 
+  /** A book spine: thickness follows the question count, the bottom band fills with mastery. */
+  function renderModuleSpine(module: ModuleInfo): HTMLButtonElement {
+    const meta = moduleMeta(module);
+    const count = module.questionIds.length;
+    const spine = el('button', 'module-spine') as HTMLButtonElement;
+    spine.type = 'button';
+    spine.dataset.title = module.title;
+    spine.dataset.count = String(count);
+    spine.setAttribute('aria-label', `${module.title} ${count}問`);
+    spine.style.setProperty('--deck-accent', meta.accent);
+    spine.style.setProperty('--spine-width', `${Math.round(Math.min(84, Math.max(48, 32 + count / 5)))}px`);
+    spine.onclick = () => openModule(module.id);
+    spine.append(el('span', 'module-spine-title', module.title), el('span', 'module-spine-band'));
+    progressNodes.set(module.id, [...(progressNodes.get(module.id) ?? []).filter((node) => screen.contains(node)), spine]);
+    fillProgress(spine, module.id);
+    return spine;
+  }
+
   function renderSearchResults(modules: ModuleInfo[]): void {
     clear(list);
     list.className = 'module-grid search-grid';
@@ -198,8 +251,9 @@ export function renderHomeScreen(context: ScreenContext): void {
     head.append(titleBox, el('div', 'folder-count', `${modules.length}件`));
     const exam = renderFolderExam(folder);
 
-    const content = el('div', isOpen ? 'folder-content open' : 'folder-content');
-    if (isOpen) for (const module of modules) content.append(renderModuleCard(module));
+    const shelf = view === 'shelf';
+    const content = el('div', `${isOpen ? 'folder-content open' : 'folder-content'}${shelf ? ' shelf' : ''}`);
+    if (isOpen) for (const module of modules) content.append(shelf ? renderModuleSpine(module) : renderModuleCard(module));
     head.onclick = () => {
       setFolderOpen(folder, !isOpen);
       renderList();
