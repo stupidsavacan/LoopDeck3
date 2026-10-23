@@ -3196,3 +3196,186 @@ body:has(.cloud-sync-control) .today-hero-top .today-date {
 .level-solid {
   background: #1f3fd1;
 }
+
+/* Weekly story */
+.weekly-open {
+  margin-top: 12px;
+}
+
+.weekly-banner-icon {
+  background: var(--editorial-ink) !important;
+  color: var(--editorial-lime) !important;
+}
+
+.weekly-story {
+  --story-bg: #0a1020;
+  --story-text: #ffffff;
+  --story-muted: #c9cfdc;
+  width: 100%;
+  max-width: 480px;
+  height: 100%;
+  max-height: 100%;
+  margin: auto;
+  padding: calc(16px + env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) calc(16px + env(safe-area-inset-bottom, 0px))
+    max(16px, env(safe-area-inset-left, 0px));
+  border: 0;
+  background: var(--story-bg);
+  color: var(--story-text);
+  box-sizing: border-box;
+}
+
+.weekly-story[open] {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 16px;
+}
+
+.weekly-story::backdrop {
+  background: rgba(10, 16, 32, 0.7);
+}
+
+.weekly-story[data-theme='blue'] {
+  --story-bg: #2148e0;
+  --story-muted: #e6ecff;
+}
+
+.weekly-story[data-theme='lime'] {
+  --story-bg: #c7ff55;
+  --story-text: #0a1020;
+  --story-muted: #2d3a00;
+}
+
+.weekly-story[data-theme='orange'] {
+  --story-bg: #c2410c;
+  --story-muted: #ffe4d1;
+}
+
+.weekly-bars {
+  display: grid;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
+  gap: 4px;
+}
+
+.weekly-bar {
+  height: 4px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--story-text) 25%, transparent);
+}
+
+.weekly-bar.is-seen {
+  background: var(--story-text);
+}
+
+.weekly-stage {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 14px;
+  min-height: 0;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.weekly-period,
+.weekly-kicker {
+  color: var(--story-muted);
+  font-size: 0.82rem;
+  font-weight: 850;
+}
+
+.weekly-kicker {
+  font-size: 1rem;
+}
+
+.weekly-big {
+  font-size: clamp(5rem, 30vw, 9rem);
+  font-weight: 950;
+  line-height: 0.95;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.weekly-big small {
+  margin-left: 6px;
+  font-size: 0.32em;
+  letter-spacing: 0;
+}
+
+.weekly-line {
+  font-size: 1.35rem;
+  font-weight: 900;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.weekly-days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+  width: 100%;
+  margin-top: 6px;
+}
+
+.weekly-day {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+}
+
+.weekly-day-mark {
+  width: 100%;
+  height: 40px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--story-text) 16%, transparent);
+}
+
+.weekly-day.is-studied .weekly-day-mark {
+  background: #c7ff55;
+}
+
+.weekly-day-name {
+  font-size: 0.72rem;
+  font-weight: 850;
+}
+
+.weekly-footer {
+  display: grid;
+  grid-template-columns: auto 1fr 1fr;
+  gap: 8px;
+}
+
+.weekly-footer button {
+  min-height: 52px;
+  padding: 0 14px;
+  border-radius: 16px;
+  font: inherit;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.weekly-close,
+.weekly-save {
+  border: 1.5px solid var(--story-text);
+  background: transparent;
+  color: var(--story-text);
+}
+
+.weekly-next {
+  border: 0;
+  background: var(--story-text);
+  color: var(--story-bg);
+}
+
+.weekly-footer button:focus-visible,
+.weekly-stage:focus-visible {
+  outline: 3px solid var(--story-muted);
+  outline-offset: 3px;
+}
