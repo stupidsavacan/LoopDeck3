@@ -5,6 +5,31 @@ import { describe, expect, it, vi } from 'vitest';
 import { LocalDatabase } from '../src/storage/indexedDb';
 
 describe('fresh LoopDeck3 database', () => {
+  it('adds cloud stores to schema2 without uploading or losing local records', async () => {
+    const name = 'cloud-v2-' + crypto.randomUUID();
+    const legacy = await new Promise<IDBDatabase>((resolve, reject) => {
+      const r = indexedDB.open(name, 2);
+      r.onupgradeneeded = () => {
+        r.result.createObjectStore('bookmarks', { keyPath: 'questionId' });
+      };
+      r.onsuccess = () => resolve(r.result);
+      r.onerror = () => reject(r.error);
+    });
+    const tx = legacy.transaction('bookmarks', 'readwrite');
+    tx.objectStore('bookmarks').put({ questionId: 'retained' });
+    await new Promise<void>((resolve) => {
+      tx.oncomplete = () => resolve();
+    });
+    legacy.close();
+    const current = new LocalDatabase(name);
+    try {
+      expect(await current.all('bookmarks')).toEqual([{ questionId: 'retained' }]);
+      expect(await current.all('cloudOutbox')).toEqual([]);
+      expect(await current.all('packSync')).toEqual([]);
+    } finally {
+      current.close();
+    }
+  });
   it('closes a late connection after a blocked open and allows a fresh retry', async () => {
     const close = vi.fn();
     const request = { result: { close }, onblocked: null, onsuccess: null } as unknown as IDBOpenDBRequest;
@@ -31,8 +56,20 @@ describe('fresh LoopDeck3 database', () => {
         stores: [...tx.db.objectStoreNames],
         indexes: [...tx.objectStore('attempts').indexNames]
       }));
-      expect(shape.version).toBe(2);
-      expect(shape.stores).toEqual(['attempts', 'bookmarks', 'contentMetadata', 'packAssets', 'packs', 'reviewCards', 'reviewLogs']);
+      expect(shape.version).toBe(3);
+      expect(shape.stores).toEqual([
+        'attempts',
+        'bookmarks',
+        'cloudConfig',
+        'cloudOutbox',
+        'cloudStaging',
+        'contentMetadata',
+        'packAssets',
+        'packSync',
+        'packs',
+        'reviewCards',
+        'reviewLogs'
+      ]);
       expect(shape.indexes).toEqual(['byQuestionId', 'byResult']);
     } finally {
       database.close();

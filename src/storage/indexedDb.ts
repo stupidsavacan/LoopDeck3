@@ -1,9 +1,14 @@
 import { recoverReviewRows } from './reviewRecovery';
 import type { ReviewCard } from '../core/models';
 export const USER_DATA_STORES = ['attempts', 'bookmarks', 'packs', 'packAssets', 'reviewCards', 'reviewLogs'] as const;
-export type StoreName = (typeof USER_DATA_STORES)[number] | 'contentMetadata';
+export const CLOUD_STORES = ['cloudConfig', 'packSync', 'cloudOutbox', 'cloudStaging'] as const;
+export type StoreName = (typeof USER_DATA_STORES)[number] | 'contentMetadata' | (typeof CLOUD_STORES)[number];
 const schema: Record<StoreName, { key: string | string[]; indexes?: Record<string, string> }> = {
   contentMetadata: { key: 'key' },
+  cloudConfig: { key: 'key' },
+  packSync: { key: 'packId' },
+  cloudOutbox: { key: 'opId' },
+  cloudStaging: { key: 'packId' },
   attempts: { key: 'attemptId', indexes: { byQuestionId: 'questionId', byResult: 'result' } },
   bookmarks: { key: 'questionId' },
   packs: { key: 'packId' },
@@ -25,12 +30,12 @@ export class LocalDatabase {
     if (this.connection) return Promise.resolve(this.connection);
     if (this.opening) return this.opening;
     this.opening = new Promise<IDBDatabase>((resolve, reject) => {
-      const request = indexedDB.open(this.name, 2);
+      const request = indexedDB.open(this.name, 3);
       let failed = false;
       request.onupgradeneeded = () => {
         const connection = request.result;
         const tx = request.transaction!;
-        for (const name of [...USER_DATA_STORES, 'contentMetadata'] as StoreName[]) {
+        for (const name of [...USER_DATA_STORES, 'contentMetadata', ...CLOUD_STORES] as StoreName[]) {
           const layout = schema[name];
           const store = connection.objectStoreNames.contains(name)
             ? tx.objectStore(name)

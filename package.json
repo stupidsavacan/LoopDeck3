@@ -4,6 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test:cloud-server": "npm --prefix server run test:sync",
+    "test:cloud-policy": "node qa/cloud-policy-test.mjs",
     "dev": "vite --host 0.0.0.0",
     "dev:local": "vite",
     "build": "npm run typecheck && vite build",

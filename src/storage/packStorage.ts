@@ -1,3 +1,4 @@
+import { recordPackMutation, recordPackDeletion, type RemoteCommit } from './cloudRecords';
 import { clearBrowserStudyState } from './browserStudyState';
 import { validatePack, validateActivePackIdentities } from '../packs/packValidator';
 import { loadBuiltinPacks } from '../packs/builtinLoader';
@@ -58,9 +59,11 @@ export async function savePackWithAssets(
   database: LocalDatabase,
   pack: LoopDeckPack,
   assets: ImportedPackAsset[],
-  strategy: PackAssetWriteStrategy
+  strategy: PackAssetWriteStrategy,
+  remote?: RemoteCommit
 ): Promise<void> {
-  await database.transact(PACK_LIFECYCLE_STORES, 'readwrite', (tx) => {
+  await database.transact([...PACK_LIFECYCLE_STORES, 'packSync', 'cloudOutbox', 'cloudStaging', 'cloudConfig'], 'readwrite', (tx) => {
+    recordPackMutation(tx, pack, assets, strategy, remote);
     putPacksInInstallOrder(tx.objectStore('packs'), [pack], true);
     const assetStore = tx.objectStore('packAssets');
     const referencedPaths = new Set(pack.questions.map((question) => question.imageAsset).filter((path): path is string => Boolean(path)));
@@ -120,7 +123,8 @@ export async function savePackWithAssets(
 }
 
 export async function deletePackAndAssets(database: LocalDatabase, packId: string): Promise<void> {
-  await database.transact(PACK_LIFECYCLE_STORES, 'readwrite', (tx) => {
+  await database.transact([...PACK_LIFECYCLE_STORES, 'packSync', 'cloudOutbox', 'cloudStaging'], 'readwrite', (tx) => {
+    recordPackDeletion(tx, packId);
     const packStore = tx.objectStore('packs');
     const current = packStore.getAll();
     current.onsuccess = () => {

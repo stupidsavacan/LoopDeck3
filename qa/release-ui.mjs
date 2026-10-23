@@ -1,0 +1,40 @@
+import {chromium} from '@playwright/test';
+import {execFileSync,spawn} from 'node:child_process';
+import {writeFileSync} from 'node:fs';
+import {createHash,randomUUID} from 'node:crypto';
+import {setTimeout as delay} from 'node:timers/promises';
+import {createInterface} from 'node:readline';
+import {createConnection} from 'node:net';
+import JSZip from 'jszip';
+import assert from 'node:assert/strict';
+import {contentFingerprint,importLoopDeckZip} from '../server/generated/pack-protocol.mjs';
+const serial='ZY22GSDPFW',pkg='com.loopdeck3.app.syncpreview.release',base='https://loopdeck3-sync-20261022.salmon1124.chatgpt.site';
+const adb=(...a)=>execFileSync('adb',['-s',serial,...a],{encoding:'utf8',timeout:120000,stdio:['ignore','pipe','pipe']}).trim();
+const result={environment:'stock physical Android; signed release UI handlers via separate same-signed instrumentation, no CDP on release, no direct IndexedDB writes, private phrase in raw stdin/RAM only',checks:[]};
+const record=(name,detail)=>{result.checks.push({name,status:'PASS',detail});console.log('PASS '+name);writeFileSync('qa-results/public/release-ui-results.json',JSON.stringify(result,null,2));};
+async function until(name,f,timeout=240000){const end=Date.now()+timeout;let next=Date.now()+20000;while(Date.now()<end){if(await f())return;if(Date.now()>next){console.log('WAIT '+name);next=Date.now()+20000;}await delay(400);}throw Error(name+' timed out');}
+if(!process.stdin.isTTY)throw Error('Run with a PTY for non-echoed secret input');
+process.stdin.setRawMode(true);process.stdin.resume();console.log('SECRET_INPUT_READY');
+let phrase;const secretLines=createInterface({input:process.stdin});for await(const line of secretLines){try{phrase=JSON.parse(line).phrase;}catch{throw Error('Invalid secret input');}secretLines.close();break;}process.stdin.pause();console.log('SECRET_RECEIVED');
+let browser,sourcePort,socketPort,instrument,token,testInstalled=false;
+async function phase(input){
+ adb('shell','am','force-stop',pkg);const socketName='loopdeck-release-qa-'+randomUUID();let output='',error='',done=false,code;
+ instrument=spawn('adb',['-s',serial,'shell','am','instrument','-w','-r','-e','ui','true','-e','socket',socketName,pkg+'.test/com.loopdeck3.app.ReleaseSmokeInstrumentation'],{stdio:['ignore','pipe','pipe']});instrument.stdout.on('data',b=>output+=b);instrument.stderr.on('data',b=>error+=b);instrument.on('exit',exit=>{done=true;code=exit;});
+ await until('UI instrumentation ready',()=>output.includes('qa=READY')||done,60000);assert.ok(!done,'UI test did not start');socketPort=adb('forward','tcp:0','localabstract:'+socketName);
+ await new Promise((resolve,reject)=>{const socket=createConnection({host:'127.0.0.1',port:Number(socketPort)},()=>{const data=Buffer.from(JSON.stringify(input)),prefix=Buffer.alloc(4);prefix.writeUInt32BE(data.length);socket.write(Buffer.concat([prefix,data]));});socket.on('close',resolve);socket.on('error',reject);});
+ await until('normal release UI '+input.phase,()=>done,300000);assert.equal(code,0);assert.ok(!error.trim());const publicResult=JSON.parse(/INSTRUMENTATION_RESULT: qaResult=(\{.*\})/.exec(output)?.[1]??'{}');result.lastUiResult=publicResult;assert.equal(publicResult.status,'PASS',JSON.stringify(publicResult));adb('forward','--remove','tcp:'+socketPort);socketPort=undefined;instrument=undefined;return publicResult;
+}
+try{
+ assert.equal(typeof phrase,'string');assert.ok(phrase.length>0);assert.equal(adb('shell','getprop','ro.debuggable'),'0');
+ const pid=adb('shell','pidof','com.loopdeck3.app.syncpreview.debug');assert.match(pid,/^\d+$/);sourcePort=adb('forward','tcp:0','localabstract:webview_devtools_remote_'+pid);browser=await chromium.connectOverCDP('http://127.0.0.1:'+sourcePort,{noDefaults:true});const source=browser.contexts().flatMap(c=>c.pages()).find(p=>p.url().startsWith('https://appassets.androidplatform.net/assets/loopdeck/index.html'));assert.ok(source);token=await source.evaluate(()=>LoopDeckCloud.token());assert.match(token,/^[a-f0-9]{64}$/);await browser.close();browser=undefined;adb('forward','--remove','tcp:'+sourcePort);sourcePort=undefined;
+ assert.match(adb('install','-r','android/app/build/outputs/apk/androidTest/release/app-release-androidTest.apk'),/Success/);testInstalled=true;
+ const id='release-ui-auto-'+Date.now(),pack={packVersion:1,packId:id,title:'Release UI auto public dummy',folders:[{id:id+'-f',title:'Folder'}],modules:[{id:id+'-m',folderId:id+'-f',title:'Module',subject:'dummy',questionIds:[id+'-q']}],questions:[{id:id+'-q',moduleId:id+'-m',type:'input',prompt:'Release UI?',answer:'one'}]};
+ const upload=await phase({phase:'upload',phrase,packId:id,pack,answer:'one'});phrase=undefined;
+ assert.ok(upload.http.some(r=>r.path==='/api/v1/auth/login'&&r.method==='POST'&&r.status===200));assert.equal(upload.snapshot.builtinQuestions,1112);assert.equal(upload.snapshot.builtinImages,4);record('real signed release UI login, first setup, builtin receive and normal import automatic upload',upload);
+ const http=(path,o={})=>fetch(base+'/api/v1'+path,{...o,headers:{...o.headers,Authorization:'Bearer '+token},redirect:'error'});
+ const headsResponse=await http('/packs');assert.equal(headsResponse.status,200);const head=(await headsResponse.json()).packs.find(p=>p.packId===id);assert.ok(head);const get=await http(`/packs/${id}/revisions/${head.revision}/download`);assert.equal(get.status,200);const bytes=await get.arrayBuffer();assert.equal(createHash('sha256').update(Buffer.from(bytes)).digest('hex'),head.sha256);const parsed=await importLoopDeckZip(new File([bytes],id+'.loopdeck.zip'),true);assert.ok(parsed.ok);assert.equal(parsed.pack.questions[0].answer,'one');record('independent HTTP verifies release UI uploaded ZIP',{packId:id,revision:head.revision,sha256:head.sha256,httpStatus:200});
+ const updated=structuredClone(pack);updated.questions[0].answer='two';const z=new JSZip(),{modules,questions,...manifest}=updated;for(const[k,v]of Object.entries({manifest,modules,questions}))z.file(k+'.json',JSON.stringify(v));const updateBytes=await z.generateAsync({type:'uint8array',compression:'STORE'}),sha=createHash('sha256').update(updateBytes).digest('hex'),fp=await contentFingerprint(updated,[]);const post=await http(`/packs/${id}/revisions`,{method:'POST',headers:{'Content-Type':'application/zip','Idempotency-Key':randomUUID(),'X-Content-Fingerprint':fp},body:updateBytes});assert.equal(post.status,201);const remote=await post.json();assert.equal(remote.sha256,sha);record('independent client updates same dummy cloud pack',{packId:id,revision:remote.revision,sha256:sha,httpStatus:201});
+ const receive=await phase({phase:'receive',packId:id,answer:'two',revision:remote.revision});assert.deepEqual(receive.snapshot.learning,upload.snapshot.learning);assert.equal(receive.snapshot.builtinQuestions,1112);assert.equal(receive.snapshot.builtinImages,4);record('release startup automatically receives other-client update without sync button',receive);
+ assert.match(adb('uninstall',pkg+'.test'),/Success/);testInstalled=false;adb('shell','am','force-stop',pkg);adb('shell','am','start','-n',pkg+'/com.loopdeck3.app.MainActivity');await delay(3000);const releasePid=adb('shell','pidof',pkg);assert.match(releasePid,/^\d+$/);assert.ok(!adb('shell','cat','/proc/net/unix').includes('webview_devtools_remote_'+releasePid));record('test-only helper removed; release remains logged in with debugging disabled',{helperUninstalled:true,releaseDataRetained:true,webviewDebugSocketAbsent:true,normalAppCleared:false,debugAppCleared:false});
+}catch(e){result.checks.push({name:'release UI exception',status:'FAIL',error:e.message});console.log('FAIL '+e.message);process.exitCode=1;}
+finally{phrase=undefined;token=undefined;if(browser)await browser.close().catch(()=>{});if(sourcePort)adb('forward','--remove','tcp:'+sourcePort);if(socketPort)adb('forward','--remove','tcp:'+socketPort);if(instrument&&!instrument.killed)instrument.kill();if(testInstalled){try{adb('uninstall',pkg+'.test');}catch{}}process.stdin.setRawMode(false);writeFileSync('qa-results/public/release-ui-results.json',JSON.stringify(result,null,2));}

@@ -1,0 +1,18 @@
+{
+  "description": "Generated from canonical LoopDeck3 sources; do not edit the bundle by hand.",
+  "bundleSha256": "c6e7bc6da504aedfdcac5eda5cc1ad8655b590828dbd91d16ed2ffc8bca9db8b",
+  "sources": {
+    "src/core/answerJudge.ts": "cc0e2d134654f2a7994e61b69edc41de54906fdebde13054181da27ee5fa54d0",
+    "src/core/japaneseVocabulary.ts": "4309d624132a698cffceddf42c3a5acae60e7e383a4caa9f2d0feceb06a92acd",
+    "src/core/questionPresentation.ts": "54f9e759fc7876b1c9e164a2591b9396d2c30c7ec12a82946dd70074dd6ea2b7",
+    "src/core/visualReferences.ts": "576606c0cab0d587cfa9f239dc7d9efcb0f9d0cac7da272724baafaafc3ad5c7",
+    "src/packs/assetSafety.ts": "7b611c21582fb1674d25fb486ae60f3e8af14ff334487ee6aa8609bfa6912a8c",
+    "src/packs/contentFingerprint.ts": "9772dbd2094bcf9b0552d69c0e5d37208d3ff1d0be11ee3534a64cf2ab062654",
+    "src/packs/importLimits.ts": "55def2bce6d90160694cbc25d1e2a35492c04f1f10f95f25b67add5de06828d3",
+    "src/packs/packTypes.ts": "0f78f68a77f4df024a068006847f84dd15c84ff0ea7f39bc9cc6654cc134c109",
+    "src/packs/packValidator.ts": "2d60b08dea2b3b8a7bfc9c9b3e85dabd075d7179f0f6eed5cdb8e2ead3f1d607",
+    "src/packs/zipImporter.ts": "7542577d88f0db03c19ae33c2a1607aca1ed84e9a0f0f08a83861cb6e774158b",
+    "src/packs/zipIntegrity.ts": "6f80dd083e91c71d8eeac88c35b862c90aa025b26472991c90567aa42bcddace",
+    "src/packs/zipSafety.ts": "74ff880b6fe01e9ec5226b3df072402dff84d7d09422db654657df83a654889e"
+  }
+}
