@@ -212,23 +212,16 @@
   display: flex;
   flex-direction: column;
   border-radius: 28px;
-  background: var(--editorial-surface);
+  /* The accent band is part of the face's own background, so it follows the rounded corners and the edge. */
+  background:
+    linear-gradient(90deg, var(--editorial-blue), var(--editorial-cyan)) top / 100% 5px no-repeat border-box,
+    var(--editorial-surface);
   border: 1px solid rgba(10, 16, 32, 0.08);
   box-shadow: 0 22px 55px rgba(21, 31, 59, 0.1);
   padding: 40px 34px;
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
   transform: rotateY(0deg) translateZ(0.1px);
-}
-.flashcard-face::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
-  height: 5px;
-  border-radius: 28px 28px 0 0;
-  background: linear-gradient(90deg, var(--editorial-blue), var(--editorial-cyan));
 }
 .flashcard-back {
   transform: rotateY(180deg) translateZ(0.1px);
