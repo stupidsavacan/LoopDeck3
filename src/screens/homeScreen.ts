@@ -193,9 +193,7 @@ export function renderHomeScreen(context: ScreenContext): void {
     icon.style.background = meta.accent;
     icon.append(createUiIcon(iconNameForModule(module), 'deck-icon-svg'));
     const title = el('div', 'title');
-    // 「歴史総合」 over 「歴史総合 一問一答」 says the name twice; the subtitle keeps only what it adds.
-    const subtitle = meta.subtitle.startsWith(module.title) ? meta.subtitle.slice(module.title.length).trim() : meta.subtitle;
-    title.append(el('h2', '', module.title), el('div', 'subtitle', subtitle || meta.subtitle));
+    title.append(el('h2', '', module.title), el('div', 'subtitle', meta.subtitle));
     top.append(icon, title);
 
     const tags = el('div', 'tags');

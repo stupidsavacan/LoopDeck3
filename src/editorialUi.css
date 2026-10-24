@@ -2159,8 +2159,7 @@ body {
 }
 
 /* The cloud sync button is fixed to the top-right corner; keep the progress bar and top buttons clear of it. */
-body:has(.cloud-sync-control) .quiz-head,
-body:has(.cloud-sync-control) .screen > .topbar {
+body:has(.cloud-sync-control) .home-screen > .topbar {
   padding-right: 48px !important;
 }
 
@@ -3705,15 +3704,6 @@ body:has(.cloud-sync-control) .today-hero-top .today-date {
   scroll-padding-inline: 2px;
 }
 
-.home-screen .module-card {
-  min-height: 150px !important;
-  overflow: visible !important;
-}
-
-.home-screen .module-card::after {
-  content: none !important;
-}
-
 .home-screen .module-card .module-progress {
   margin-top: auto !important;
 }
@@ -3738,10 +3728,6 @@ body:has(.cloud-sync-control) .today-hero-top .today-date {
 .today-screen:has(.quiz-mount > .quiz-card:not(.done)) > .topbar,
 .today-screen:has(.quiz-mount > .quiz-card:not(.done)) > .today-screen-title {
   display: none !important;
-}
-
-body:has(.quiz-card:not(.done)) .quiz-head {
-  padding-right: 0 !important;
 }
 
 /* After answering: spent tools fade, the answer line is dropped when the options already mark it. */
