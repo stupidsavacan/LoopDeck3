@@ -1,3 +1,4 @@
+import { getUnresolvedMistakeIds } from '../core/unresolvedMistakes';
 import type { ScreenContext } from '../app/context';
 import { encodeStudyCategory } from '../core/studyCategory';
 import { buildQuizAnswerSources } from '../core/reviewPersistence';
@@ -84,9 +85,7 @@ export async function renderModuleScreen(context: ScreenContext & { moduleId: st
   storageScope.packRevision = revisions.get(modulePackId ?? '') ?? 'builtin';
   storageScope.resetEpoch = revisions.get('') ?? '0';
   if (!isCurrent()) return;
-  const wrongIds = new Set(
-    attempts.filter((attempt) => attempt.answerMode !== 'flashcard' && attempt.result !== 'correct').map((attempt) => attempt.questionId)
-  );
+  const wrongIds = getUnresolvedMistakeIds(attempts);
   const bookmarkIds = new Set(bookmarks);
   const wrongQuestions = questions.filter((question) => wrongIds.has(question.id));
   const bookmarkedQuestions = questions.filter((question) => bookmarkIds.has(question.id));
@@ -344,7 +343,9 @@ export async function renderModuleScreen(context: ScreenContext & { moduleId: st
       (question) => !seen.has(question.id)
     );
     const rest =
-      done.mode === 'normal' ? selectSessionQuestions(eligible, { ...settings, selectedRange: 'all', selectedCategory: 'all', filter: 'all' }) : [];
+      done.mode === 'normal'
+        ? selectSessionQuestions(eligible, { ...settings, selectedRange: 'all', selectedCategory: 'all', filter: 'all' })
+        : [];
     const actions: SessionNextSteps['actions'] = [];
     if (missed.length) {
       actions.push({

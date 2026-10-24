@@ -6,6 +6,7 @@ import type { LoopDeckPack, ModuleInfo } from '../src/core/models';
 import { createSession } from '../src/core/sessionEngine';
 import { resolveActivePacks } from '../src/packs/packResolver';
 import { renderInlineQuiz } from '../src/screens/inlineQuiz';
+import { renderReviewCenter } from '../src/screens/reviewCenter';
 import { renderModuleScreen } from '../src/screens/moduleScreen';
 import { studyStore } from '../src/storage/studyRepository';
 
@@ -132,6 +133,102 @@ describe('session next steps', () => {
     await settle();
     expect(root.querySelector('.quiz-card.done')).toBeNull();
     expect(root.querySelector('.v2-start')).not.toBeNull();
+  });
+
+  it('clears the module mistake filter only after two objective correct answers', async () => {
+    const root = await startModule(1);
+    await answer(root, 'wrong');
+    for (let round = 0; round < 2; round += 1) {
+      buttonByText(root, '今日はここまで').click();
+      await settle();
+      buttonByText(root, '間違いだけ 1問').click();
+      await settle();
+      await answer(root, 'correct');
+    }
+    buttonByText(root, '今日はここまで').click();
+    await settle();
+    expect(root.textContent).not.toContain('間違いだけ 1問');
+    expect((await studyStore.getAttempts()).filter((attempt) => attempt.questionId === 'next-q-1')).toHaveLength(3);
+  });
+
+  it('retries mistakes from the review center and removes retry after a clean round', async () => {
+    const pack = testPack(1);
+    await studyStore.saveImportedPack(pack);
+    await studyStore.addAttempt({
+      attemptId: 'review-seed',
+      questionId: 'next-q-1',
+      moduleId: moduleInfo.id,
+      answeredAt: new Date().toISOString(),
+      result: 'wrong',
+      input: 'nope',
+      answer: 'answer-1',
+      elapsedMs: 1000,
+      mode: 'normal',
+      answerMode: 'input'
+    });
+    const root = document.createElement('div');
+    await renderReviewCenter(screenContext({ root, catalog: resolveActivePacks([pack]) }));
+    buttonByText(root, '弱点を復習する').click();
+    await settle();
+    await answer(root, 'reveal');
+    buttonByText(root, '間違えた1問だけもう一周').click();
+    await settle();
+    expect(root.querySelector('.question-prompt')?.textContent).toBe('word-1');
+    await answer(root, 'correct');
+    expect(root.querySelector('[data-action="retry-mistakes"]')).toBeNull();
+    expect(buttonByText(root, '今日はここまで')).toBeTruthy();
+  });
+
+  it('keeps the concrete reverse direction when retrying an SRS mistake', async () => {
+    const pack = testPack(1);
+    const question = pack.questions[0];
+    question.sides = { front: { label: 'Front', text: 'word-1' }, back: { label: 'Back', text: 'answer-1' } };
+    question.supportedStudyModes = ['front_to_back', 'back_to_front'];
+    await studyStore.saveImportedPack(pack);
+    await studyStore.addAttempt({
+      attemptId: 'reverse-seed',
+      questionId: question.id,
+      moduleId: moduleInfo.id,
+      answeredAt: new Date().toISOString(),
+      result: 'wrong',
+      input: 'nope',
+      answer: 'word-1',
+      elapsedMs: 1000,
+      mode: 'review',
+      answerMode: 'input',
+      questionMode: 'back_to_front'
+    });
+    const now = new Date().toISOString();
+    await studyStore.putReviewCard({
+      questionId: question.id,
+      moduleId: moduleInfo.id,
+      questionMode: 'back_to_front',
+      state: 'review',
+      dueAt: new Date(Date.now() - 86400000).toISOString(),
+      lastReviewedAt: now,
+      firstReviewedAt: now,
+      intervalDays: 1,
+      ease: 2.5,
+      totalReviews: 1,
+      totalCorrect: 0,
+      totalWrong: 1,
+      correctStreak: 0,
+      wrongStreak: 1,
+      lapseCount: 0,
+      leechLevel: 0,
+      suspended: false,
+      createdAt: now,
+      updatedAt: now
+    });
+    const root = document.createElement('div');
+    await renderReviewCenter(screenContext({ root, catalog: resolveActivePacks([pack]) }));
+    buttonByText(root, '今日の復習を始める').click();
+    await settle();
+    expect(root.querySelector('.question-prompt')?.textContent).toBe('answer-1');
+    await answer(root, 'reveal');
+    buttonByText(root, '間違えた1問だけもう一周').click();
+    await settle();
+    expect(root.querySelector('.question-prompt')?.textContent).toBe('answer-1');
   });
 
   it('keeps the plain return button for callers without next steps', () => {
