@@ -5,6 +5,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import packAuthoringPrompt from '../src/packs/packAuthoringPrompt.txt?raw';
 import englishVocabularyRules from '../docs/english-vocabulary-pack-rules.md?raw';
 import { ALLOWED_IMAGE_EXTENSIONS, FORBIDDEN_EXTENSIONS } from '../src/packs/packTypes';
+import { validatePack } from '../src/packs/packValidator';
+import { createLoopDeckZipBytes } from '../src/packs/zipExporter';
+import { importLoopDeckZip } from '../src/packs/zipImporter';
 import { resolveActivePacks } from '../src/packs/packResolver';
 import { renderImportScreen } from '../src/screens/importScreen';
 
@@ -15,7 +18,7 @@ describe('pack authoring prompt', () => {
 
   it('ships the current Sol-oriented authoring contract with semantic drift guards', () => {
     expect(packAuthoringPrompt.length).toBeGreaterThan(8000);
-    expect(packAuthoringPrompt).toContain('Authoring contract revision: 2026-10-04');
+    expect(packAuthoringPrompt).toContain('Authoring contract revision: 2026-10-24');
     expect(packAuthoringPrompt).toContain('Target LoopDeck packVersion: 1');
     expect(packAuthoringPrompt).toContain('Prompt target: modern reasoning models including GPT-5.6 Sol');
 
@@ -83,6 +86,10 @@ describe('pack authoring prompt', () => {
     expect(packAuthoringPrompt).toContain('a JSON-only pack cannot carry a local image payload');
     expect(packAuthoringPrompt).toContain('Question IDs must be globally unique across different active packIds');
     expect(packAuthoringPrompt).toContain('Merge import upserts assets');
+    expect(packAuthoringPrompt).toContain('rejects an existing same-path asset with different stored image data');
+    expect(packAuthoringPrompt).not.toContain('incoming same-path bytes replace stored bytes');
+    expect(packAuthoringPrompt).toContain('Stable IDs alone do not preserve learning state.');
+    expect(packAuthoringPrompt).toContain('Effective numbers must be unique within each Module.');
     expect(packAuthoringPrompt).toContain('whole JSON/ZIP/backup file: at most 32 MiB');
     expect(packAuthoringPrompt).toContain('ZIP entry count: at most 256 entries');
     expect(packAuthoringPrompt).toContain('preferredAnswerFormat');
@@ -91,9 +98,27 @@ describe('pack authoring prompt', () => {
     expect(packAuthoringPrompt).toContain('activeStudyMode');
   });
 
+  it('provides a complete example that validates and round-trips through the ZIP importer', async () => {
+    const section = packAuthoringPrompt.split('A complete single-file pack has this shape:')[1];
+    const json = section?.match(/```json\s*([\s\S]*?)```/)?.[1];
+    expect(json).toBeDefined();
+    const result = validatePack(JSON.parse(json!));
+    expect(result.issues).toEqual([]);
+    expect(result.ok).toBe(true);
+    const pack = result.pack!;
+    expect(pack.questions.length).toBeGreaterThan(0);
+    const bytes = await createLoopDeckZipBytes(pack);
+    // Supply the browser File interface without depending on jsdom's missing arrayBuffer.
+    const file = { name: 'example.loopdeck.zip', size: bytes.length, arrayBuffer: async () => bytes.buffer } as File;
+    const imported = await importLoopDeckZip(file);
+    expect(imported.issues).toEqual([]);
+    expect(imported.pack).toEqual(pack);
+  });
+
   it('downloads a non-empty UTF-8 text prompt from the import screen action', async () => {
     const root = document.createElement('div');
-    await renderImportScreen(screenContext({ root: root, catalog: resolveActivePacks([]), refreshCatalog: async () => {}, navigation: { home: () => {} } })
+    await renderImportScreen(
+      screenContext({ root: root, catalog: resolveActivePacks([]), refreshCatalog: async () => {}, navigation: { home: () => {} } })
     );
 
     const originalCreateObjectURL = Object.getOwnPropertyDescriptor(URL, 'createObjectURL');
