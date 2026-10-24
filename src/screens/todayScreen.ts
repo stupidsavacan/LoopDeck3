@@ -131,7 +131,12 @@ export async function renderTodayScreen(context: ScreenContext): Promise<void> {
     )
   );
 
-  function freshPlan(extraAttempts: Attempt[] = [], reviewCards: ReviewCard[] = cards, reviewLimit?: number): TodayPlan {
+  function freshPlan(
+    extraAttempts: Attempt[] = [],
+    reviewCards: ReviewCard[] = cards,
+    reviewLimit?: number,
+    beyondDailyQuota = false
+  ): TodayPlan {
     return buildTodayPlan({
       questions,
       modules,
@@ -139,7 +144,8 @@ export async function renderTodayScreen(context: ScreenContext): Promise<void> {
       attempts: [...attempts, ...extraAttempts],
       focusModuleId: safeGet(LAST_MODULE_KEY) ?? undefined,
       ...examOptions,
-      reviewLimit
+      reviewLimit,
+      beyondDailyQuota
     });
   }
 
@@ -151,7 +157,7 @@ export async function renderTodayScreen(context: ScreenContext): Promise<void> {
   back.onclick = navigation.home;
   header.append(back);
   const title = el('section', 'today-screen-title');
-  title.append(el('p', 'eyebrow', 'TODAY'), el('h1', '', '今日のループ'));
+  title.append(el('h1', '', '今日のループ'));
   const mount = el('div', 'quiz-mount');
   screen.append(header, title, mount);
   root.append(screen);
@@ -228,7 +234,7 @@ export async function renderTodayScreen(context: ScreenContext): Promise<void> {
         }
       });
     }
-    const more = freshPlan(done.attempts, cards, 0);
+    const more = freshPlan(done.attempts, cards, 0, true);
     if (more.fresh.length && more.focusModule) {
       actions.push({
         id: 'continue',

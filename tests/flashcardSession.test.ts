@@ -214,7 +214,7 @@ describe('flashcard session rendering and lifecycle', () => {
     const complete = second.callbacks.onSessionChange.mock.calls[0][0];
     const result = setup(undefined, complete);
     expect(container.querySelector('h1')?.textContent).toBe('おつかれさま。');
-    expect(container.querySelector('.flashcard-donut-center')?.textContent).toBe('50%KNOWN');
+    expect(container.querySelector('.flashcard-donut-center')?.textContent).toBe('50%知ってる');
     expect(container.querySelectorAll('.flashcard-stat')).toHaveLength(2);
     expect(container.querySelector('.flashcard-missed-chip')?.textContent).toBe(complete.queue[1].prompt);
     expect([...container.querySelectorAll('.flashcard-result-actions button')].map((button) => button.textContent)).toEqual([

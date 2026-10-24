@@ -17,7 +17,7 @@ test('cloud initial setup persists exclusions and never uploads unselected exist
   const pack={packVersion:1,packId:'old-local',title:'Existing local pack',folders:[{id:'old-f',title:'Folder'}],modules:[{id:'old-m',folderId:'old-f',title:'Module',subject:'demo',questionIds:['old-q']}],questions:[{id:'old-q',moduleId:'old-m',type:'input',prompt:'A?',answer:'A'}]};
   await new Promise((resolve,reject)=>{const tx=db.transaction('packs','readwrite');tx.objectStore('packs').put(pack);tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);});db.close();
  });
- await page.locator('.cloud-sync-icon').click();await page.getByLabel('API URL',{exact:true}).fill('https://sync.qa.invalid');await page.getByLabel('端末名',{exact:true}).fill('Browser QA');await page.getByLabel('合言葉',{exact:true}).fill('fixture');await page.getByRole('button',{name:'ログイン',exact:true}).click();
+ await page.locator('.cloud-sync-icon').click();await page.getByText('接続先を変更',{exact:true}).click();await page.getByLabel('API URL',{exact:true}).fill('https://sync.qa.invalid');await page.getByLabel('端末名',{exact:true}).fill('Browser QA');await page.getByLabel('合言葉',{exact:true}).fill('fixture');await page.getByRole('button',{name:'ログイン',exact:true}).click();
  await expect(page.getByRole('button',{name:'この設定で自動同期を開始'})).toBeVisible();
  const local=page.getByLabel(/共有する: Existing local pack/),excluded=page.getByLabel(/この端末への取り込みを除外: Cloud cloud-only/);await expect(local).not.toBeChecked();await excluded.check();
  await page.getByRole('button',{name:'この設定で自動同期を開始'}).click();await expect(page.getByRole('button',{name:'今すぐ再試行'})).toBeVisible();

@@ -106,7 +106,8 @@ describe("today's loop screen", () => {
     localStorage.setItem(TODAY_RECORD_KEY, JSON.stringify({ ...record, date: '2000-01-01' }));
 
     const next = await openToday(pack);
-    expect(meta(next)).toBe('1 / 10');
+    // The answer still happened today, so it uses one of the day's ten new questions.
+    expect(meta(next)).toBe('1 / 9');
     expect(prompt(next)).toBe('word-2');
   });
 

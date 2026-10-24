@@ -134,3 +134,31 @@ describe('study streak', () => {
     expect(currentStreak(days(20), NOW)).toBe(0);
   });
 });
+
+describe('daily quota of new questions', () => {
+  it('counts questions first answered today against the quota, unless the learner asks for more', async () => {
+    const { buildTodayPlan, countFreshToday } = await import('../src/core/todayPlan');
+    const now = new Date('2026-10-24T12:00:00');
+    const questions = Array.from({ length: 30 }, (_, i) => ({ id: `n${i}`, moduleId: 'nm', type: 'input' as const, prompt: `p${i}`, answer: `a${i}` }));
+    const modules = [{ id: 'nm', title: 'N', folderId: '', subject: 'S', questionIds: questions.map((q) => q.id) }];
+    const answered = (id: string, at: string) => ({
+      attemptId: `${id}-${at}`,
+      questionId: id,
+      moduleId: 'nm',
+      answeredAt: at,
+      result: 'correct' as const,
+      input: '',
+      answer: '',
+      elapsedMs: 1000,
+      mode: 'normal' as const
+    });
+    const attempts = [
+      ...questions.slice(0, 10).map((q) => answered(q.id, '2026-10-24T09:00:00')),
+      answered('n10', '2026-10-20T09:00:00'),
+      answered('n10', '2026-10-24T10:00:00')
+    ];
+    expect(countFreshToday(attempts, now)).toBe(10);
+    expect(buildTodayPlan({ questions, modules, cards: [], attempts, now }).fresh).toHaveLength(0);
+    expect(buildTodayPlan({ questions, modules, cards: [], attempts, now, beyondDailyQuota: true }).fresh).toHaveLength(10);
+  });
+});

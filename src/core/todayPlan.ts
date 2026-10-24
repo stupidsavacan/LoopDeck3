@@ -16,7 +16,10 @@ export interface TodayPlanInput {
   attempts: Attempt[];
   /** Preferred module for new questions, e.g. the last one opened. */
   focusModuleId?: string;
+  /** New questions per day; questions first answered earlier today count against it. */
   freshCount?: number;
+  /** The learner asked for more after finishing, so today's quota no longer applies. */
+  beyondDailyQuota?: boolean;
   reviewLimit?: number;
   now?: Date;
 }
@@ -49,6 +52,19 @@ export function countAnsweredToday(attempts: readonly Attempt[], now = new Date(
   }).length;
 }
 
+/** Questions whose very first answer was given today. */
+export function countFreshToday(attempts: readonly Attempt[], now = new Date()): number {
+  const start = startOfLocalCalendarDay(now);
+  const end = endOfLocalCalendarDay(now);
+  const firstAnswer = new Map<string, number>();
+  for (const attempt of attempts) {
+    const time = Date.parse(attempt.answeredAt);
+    if (!Number.isFinite(time) || attempt.contentRetired) continue;
+    firstAnswer.set(attempt.questionId, Math.min(firstAnswer.get(attempt.questionId) ?? Infinity, time));
+  }
+  return [...firstAnswer.values()].filter((time) => time >= start && time <= end).length;
+}
+
 export function todayKey(now = new Date()): string {
   return localCalendarDayKey(now);
 }
@@ -78,7 +94,9 @@ export function buildTodayPlan(input: TodayPlanInput): TodayPlan {
   const seen = new Set([...indexCardsByQuestion(cards).keys(), ...input.attempts.map((attempt) => attempt.questionId), ...planned]);
   const candidates = input.modules.filter((module) => unseenQuestions(module, questionsById, seen).length > 0);
   const focusModule = candidates.find((module) => module.id === input.focusModuleId) ?? candidates[0];
-  const fresh = focusModule ? unseenQuestions(focusModule, questionsById, seen).slice(0, input.freshCount ?? DEFAULT_FRESH_COUNT) : [];
+  const quota = input.freshCount ?? DEFAULT_FRESH_COUNT;
+  const freshLimit = input.beyondDailyQuota ? quota : Math.max(0, quota - countFreshToday(input.attempts, now));
+  const fresh = focusModule ? unseenQuestions(focusModule, questionsById, seen).slice(0, freshLimit) : [];
 
   return {
     review: placeRivalsTogether(review, buildRivalPairs(input.attempts)),

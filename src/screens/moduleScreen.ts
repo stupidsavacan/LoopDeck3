@@ -130,7 +130,6 @@ export async function renderModuleScreen(context: ScreenContext & { moduleId: st
   if (module.title.length > 42) info.classList.add('very-long-title');
   const meta = moduleMeta(module);
   info.style.setProperty('--module-accent', meta.accent);
-  info.dataset.coverGlyph = module.title.trim().slice(0, 1);
   const coverIcon = el('div', 'module-cover-icon');
   coverIcon.append(createUiIcon(iconNameForModule(module), 'module-cover-svg'));
   info.append(
@@ -139,17 +138,9 @@ export async function renderModuleScreen(context: ScreenContext & { moduleId: st
     el('h1', '', module.title),
     el('p', '', module.description ?? 'インライン学習でテンポよく進めます。')
   );
-  if (module.tags?.length) {
-    const tags = el('div', 'tag-row');
-    for (const tag of module.tags.slice(0, 4)) tags.append(el('span', 'tag', tag));
-    info.append(tags);
-  }
+  const tagNames = (module.tags ?? []).filter((tag) => tag !== module.subject && tag !== module.title).slice(0, 3);
   const stats = el('div', 'stats-row');
-  stats.append(
-    el('span', '', `${questions.length}問`),
-    el('span', '', `ミス ${wrongQuestions.length}問`),
-    el('span', '', `ブックマーク ${bookmarkedQuestions.length}問`)
-  );
+  stats.append(el('span', '', `${questions.length}問`), ...tagNames.map((tag) => el('span', 'tag', tag)));
   info.append(stats);
 
   const settingsCard = el('section', 'card setup-card');
@@ -239,6 +230,8 @@ export async function renderModuleScreen(context: ScreenContext & { moduleId: st
     persistStudyPreferences();
   };
 
+  categoryField.wrap.hidden = categories.length === 0;
+  questionModeField.wrap.hidden = questionModes.length <= 1;
   settingsGrid.append(countField.wrap, rangeField.wrap, categoryField.wrap, answerField.wrap, questionModeField.wrap);
   settingsCard.append(settingsGrid);
 
@@ -257,6 +250,7 @@ export async function renderModuleScreen(context: ScreenContext & { moduleId: st
     const wrap = el('label', 'check-label');
     const input = document.createElement('input');
     input.type = 'checkbox';
+    input.setAttribute('role', 'switch');
     input.checked = Boolean(settings[key]);
     if (key === 'autoNext' || key === 'autoRevealAfterIdle' || key === 'askConfidence') autoToggles.push(input);
     input.onchange = () => {
@@ -278,9 +272,9 @@ export async function renderModuleScreen(context: ScreenContext & { moduleId: st
   }
   updateFlashcardToggles();
   settingsCard.append(flashcardNotice);
-  settingsCard.append(settingRow, el('p', 'hint', '通常はシャッフルONで使います。必要なら問題数や範囲を絞れます。'));
+  settingsCard.append(settingRow);
 
-  const actions = el('section', 'card action-card module-secondary-actions');
+  const actions = el('div', 'module-secondary-actions');
   const start = button('', 'v2-start');
   appendIconLabel(start, 'arrowRight', '学習を始める', 'end');
   const quizMount = el('div', 'quiz-mount');
@@ -382,12 +376,13 @@ export async function renderModuleScreen(context: ScreenContext & { moduleId: st
     return { actions, preview: tomorrowPreview() };
   }
 
+  let resume: HTMLButtonElement | undefined;
   if (storedSession) {
     const resumeLabel =
       storedSession.index >= storedSession.questions.length
         ? '結果を再開'
         : `再開 (${storedSession.index + 1}/${storedSession.questions.length})`;
-    const resume = button(resumeLabel, 'btn');
+    resume = button(resumeLabel, 'v2-resume');
     resume.onclick = () => {
       const session = restoreStoredSession(module, storedSession, questionsById, sessionQuestionPool);
       if (!session) {
@@ -397,7 +392,6 @@ export async function renderModuleScreen(context: ScreenContext & { moduleId: st
       }
       mountSession(session);
     };
-    actions.append(resume);
     if (takeAutoResume(module.id)) resume.click();
   }
 
@@ -415,7 +409,7 @@ export async function renderModuleScreen(context: ScreenContext & { moduleId: st
 
   const quick = el('section', 'v2-quick-start');
   const quickLabel = el('div', 'v2-quick-label');
-  quickLabel.append(el('strong', '', 'Quick Start'), el('span', '', '問題数だけ選んですぐ開始'));
+  quickLabel.append(el('strong', '', resume ? '続きから' : 'すぐ始める'));
   const lengths = el('div', 'v2-lengths');
   const quickValues: Array<[string, string]> = [
     ['10', '10問'],
@@ -440,7 +434,15 @@ export async function renderModuleScreen(context: ScreenContext & { moduleId: st
   }
   countField.select.addEventListener('change', updateQuickSelection);
   updateQuickSelection();
-  quick.append(quickLabel, lengths, start);
+  if (resume) {
+    start.classList.add('is-secondary');
+    start.replaceChildren();
+    appendIconLabel(start, 'arrowRight', '最初から始める', 'end');
+    quick.append(quickLabel, resume, lengths, start);
+  } else {
+    quick.append(quickLabel, lengths, start);
+  }
+  if (actions.childElementCount) quick.append(actions);
 
   const customize = el('details', 'v2-customize');
   const customizeSummary = el('summary');
@@ -449,8 +451,6 @@ export async function renderModuleScreen(context: ScreenContext & { moduleId: st
   customizeSummary.append(customizeTitle);
   customize.append(customizeSummary, settingsCard);
 
-  screen.append(header, info, quick, customize);
-  if (actions.childElementCount) screen.append(actions);
-  screen.append(quizMount);
+  screen.append(header, info, quick, customize, quizMount);
   root.append(screen);
 }

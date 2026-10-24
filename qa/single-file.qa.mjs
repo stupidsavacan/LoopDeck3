@@ -200,7 +200,7 @@ test('combined text image and visual references fit phone and desktop screens', 
     }
     await page.getByRole('button', { name: '知ってる', exact: true }).click();
   }
-  await expect(page.locator('.flashcard-donut-center')).toHaveText('100%KNOWN');
+  await expect(page.locator('.flashcard-donut-center')).toHaveText('100%知ってる');
 });
 
 for (const width of [412, 1280]) test(`flashcard tap swipe result retry and resume ${width}`, async ({ page }, info) => {
@@ -327,7 +327,7 @@ for (const width of [412, 1280]) test(`flashcard tap swipe result retry and resu
   await swipe(-130);
   await expect(page.getByRole('heading', { name: 'おつかれさま。', exact: true })).toBeVisible();
   await expect(page.locator('.flashcard-header').getByRole('button')).toHaveCount(0);
-  await expect(page.locator('.flashcard-donut-center')).toHaveText('50%KNOWN');
+  await expect(page.locator('.flashcard-donut-center')).toHaveText('50%知ってる');
   await expect(page.locator('.flashcard-stat')).toHaveCount(2);
   await expect(page.locator('.flashcard-missed-chip')).toHaveText('agree');
   await expect(page.locator('.flashcard-result-actions button')).toHaveText(['AGAINだけもう一度', '全部やり直す', '教材へ戻る']);
@@ -357,10 +357,10 @@ for (const width of [412, 1280]) test(`flashcard tap swipe result retry and resu
   await page.getByRole('button', { name: 'AGAINだけもう一度', exact: true }).click();
   await expect(page.locator('.flashcard-front .flashcard-term')).toHaveText('agree');
   await expect(page.locator('.flashcard-position')).toHaveText('1 / 1');
-  await expect(page.locator('.flashcard-counts')).toHaveText('KNOWN 0 · AGAIN 0');
+  await expect(page.locator('.flashcard-counts')).toHaveText('知ってる 0 · 知らない 0');
   await wrap.press('Space'); await expect(wrap).toHaveClass(/is-flipped/);
   await wrap.press('ArrowRight');
-  await expect(page.locator('.flashcard-donut-center')).toHaveText('100%KNOWN');
+  await expect(page.locator('.flashcard-donut-center')).toHaveText('100%知ってる');
   await expect(page.getByRole('button', { name: 'AGAINだけもう一度', exact: true })).toBeDisabled();
   await expect(page.locator('.flashcard-missed-chips')).toHaveText('なし');
   await page.locator('.flashcard-result-actions').getByRole('button', { name: '教材へ戻る', exact: true }).click();
@@ -461,7 +461,7 @@ test('built-in pack ZIP downloads contain the referenced embedded image bytes', 
   await go(page, 'import');
   const assets = await page.evaluate(() => globalThis.__LOOPDECK_EMBEDDED_ASSETS__);
   const download = page.waitForEvent('download');
-  await page.locator('.pack-row').filter({ hasText: '/ built-in' }).first().getByRole('button', { name: 'ZIP', exact: true }).click();
+  await page.locator('.pack-row').filter({ hasText: '/ 内蔵' }).first().getByRole('button', { name: 'ZIP', exact: true }).click();
   const file = await download; const path = info.outputPath('builtin-pack.zip'); await file.saveAs(path);
   const zip = await JSZip.loadAsync(await readFile(path));
   const questions = JSON.parse(await zip.file('questions.json').async('string'));

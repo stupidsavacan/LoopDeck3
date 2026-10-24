@@ -269,7 +269,6 @@ export async function renderGraphsScreen(context: ScreenContext): Promise<void> 
 
   const hero = el('section', 'hero-card study-hero-card');
   hero.append(
-    el('p', 'eyebrow', 'ANALYTICS'),
     el('h1', '', '学習の記録'),
     el('p', '', '続けた日、正答率、ミスの傾向をまとめて振り返ります。')
   );

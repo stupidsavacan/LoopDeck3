@@ -53,3 +53,46 @@
 .cloud-sync-dialog::backdrop {
   background: #0006;
 }
+/* Studying is not the time for sync settings; the corner icon steps aside on quiz and card screens. */
+body:has(.quiz-card:not(.done)) .cloud-sync-control,
+body:has(.flashcard-session) .cloud-sync-control {
+  display: none;
+}
+.cloud-sync-dialog {
+  position: fixed;
+  border-color: #e2e5eb;
+  border-radius: 20px;
+  padding: 22px 20px 18px;
+}
+.cloud-sync-dialog h2 {
+  margin: 0 64px 8px 0;
+}
+.cloud-sync-dialog .cloud-sync-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  margin: 0;
+  border: 1px solid #e2e5eb;
+  border-radius: 12px;
+  background: #fff;
+  font-weight: 700;
+}
+.cloud-sync-dialog .cloud-sync-primary {
+  display: block;
+  width: 100%;
+  min-height: 46px;
+  margin: 12px 0 0;
+  border: 0;
+  border-radius: 14px;
+  background: #0a1020;
+  color: #fff;
+  font-weight: 800;
+}
+.cloud-sync-endpoint {
+  margin-top: 14px;
+  color: #7b8496;
+  font-size: 0.85rem;
+}
+.cloud-sync-endpoint > summary {
+  cursor: pointer;
+}

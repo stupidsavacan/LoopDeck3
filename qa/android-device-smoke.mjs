@@ -52,7 +52,7 @@ try {
         }
         await api.tap({ role: 'button', name: '知ってる' }, { native: true });
       }
-      await expect(page.locator('.flashcard-donut-center')).toHaveText('100%KNOWN');
+      await expect(page.locator('.flashcard-donut-center')).toHaveText('100%知ってる');
 
       await startOverflowSession(page, url);
       await api.rotate('landscape');
@@ -67,7 +67,7 @@ try {
       await settleCard(page);
       await api.swipe({ css: '.flashcard-wrap' }, 'left');
       await expect(page.locator('.flashcard-position')).toHaveText('3 / 8');
-      await expect(page.locator('.flashcard-counts')).toHaveText('KNOWN 1 · AGAIN 1');
+      await expect(page.locator('.flashcard-counts')).toHaveText('知ってる 1 · 知らない 1');
       results.checks.push('native rotation', 'native KNOWN/AGAIN swipes');
       // Complete this session before comparing state, so visibility changes do
       // not intentionally update a live learning checkpoint during the check.

@@ -103,6 +103,8 @@ export async function renderExamPlanScreen(context: ScreenContext & { folderId: 
     const input = el('input', 'exam-date-input') as HTMLInputElement;
     input.type = 'date';
     input.id = 'exam-date-input';
+    // Required makes an empty field :invalid, so CSS can swap the browser's 「yyyy/mm/dd ()」 for a plain prompt.
+    input.required = true;
     input.min = localCalendarDayKey(new Date());
     input.value = setting?.date ?? '';
     input.onchange = () => {
@@ -152,7 +154,7 @@ export async function renderExamPlanScreen(context: ScreenContext & { folderId: 
     if (!isCurrent()) return;
     const setting = readExamSetting(examFolder.id);
     const title = el('section', 'exam-title');
-    title.append(el('p', 'eyebrow', 'EXAM PLAN'), el('h1', '', examFolder.title));
+    title.append(el('h1', '', examFolder.title));
     const parts: HTMLElement[] = [title];
 
     if (setting) {

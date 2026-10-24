@@ -23,8 +23,20 @@ function questionsForCards(cards: ReviewCard[], questionsById: Map<string, Quest
   });
 }
 
-function stat(label: string, value: string | number): HTMLElement {
-  return el('span', '', `${label} ${value}`);
+function clockLabel(date: Date): string {
+  return `${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`;
+}
+
+/** A compact row: the prompt, a muted line, and the whole row starts that one question. */
+function previewRow(className: string, prompt: string, note: string, onStart: () => void): HTMLElement {
+  const row = el('button', `priority-row ${className}`) as HTMLButtonElement;
+  row.type = 'button';
+  row.title = 'この1問だけ解く';
+  const meta = el('span', 'pack-meta');
+  meta.append(el('span', '', prompt), el('small', '', note));
+  row.append(meta, el('span', 'priority-row-go', '解く'));
+  row.onclick = onStart;
+  return row;
 }
 
 function readReviewScope(): ReviewScope {
@@ -73,7 +85,7 @@ export async function renderReviewCenter(context: ScreenContext): Promise<void> 
   const sourceByQuestionId = buildQuizAnswerSources(questions, packView.modulePackIdById, assets, revisions);
   const modules = packView.moduleById;
   const scope = readReviewScope();
-  const { questionsById, activeModuleIds, queue, mistakes, analyses, weak, schedule, buckets, srsQueue, hiddenDueCount } =
+  const { questionsById, queue, mistakes, analyses, weak, schedule, buckets, srsQueue, laterToday, hiddenDueCount } =
     buildReviewCenterModel(attempts, reviewCards, questions, scope);
   const mount = el('div', 'quiz-mount');
 
@@ -90,21 +102,8 @@ export async function renderReviewCenter(context: ScreenContext): Promise<void> 
 
   const hero = el('section', 'hero-card');
   hero.append(
-    el('p', 'eyebrow', 'REVIEW'),
     el('h1', '', '復習'),
-    el(
-      'p',
-      '',
-      scope === 'recent'
-        ? `最近${DEFAULT_REVIEW_LOOKBACK_DAYS}日に解いた問題を中心に表示します。古い問題は自動で主画面から外れます。`
-        : '過去の教材を含む全履歴を表示しています。'
-    )
-  );
-  const stats = el('div', 'stats-row');
-  stats.append(
-    stat('今日の復習', `${schedule.dueToday}問`),
-    stat(scope === 'recent' ? '最近の弱点' : '全履歴の弱点', `${queue.length}問`),
-    stat('対象教材', `${activeModuleIds.size}件`)
+    el('p', '', scope === 'recent' ? `最近${DEFAULT_REVIEW_LOOKBACK_DAYS}日に解いた問題が対象です。` : '過去の教材を含む全履歴が対象です。')
   );
 
   const scopeActions = el('div', 'review-scope-actions');
@@ -117,7 +116,7 @@ export async function renderReviewCenter(context: ScreenContext): Promise<void> 
   if (hiddenDueCount > 0) {
     scopeActions.append(el('span', 'hint', `過去教材の復習予定 ${hiddenDueCount}問は非表示です。`));
   }
-  hero.append(stats, scopeActions);
+  hero.append(scopeActions);
 
   function rerender(): void {
     void renderReviewCenter(context);
@@ -163,25 +162,32 @@ export async function renderReviewCenter(context: ScreenContext): Promise<void> 
     );
   }
 
+  // Only cards already due can be studied now; ones coming back later today are named with their time.
   const srsCard = el('section', 'card action-card');
   srsCard.append(el('h2', '', '今日の復習'));
-  const srsStats = el('div', 'stats-row');
-  srsStats.append(
-    stat('対象', `${schedule.dueToday}問`),
-    stat('期限切れ', `${schedule.overdue}問`),
-    stat('目安', `${schedule.estimatedMinutes}分`)
+  const nowCount = srsQueue.length;
+  const later = laterToday.firstDueAt ? `あと${laterToday.count}問は ${clockLabel(laterToday.firstDueAt)} 以降に出ます。` : '';
+  srsCard.append(
+    el(
+      'p',
+      'review-summary-line',
+      nowCount
+        ? `今すぐ ${nowCount}問・目安 ${Math.max(1, Math.ceil((nowCount * 20) / 60))}分${schedule.overdue ? `（期限切れ ${schedule.overdue}問を含む）` : ''}`
+        : later || '今は復習する問題がありません。'
+    )
   );
+  if (nowCount && later) srsCard.append(el('p', 'hint', later));
   const startSrs = button('今日の復習を始める', 'btn primary');
+  startSrs.disabled = !nowCount;
   startSrs.onclick = () => startReviewSession(questionsForCards(srsQueue, questionsById), '今日の復習', 'srs-due', 30, false);
-  srsCard.append(srsStats, startSrs);
+  srsCard.append(startSrs);
 
   const srsDetails = el('details', 'review-details');
   srsDetails.append(el('summary', '', '内訳・個別メニュー'));
-  const detailedStats = el('div', 'stats-row');
-  detailedStats.append(
-    stat('再学習', `${schedule.relearning}問`),
-    stat('重点復習', `${schedule.leech}問`),
-    stat('習得済み', `${schedule.mastered}問`)
+  const detailedStats = el(
+    'p',
+    'hint',
+    `再学習 ${schedule.relearning}問・重点復習 ${schedule.leech}問・習得済み ${schedule.mastered}問`
   );
   const srsActions = el('div', 'data-actions');
   const overdue = button('期限切れだけ復習', 'btn');
@@ -215,15 +221,14 @@ export async function renderReviewCenter(context: ScreenContext): Promise<void> 
       20,
       true
     );
+  startWeak.disabled = !queue.length;
   weakActionCard.append(
-    startWeak,
     el(
       'p',
-      'hint',
-      scope === 'recent'
-        ? `最近${DEFAULT_REVIEW_LOOKBACK_DAYS}日のミス・答え表示・遅い正解から手動復習の候補を作ります。古い記録ほど優先度を下げますが、SRSの次回日程は変更しません。`
-        : '全履歴から手動復習の候補を作ります。この順位は分析用で、SRSの次回日程は変更しません。'
-    )
+      'review-summary-line',
+      queue.length ? `ミス・答え表示・遅い正解から ${queue.length}問` : '今の範囲には弱点がありません。'
+    ),
+    startWeak
   );
 
   const weakDetails = el('details', 'review-details');
@@ -247,66 +252,53 @@ export async function renderReviewCenter(context: ScreenContext): Promise<void> 
   actionGrid.append(srsCard, weakActionCard);
 
   const srsListCard = el('section', 'card');
-  srsListCard.append(el('h2', '', '今日の候補'));
+  srsListCard.append(el('h2', '', '今日の復習の中身'));
   const srsList = el('div', 'priority-list');
   for (const card of srsQueue.slice(0, 3)) {
     const question = questionsById.get(card.questionId);
     if (!question) continue;
-    const row = el('div', `priority-row priority-${card.state}`);
-    const meta = el('div', 'pack-meta');
-    meta.append(
-      el('span', '', question.prompt),
-      el('small', '', `${modules.get(card.moduleId)?.title ?? card.moduleId} / ${reviewStateLabel(card)} / 間隔 ${card.intervalDays}日`)
-    );
-    const one = button('この問題を復習', 'btn');
-    one.onclick = () =>
-      startReviewSession(
-        [presentQuestionForStudy(question, card.questionMode ?? 'as_stored')],
-        modules.get(card.moduleId)?.title ?? '問題別復習',
-        `srs-${card.questionId}`,
-        1,
-        false
-      );
-    row.append(meta, one);
-    srsList.append(row);
-  }
-  if (!srsList.childElementCount) {
     srsList.append(
-      el(
-        'p',
-        'empty',
-        scope === 'recent'
-          ? `最近${DEFAULT_REVIEW_LOOKBACK_DAYS}日に解いた問題には、今日の復習予定がありません。`
-          : '今日の復習予定はありません。'
+      previewRow(
+        `priority-${card.state}`,
+        question.prompt,
+        `${modules.get(card.moduleId)?.title ?? card.moduleId} / ${reviewStateLabel(card)}`,
+        () =>
+          startReviewSession(
+            [presentQuestionForStudy(question, card.questionMode ?? 'as_stored')],
+            modules.get(card.moduleId)?.title ?? '問題別復習',
+            `srs-${card.questionId}`,
+            1,
+            false
+          )
       )
     );
   }
+  // With nothing due now the card above already says when reviews come back; an empty list would only repeat it.
+  srsListCard.hidden = !srsList.childElementCount;
   if (srsQueue.length > 3) srsList.append(el('p', 'hint', `ほか ${srsQueue.length - 3}問。開始すると順番に出題します。`));
   srsListCard.append(srsList);
 
   const queueCard = el('section', 'card');
-  queueCard.append(el('h2', '', scope === 'recent' ? '最近の弱点候補' : '全履歴の弱点候補'));
+  queueCard.append(el('h2', '', scope === 'recent' ? '最近の弱点の中身' : '全履歴の弱点の中身'));
   const queueList = el('div', 'priority-list');
   for (const item of queue.slice(0, 3)) {
-    const row = el('div', `priority-row priority-${item.label}`);
-    const meta = el('div', 'pack-meta');
-    meta.append(
-      el('span', '', item.question.prompt),
-      el('small', '', `${modules.get(item.question.moduleId)?.title ?? item.question.moduleId} / ${item.label}`)
+    queueList.append(
+      previewRow(
+        `priority-${item.label}`,
+        item.question.prompt,
+        `${modules.get(item.question.moduleId)?.title ?? item.question.moduleId} / ${item.label}`,
+        () =>
+          startReviewSession(
+            [item.question],
+            modules.get(item.question.moduleId)?.title ?? '問題別復習',
+            `review-${item.question.id}`,
+            1,
+            false
+          )
+      )
     );
-    const one = button('この問題から復習', 'btn');
-    one.onclick = () =>
-      startReviewSession(
-        [item.question],
-        modules.get(item.question.moduleId)?.title ?? '問題別復習',
-        `review-${item.question.id}`,
-        1,
-        false
-      );
-    row.append(meta, one);
-    queueList.append(row);
   }
-  if (!queueList.childElementCount) queueList.append(el('p', 'empty', '今の範囲には弱点候補がありません。'));
+  queueCard.hidden = !queueList.childElementCount;
   if (queue.length > 3) queueList.append(el('p', 'hint', `ほか ${queue.length - 3}問。弱点復習では上位20問を出題します。`));
   queueCard.append(queueList);
 
