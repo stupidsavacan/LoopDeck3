@@ -1,3 +1,4 @@
+import type { SessionNextSteps } from '../ui/inlineQuizView';
 import { buildQuizAnswerSources } from '../core/reviewPersistence';
 import { presentQuestionForStudy } from '../core/questionPresentation';
 import { buildSrsReviewQueue } from '../core/scheduler';
@@ -147,17 +148,44 @@ export async function renderReviewCenter(context: ScreenContext): Promise<void> 
     session.sourceByQuestionId = sourceByQuestionId;
     if (items.some((question) => question.activeStudyMode !== undefined))
       session.queue = session.queue.map((question, index) => items[index] ?? question);
+    const nextSteps = (done: QuizSession): SessionNextSteps => {
+      const missed = new Set(
+        done.attempts
+          .filter((attempt) => attempt.result !== 'correct')
+          .map((attempt) => JSON.stringify([attempt.questionId, attempt.questionMode ?? 'as_stored']))
+      );
+      const retryQuestions = done.queue.filter((question) =>
+        missed.has(JSON.stringify([question.id, question.activeStudyMode ?? 'as_stored']))
+      );
+      const actions: SessionNextSteps['actions'] = [];
+      if (retryQuestions.length) {
+        actions.push({
+          id: 'retry-mistakes',
+          label: `間違えた${retryQuestions.length}問だけもう一周`,
+          detail: '答えを見た問題も入ります',
+          primary: true,
+          run: () => {
+            const retry = createSession(reviewModule, retryQuestions, done.settings, 'review', questions);
+            retry.queue = [...retryQuestions];
+            retry.sourceByQuestionId = sourceByQuestionId;
+            update(retry);
+          }
+        });
+      }
+      actions.push({ id: 'finish', label: '今日はここまで', detail: '復習の画面に戻ります', run: rerender });
+      return { actions };
+    };
     const update = (next: QuizSession) =>
       renderInlineQuiz(
         mount,
         next,
-        { onSessionChange: update, onComplete: rerender },
+        { onSessionChange: update, onComplete: rerender, nextSteps },
         { store: studyStore, isCurrent, resolveImageAsset: resolveImage }
       );
     renderInlineQuiz(
       mount,
       session,
-      { onSessionChange: update, onComplete: rerender },
+      { onSessionChange: update, onComplete: rerender, nextSteps },
       { store: studyStore, isCurrent, resolveImageAsset: resolveImage }
     );
   }
@@ -184,11 +212,7 @@ export async function renderReviewCenter(context: ScreenContext): Promise<void> 
 
   const srsDetails = el('details', 'review-details');
   srsDetails.append(el('summary', '', '内訳・個別メニュー'));
-  const detailedStats = el(
-    'p',
-    'hint',
-    `再学習 ${schedule.relearning}問・重点復習 ${schedule.leech}問・習得済み ${schedule.mastered}問`
-  );
+  const detailedStats = el('p', 'hint', `再学習 ${schedule.relearning}問・重点復習 ${schedule.leech}問・習得済み ${schedule.mastered}問`);
   const srsActions = el('div', 'data-actions');
   const overdue = button('期限切れだけ復習', 'btn');
   overdue.onclick = () => startReviewSession(questionsForCards(buckets.overdue, questionsById), '期限切れ復習', 'srs-overdue', 30, false);
@@ -223,11 +247,7 @@ export async function renderReviewCenter(context: ScreenContext): Promise<void> 
     );
   startWeak.disabled = !queue.length;
   weakActionCard.append(
-    el(
-      'p',
-      'review-summary-line',
-      queue.length ? `ミス・答え表示・遅い正解から ${queue.length}問` : '今の範囲には弱点がありません。'
-    ),
+    el('p', 'review-summary-line', queue.length ? `ミス・答え表示・遅い正解から ${queue.length}問` : '今の範囲には弱点がありません。'),
     startWeak
   );
 

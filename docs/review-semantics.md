@@ -31,6 +31,12 @@ The history-based weak queue is analytics/advisory. It ranks candidates for a us
 
 The default Review Center scope uses the recent-study window and recency weighting introduced for issue #24. All-history mode remains available for old material.
 
+## Module mistake filter
+
+The module's "間違いだけ" filter contains objective mistakes (wrong or answer revealed) until two consecutive objective correct answers follow the latest mistake. A new mistake/reveal resets the streak. Flashcard self-ratings neither add nor clear these mistakes; directions share the same question history. Attempts are ordered by answer time, with input order breaking ties. Existing histories are evaluated immediately, so already-cleared questions disappear from this filter after an app update.
+
+This filter does not delete attempts or change the Review Center's history analytics or SRS schedule. The module and Today's Loop already offer a retry of the current round's mistakes; the Review Center now offers the same completion action, preserving the concrete directions of missed questions. Each retry starts a fresh round, so a clean round offers only a way back.
+
 ## Reset semantics
 
 The two data sets are intentionally independent:
