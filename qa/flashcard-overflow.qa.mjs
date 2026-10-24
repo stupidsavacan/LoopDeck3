@@ -41,7 +41,7 @@ for (const [width, height] of sizes) test(`flashcard text fit and visible face t
     }
     await page.getByRole('button', { name: '知ってる', exact: true }).click();
   }
-  await expect(page.locator('.flashcard-donut-center')).toHaveText('100%KNOWN');
+  await expect(page.locator('.flashcard-donut-center')).toHaveText('100%知ってる');
   await info.attach('face-measurements', { body: JSON.stringify(measurements, null, 2), contentType: 'application/json' });
   expect(errors).toEqual([]);
 });
@@ -70,5 +70,5 @@ test('flashcard refits after rotation and keeps scroll position on flip', async 
   await expect(page.locator('.flashcard-position')).toHaveText('5 / 8');
   await dragTouch(page, page.locator('.flashcard-wrap'), -120, 0);
   await expect(page.locator('.flashcard-position')).toHaveText('6 / 8');
-  await expect(page.locator('.flashcard-counts')).toHaveText('KNOWN 4 · AGAIN 1');
+  await expect(page.locator('.flashcard-counts')).toHaveText('知ってる 4 · 知らない 1');
 });

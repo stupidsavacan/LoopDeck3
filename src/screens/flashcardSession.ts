@@ -76,8 +76,8 @@ export function renderFlashcardSession(
   inner.append(front, rear);
   const knownLabel = el('span', 'flashcard-judge-label known');
   const againLabel = el('span', 'flashcard-judge-label again');
-  knownLabel.append(el('span', '', 'SWIPE RIGHT'), el('strong', '', 'KNOWN'));
-  againLabel.append(el('span', '', 'SWIPE LEFT'), el('strong', '', 'AGAIN'));
+  knownLabel.append(el('span', '', '右へ'), el('strong', '', '知ってる'));
+  againLabel.append(el('span', '', '左へ'), el('strong', '', '知らない'));
   knownLabel.setAttribute('aria-hidden', 'true');
   againLabel.setAttribute('aria-hidden', 'true');
   wrap.append(inner);
@@ -98,7 +98,7 @@ export function renderFlashcardSession(
   controls.append(again, flipButton, known);
   const status = el('div', 'flashcard-status');
   status.setAttribute('aria-live', 'polite');
-  screen.append(stage, controls, el('p', 'flashcard-key-hint', 'Space = flip · ← / → = judge'), status);
+  screen.append(stage, controls, el('p', 'flashcard-key-hint', 'Space：裏返す · ← →：知らない / 知ってる'), status);
   const disposeLayout = observeFlashcardLayout([front, rear]);
 
   let flipped = false;

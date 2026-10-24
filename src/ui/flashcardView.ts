@@ -12,7 +12,6 @@ export function renderFlashcardHeader(session: QuizSession, leading?: HTMLElemen
   const leadingSlot = leading ?? el('span', 'flashcard-header-leading');
   header.append(
     leadingSlot,
-    el('span', 'flashcard-brand', 'LOOPDECK · FLASHCARDS'),
     el('span', 'flashcard-direction', getStudyQuestionModeLabel(session.settings.questionMode ?? 'as_stored', sample))
   );
   return header;
@@ -24,11 +23,8 @@ export function renderFlashcardProgress(session: QuizSession): HTMLElement {
   const known = session.attempts.filter((attempt) => attempt.result === 'correct').length;
   const again = session.attempts.filter((attempt) => attempt.result === 'wrong').length;
   const position = el('div', 'flashcard-progress-heading');
-  position.append(
-    el('p', 'eyebrow', 'FLASHCARD SESSION'),
-    el('strong', 'flashcard-position', `${Math.min(session.index + 1, session.queue.length)} / ${session.queue.length}`)
-  );
-  row.append(position, el('span', 'flashcard-counts', `KNOWN ${known} · AGAIN ${again}`));
+  position.append(el('strong', 'flashcard-position', `${Math.min(session.index + 1, session.queue.length)} / ${session.queue.length}`));
+  row.append(position, el('span', 'flashcard-counts', `知ってる ${known} · 知らない ${again}`));
   const progress = el('div', 'flashcard-progress');
   progress.setAttribute('role', 'progressbar');
   progress.setAttribute('aria-label', 'カード学習進捗');
@@ -76,9 +72,8 @@ export function renderFlashcardFace(
     if (question.explanation) content.append(el('p', 'flashcard-explanation', question.explanation));
     if (session.settings.showExample && question.example) content.append(el('p', 'flashcard-example', question.example));
   }
-  const hint = el('span', 'flashcard-flip-hint');
-  hint.append(el('i', 'flashcard-tap-dot'), document.createTextNode('TAP TO FLIP'));
-  face.append(content, hint);
+  // The 「タップで表 / 裏」 button below already says how to flip, so the face carries no second hint.
+  face.append(content);
   return face;
 }
 
@@ -89,7 +84,6 @@ export function renderFlashcardResult(session: QuizSession, onAgain: () => void,
   const total = session.queue.length;
   const percentage = total ? Math.round((known / total) * 100) : 0;
   result.append(
-    el('p', 'eyebrow', 'SESSION COMPLETE'),
     el('h1', '', 'おつかれさま。'),
     el('p', 'flashcard-result-description', `${total}枚を最後まで確認しました。知らなかったカードだけ、そのままもう一周できます。`)
   );
@@ -98,9 +92,9 @@ export function renderFlashcardResult(session: QuizSession, onAgain: () => void,
   const donut = el('div', 'flashcard-donut');
   donut.style.setProperty('--known', String(percentage));
   donut.setAttribute('role', 'img');
-  donut.setAttribute('aria-label', `KNOWN ${known}枚、AGAIN ${missed.length}枚、知ってる割合 ${percentage}%`);
+  donut.setAttribute('aria-label', `知ってる ${known}枚、知らない ${missed.length}枚、知ってる割合 ${percentage}%`);
   const center = el('div', 'flashcard-donut-center');
-  center.append(el('strong', '', `${percentage}%`), el('span', '', 'KNOWN'));
+  center.append(el('strong', '', `${percentage}%`), el('span', '', '知ってる'));
   donut.append(center);
   donutCard.append(donut);
   const stats = el('div', 'flashcard-result-stats');
@@ -109,7 +103,7 @@ export function renderFlashcardResult(session: QuizSession, onAgain: () => void,
     ['AGAIN', missed.length, 'まだ知らない']
   ] as const) {
     const stat = el('div', `flashcard-stat ${type.toLowerCase()}`);
-    stat.append(el('span', '', type), el('strong', '', String(count)), el('span', '', label));
+    stat.append(el('strong', '', String(count)), el('span', '', label));
     stats.append(stat);
   }
   const panel = el('section', 'flashcard-result-panel');

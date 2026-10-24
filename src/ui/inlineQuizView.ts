@@ -147,7 +147,7 @@ export function appendQuizResult(
   const resultBox = el('div', result === 'correct' ? 'result correct' : 'result wrong');
   resultBox.append(
     el('strong', '', result === 'revealed' ? '答え表示' : result === 'correct' ? '正解' : '不正解'),
-    el('span', '', `答え：${answerToText(getCorrectAnswer(question))}`)
+    el('span', 'result-answer', `答え：${answerToText(getCorrectAnswer(question))}`)
   );
   if (nearMiss) resultBox.append(el('span', 'near-miss-note', 'かなり近い答えです。復習優先度は軽めに記録しました。'));
   container.append(resultBox);
@@ -182,7 +182,8 @@ export function renderReviewSchedule(
     box.dataset.rating = current.log.rating;
     line.replaceChildren();
     if (current.log.rating === 'again') {
-      line.append(document.createTextNode('間違えた問題は、10分後から復習に並びます'));
+      const subject = current.log.result === 'revealed' ? '答えを見た問題' : '間違えた問題';
+      line.append(document.createTextNode(`${subject}は、10分後から復習に並びます`));
       return;
     }
     line.append(document.createTextNode('次の復習は '), el('strong', '', describeInterval(current.log.nextIntervalDays)));

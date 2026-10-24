@@ -104,13 +104,12 @@ export async function renderPdfWorksheetScreen(context: ScreenContext): Promise<
 
   const intro = el('section', 'hero-card worksheet-hero');
   intro.append(
-    el('p', 'eyebrow', 'WORKSHEET / A4'),
     el('h1', '', 'PDFプリント'),
     el('p', '', '日本語の意味から英語を書く、テスト対策用のA4プリントを作成します。')
   );
 
   const setup = el('section', 'card setup-card worksheet-setup');
-  setup.append(el('p', 'eyebrow', 'SETUP'), el('h2', '', '出力設定'));
+  setup.append(el('h2', '', '出力設定'));
   if (!modules.length) {
     setup.append(el('p', 'empty', '出力できる入力式の教材がありません。'));
     screen.append(header, intro, setup);

@@ -123,7 +123,6 @@ export async function renderImportScreen(context: ScreenContext): Promise<void> 
 
   const card = el('section', 'hero-card');
   card.append(
-    el('p', 'eyebrow', 'LIBRARY & DATA'),
     el('h1', '', '教材とデータ'),
     el('p', '', '教材の追加、バックアップ、書き出しをここで管理します。')
   );
@@ -154,7 +153,8 @@ export async function renderImportScreen(context: ScreenContext): Promise<void> 
   uploadCard.append(uploadTitle, uploadZone);
 
   const preview = el('section', 'card preview-card');
-  preview.append(el('h2', '', '読み込み結果'), el('p', 'empty', 'まだファイルが選ばれていません。'));
+  // Results appear once a file is chosen; an empty placeholder card is only noise.
+  preview.hidden = true;
 
   let importing = false;
   function setImporting(value: boolean): void {
@@ -200,6 +200,7 @@ export async function renderImportScreen(context: ScreenContext): Promise<void> 
 
   function renderBackupImport(backup: StudyBackup): void {
     clear(preview);
+    preview.hidden = false;
     preview.append(
       el('h2', '', 'バックアップを読み込む'),
       el(
@@ -227,6 +228,7 @@ export async function renderImportScreen(context: ScreenContext): Promise<void> 
     const sizeIssue = validateImportFileSize(file).find((issue) => issue.level === 'error');
     if (sizeIssue) {
       clear(preview);
+      preview.hidden = false;
       preview.append(el('h2', '', '読み込み結果'), el('p', 'issue error', sizeIssue.message));
       return;
     }
@@ -242,6 +244,8 @@ export async function renderImportScreen(context: ScreenContext): Promise<void> 
       const result = imported.result;
 
       clear(preview);
+
+      preview.hidden = false;
       preview.append(el('h2', '', '読み込み結果'));
       const issueList = el('div', 'issue-list');
       for (const issue of result.issues) {
@@ -406,6 +410,7 @@ export async function renderImportScreen(context: ScreenContext): Promise<void> 
       }
     } catch (error) {
       clear(preview);
+      preview.hidden = false;
       preview.append(
         el('h2', '', '読み込み結果'),
         el('p', 'issue error', `読み込みに失敗しました：${error instanceof Error ? error.message : String(error)}`)
@@ -442,7 +447,7 @@ export async function renderImportScreen(context: ScreenContext): Promise<void> 
     const meta = el('div', 'pack-meta');
     meta.append(
       el('span', '', pack.title),
-      el('small', '', `${pack.questions.length}問${importedIds.has(pack.packId) ? ' / imported' : ' / built-in'}`)
+      el('small', '', `${pack.questions.length}問${importedIds.has(pack.packId) ? ' / 読み込んだ教材' : ' / 内蔵'}`)
     );
 
     const actions = el('div', 'pack-actions');
@@ -519,6 +524,6 @@ export async function renderImportScreen(context: ScreenContext): Promise<void> 
     ])
   );
 
-  screen.append(header, card, authoringCard, uploadCard, preview, packageList, dataCard, note);
+  screen.append(header, card, uploadCard, preview, packageList, dataCard, authoringCard, note);
   root.append(screen);
 }

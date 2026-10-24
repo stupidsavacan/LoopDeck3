@@ -671,3 +671,10 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Keyboard shortcuts mean nothing on a touch screen. */
+@media (hover: none) {
+  .flashcard-key-hint {
+    display: none;
+  }
+}

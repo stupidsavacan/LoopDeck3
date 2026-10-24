@@ -19,7 +19,7 @@ export function mountCloudSync(store: CloudStore, repository: StudyRepository, e
     open = button('☁', 'cloud-sync-icon'),
     dialog = el('dialog', 'cloud-sync-dialog'),
     content = el('div'),
-    close = button('閉じる');
+    close = button('閉じる', 'cloud-sync-close');
   open.setAttribute('aria-label', 'クラウド教材同期の設定');
   dialog.append(content, close);
   host.append(open, dialog);
@@ -58,7 +58,7 @@ export function mountCloudSync(store: CloudStore, repository: StudyRepository, e
         );
         return;
       }
-      content.append(el('p', '', '検証用の公開APIへ接続します。共有する教材を初回設定で選択してください。'));
+      content.append(el('p', '', '合言葉でログインすると、選んだ教材をほかの端末と共有できます。共有する教材はログイン後に選べます。'));
       const url = el('input'),
         name = el('input'),
         phrase = el('input');
@@ -74,7 +74,7 @@ export function mountCloudSync(store: CloudStore, repository: StudyRepository, e
       phrase.autocomplete = 'current-password';
       phrase.placeholder = '合言葉';
       phrase.setAttribute('aria-label', '合言葉');
-      const login = button('ログイン');
+      const login = button('ログイン', 'cloud-sync-primary');
       login.onclick = () =>
         void run(async () => {
           login.disabled = true;
@@ -95,7 +95,10 @@ export function mountCloudSync(store: CloudStore, repository: StudyRepository, e
             login.disabled = false;
           }
         });
-      content.append(url, name, phrase, login);
+      // The endpoint is fixed for almost everyone, so it stays folded away instead of leading the form.
+      const endpoint = el('details', 'cloud-sync-endpoint');
+      endpoint.append(el('summary', '', '接続先を変更'), url);
+      content.append(name, phrase, login, endpoint);
       return;
     }
     const api = new CloudApi(settings.apiUrl, settings.token);

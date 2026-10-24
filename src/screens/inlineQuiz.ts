@@ -120,8 +120,7 @@ export function renderInlineQuiz(
   if (isSessionComplete(session)) {
     const done = el('div', 'quiz-card done');
     done.append(
-      el('h3', '', 'セッション完了'),
-      el('p', '', `${session.queue.length}問の学習が終わりました。`),
+      el('h3', '', `${session.queue.length}問おわりました`),
       renderSessionSummary(session)
     );
     const steps = callbacks.nextSteps?.(session);
@@ -354,6 +353,9 @@ export function renderInlineQuiz(
     idleController = undefined;
     lockAnswerControls();
     confidencePicker?.lock();
+    // The hint and the answer are spent once the question is answered.
+    hint.disabled = true;
+    reveal.disabled = true;
     markChoiceResults(choiceButtons, activeQuestion, answer, revealed);
     const { result, nearMiss = false } = attempt;
     const wrongExplanation = result === 'wrong' ? feedback : undefined;
@@ -392,8 +394,9 @@ export function renderInlineQuiz(
         : undefined
     );
     resultArea.querySelector('.review-schedule')?.remove();
+    // One box says what happened and when it comes back, instead of two stacked boxes.
     const resultBox = resultArea.querySelector('.result');
-    if (resultBox) resultBox.after(schedule);
+    if (resultBox) resultBox.append(schedule);
     else resultArea.prepend(schedule);
   }
 

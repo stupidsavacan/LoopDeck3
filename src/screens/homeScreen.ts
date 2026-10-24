@@ -147,7 +147,7 @@ export function renderHomeScreen(context: ScreenContext): void {
   search.placeholder = '教材を検索';
   search.autocomplete = 'off';
   search.setAttribute('aria-label', '教材を検索');
-  const showAll = button('すべて', 'filter');
+  const showAll = button('すべて表示', 'filter');
   toolbar.append(search, showAll);
 
   const list = el('section', 'folder-list');
@@ -168,7 +168,7 @@ export function renderHomeScreen(context: ScreenContext): void {
     fill.style.width = `${percent}%`;
     bar.append(fill);
     const label = el('span', 'module-progress-label', `習熟 ${percent}%`);
-    if (progress.dueToday) label.append(el('b', '', ` · 今日 ${progress.dueToday}問`));
+    if (progress.dueToday) label.append(el('b', '', ` · 復習 ${progress.dueToday}問`));
     node.replaceChildren(bar, label);
     node.hidden = false;
   }
@@ -193,7 +193,9 @@ export function renderHomeScreen(context: ScreenContext): void {
     icon.style.background = meta.accent;
     icon.append(createUiIcon(iconNameForModule(module), 'deck-icon-svg'));
     const title = el('div', 'title');
-    title.append(el('h2', '', module.title), el('div', 'subtitle', meta.subtitle));
+    // 「歴史総合」 over 「歴史総合 一問一答」 says the name twice; the subtitle keeps only what it adds.
+    const subtitle = meta.subtitle.startsWith(module.title) ? meta.subtitle.slice(module.title.length).trim() : meta.subtitle;
+    title.append(el('h2', '', module.title), el('div', 'subtitle', subtitle || meta.subtitle));
     top.append(icon, title);
 
     const tags = el('div', 'tags');

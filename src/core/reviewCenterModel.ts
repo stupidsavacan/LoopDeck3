@@ -34,6 +34,8 @@ export interface ReviewCenterModel {
   allSchedule: ReviewScheduleSummary;
   buckets: ReviewBuckets;
   srsQueue: ReviewCard[];
+  /** Due later today but not yet, e.g. a miss coming back after ten minutes. */
+  laterToday: { count: number; firstDueAt?: Date };
   hiddenDueCount: number;
 }
 
@@ -68,6 +70,11 @@ export function buildReviewCenterModel(
   const allSchedule = summarizeReviewSchedule(validReviewCards, now);
   const buckets = bucketReviewCards(scopedReviewCards, now);
   const srsQueue = buildSrsReviewQueue(scopedReviewCards, now, 30);
+  const laterDue = Object.values(buckets)
+    .flat()
+    .map((card) => Date.parse(card.dueAt ?? ''))
+    .filter((time) => Number.isFinite(time) && time > now.getTime())
+    .sort((a, b) => a - b);
 
   return {
     scope,
@@ -81,6 +88,7 @@ export function buildReviewCenterModel(
     allSchedule,
     buckets,
     srsQueue,
+    laterToday: { count: laterDue.length, ...(laterDue.length ? { firstDueAt: new Date(laterDue[0]) } : {}) },
     hiddenDueCount: scope === 'recent' ? Math.max(0, allSchedule.dueToday - schedule.dueToday) : 0
   };
 }

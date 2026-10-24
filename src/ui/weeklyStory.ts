@@ -25,6 +25,12 @@ function shorten(text: string, length = 18): string {
   return text.length > length ? `${text.slice(0, length)}…` : text;
 }
 
+/** 「2026-10-19」 reads like a database field; 「10月19日からの週」 reads like a calendar. */
+function weekLabel(weekStart: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(weekStart);
+  return match ? `${Number(match[2])}月${Number(match[3])}日からの週` : `${weekStart} の週`;
+}
+
 export function weeklySlides(recap: WeeklyRecap, periodLabel: string): StorySlide[] {
   if (recap.answered === 0) {
     return [{ kicker: periodLabel, big: '0', unit: '問', line: 'この週の学習記録はまだありません。', theme: 'ink', showWeek: true }];
@@ -96,7 +102,7 @@ async function slideImage(slide: StorySlide, recap: WeeklyRecap): Promise<Blob |
   context.fillRect(0, 0, canvas.width, canvas.height);
   context.fillStyle = theme.muted;
   context.font = font(800, 40);
-  context.fillText(`LOOPDECK · ${recap.weekStart} の週`, 96, 150);
+  context.fillText(`LOOPDECK · ${weekLabel(recap.weekStart)}`, 96, 150);
   context.font = font(800, 56);
   context.fillText(slide.kicker, 96, 330);
   context.fillStyle = theme.text;
@@ -145,7 +151,7 @@ export function openWeeklyStory(recap: WeeklyRecap, periodLabel: string, onClose
     const big = el('strong', 'weekly-big', slide.big);
     if (slide.unit) big.append(el('small', '', slide.unit));
     const children: HTMLElement[] = [
-      el('span', 'weekly-period', `${recap.weekStart} の週`),
+      el('span', 'weekly-period', weekLabel(recap.weekStart)),
       el('span', 'weekly-kicker', slide.kicker),
       big,
       el('span', 'weekly-line', slide.line)
