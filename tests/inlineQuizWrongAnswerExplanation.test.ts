@@ -163,7 +163,7 @@ describe('renderInlineQuiz wrong answer feedback', () => {
     }
   });
 
-  it('shows a helpful fallback when a wrong answer does not match another question', async () => {
+  it('adds no answer panel when a wrong answer matches nothing, since the marks already say it is wrong', async () => {
     const container = document.createElement('div');
     const session = createSession(
       moduleInfo,
@@ -181,9 +181,9 @@ describe('renderInlineQuiz wrong answer feedback', () => {
       .click();
     await settle();
 
-    expect(container.querySelector('.wrong-answer-explanation')?.textContent).toContain(
-      '\u3053\u306e\u554f\u984c\u306e\u7b54\u3048\u3067\u306f\u3042\u308a\u307e\u305b\u3093'
-    );
+    expect(container.querySelector('.result.wrong')).not.toBeNull();
+    expect(container.querySelector('.wrong-answer-explanation')).toBeNull();
+    expect(container.querySelector('.result-tab[data-panel="picked"]')).toBeNull();
   });
 
   it('does not show wrong-answer feedback on a correct answer', async () => {

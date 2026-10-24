@@ -1,4 +1,5 @@
 import { normalizeAnswer, normalizeAnswerForQuestion } from './answerJudge';
+import { timingThresholds } from './answerTiming';
 import type { AnswerConfidence, AnswerFormat, AnswerResult, Attempt, Question } from './models';
 
 export interface ReviewItem {
@@ -92,12 +93,21 @@ export function answerModeFor(attempt: Pick<Attempt, 'answerMode' | 'input'>): A
   return Array.isArray(attempt.input) ? 'choice' : 'input';
 }
 
-export function timingBand(elapsedMs: number, answerMode: AnswerFormat = 'input'): TimingBand {
+export function timingBand(elapsedMs: number, answerMode: AnswerFormat = 'input', readingChars?: number): TimingBand {
   if (answerMode === 'flashcard') return 'normal';
-  const [fast, slow] = answerMode === 'choice' ? [4500, 12000] : [7000, 20000];
+  const { fast, slow } = timingThresholds(answerMode, readingChars);
   if (elapsedMs <= fast) return 'fast';
   if (elapsedMs >= slow) return 'slow';
   return 'normal';
+}
+
+export function attemptTimingBand(attempt: Pick<Attempt, 'elapsedMs' | 'answerMode' | 'input' | 'readingChars'>): TimingBand {
+  return timingBand(attempt.elapsedMs, answerModeFor(attempt), attempt.readingChars);
+}
+
+export interface AnswerSignals {
+  readingChars?: number;
+  hintUsed?: boolean;
 }
 
 export function scoreAttemptDelta(
@@ -105,24 +115,27 @@ export function scoreAttemptDelta(
   nearMiss: boolean,
   elapsedMs: number,
   answerMode: AnswerFormat = 'input',
-  confidence?: AnswerConfidence
+  confidence?: AnswerConfidence,
+  signals: AnswerSignals = {}
 ): number {
   if (result === 'revealed') return 10;
   if (answerMode === 'flashcard') return result === 'correct' ? -2 : 6;
   // Being sure and wrong points at a firm misconception, which is worth reviewing first.
   if (result === 'wrong' && confidence === 'sure') return 12;
   if (result === 'wrong' && nearMiss) return 4;
-  if (result === 'wrong') return timingBand(elapsedMs, answerMode) === 'fast' ? 8 : 6;
-  if (confidence === 'guess') return 3;
-  if (timingBand(elapsedMs, answerMode) === 'fast') return -4;
-  if (timingBand(elapsedMs, answerMode) === 'slow') return 3;
+  const band = timingBand(elapsedMs, answerMode, signals.readingChars);
+  if (result === 'wrong') return band === 'fast' ? 8 : 6;
+  // A guess or an answer reached through the hint is not yet recall.
+  if (confidence === 'guess' || signals.hintUsed) return 3;
+  if (band === 'fast') return -4;
+  if (band === 'slow') return 3;
   return -2;
 }
 
 function attemptDelta(attempt: Attempt): number {
   return (
     attempt.priorityDelta ??
-    scoreAttemptDelta(attempt.result, Boolean(attempt.nearMiss), attempt.elapsedMs, answerModeFor(attempt), attempt.confidence)
+    scoreAttemptDelta(attempt.result, Boolean(attempt.nearMiss), attempt.elapsedMs, answerModeFor(attempt), attempt.confidence, attempt)
   );
 }
 
@@ -218,10 +231,9 @@ export function analyzeProblems(
       if (revealedRecords.length) tags.push(`答え表示 ${revealedRecords.length}回`);
       const nearMissCount = wrongRecords.filter((attempt) => attempt.nearMiss).length;
       if (nearMissCount) tags.push(`ニアミス ${nearMissCount}回`);
-      if (wrongRecords.some((attempt) => timingBand(attempt.elapsedMs, answerModeFor(attempt)) === 'fast')) tags.push('即答ミス');
-      if (wrongRecords.some((attempt) => timingBand(attempt.elapsedMs, answerModeFor(attempt)) === 'slow')) tags.push('長考して誤答');
-      if (correctRecords.some((attempt) => timingBand(attempt.elapsedMs, answerModeFor(attempt)) === 'slow'))
-        tags.push('正解だが想起が遅い');
+      if (wrongRecords.some((attempt) => attemptTimingBand(attempt) === 'fast')) tags.push('即答ミス');
+      if (wrongRecords.some((attempt) => attemptTimingBand(attempt) === 'slow')) tags.push('長考して誤答');
+      if (correctRecords.some((attempt) => attemptTimingBand(attempt) === 'slow')) tags.push('正解だが想起が遅い');
 
       const wrongAnswerPatterns = [
         ...wrongRecords

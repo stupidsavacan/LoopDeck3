@@ -1,7 +1,7 @@
 import { endOfLocalCalendarDay, localCalendarDayKey, recentLocalCalendarDayKeys } from './calendarDay';
 import { questionMasteryLevel, type MasteryLevel } from './mastery';
 import type { Attempt, ModuleInfo, Question, ReviewCard } from './models';
-import { analyzeProblems, answerModeFor, timingBand, type ReviewAttemptAggregation } from './reviewEngine';
+import { analyzeProblems, attemptTimingBand, type ReviewAttemptAggregation } from './reviewEngine';
 
 export interface DailyStudyStat {
   date: string;
@@ -209,8 +209,8 @@ export function buildMistakeBreakdown(attempts: Attempt[], questions: Question[]
       wrongByQuestion.set(attempt.questionId, (wrongByQuestion.get(attempt.questionId) ?? 0) + 1);
       if (question?.type === 'multi_select') bump(counts, 'multi_select', '複数選択ミス');
       if (attempt.nearMiss) bump(counts, 'near_miss', 'ニアミス');
-      if (timingBand(attempt.elapsedMs, answerModeFor(attempt)) === 'fast') bump(counts, 'quick_wrong', '即答ミス');
-      if (timingBand(attempt.elapsedMs, answerModeFor(attempt)) === 'slow') bump(counts, 'slow_wrong', '長考して誤答');
+      if (attemptTimingBand(attempt) === 'fast') bump(counts, 'quick_wrong', '即答ミス');
+      if (attemptTimingBand(attempt) === 'slow') bump(counts, 'slow_wrong', '長考して誤答');
       continue;
     }
 
@@ -220,7 +220,7 @@ export function buildMistakeBreakdown(attempts: Attempt[], questions: Question[]
       continue;
     }
 
-    if (attempt.result === 'correct' && timingBand(attempt.elapsedMs, answerModeFor(attempt)) === 'slow') {
+    if (attempt.result === 'correct' && attemptTimingBand(attempt) === 'slow') {
       bump(counts, 'slow_correct', '時間がかかった正解');
     }
   }
@@ -314,12 +314,12 @@ export function buildAnalyticsOverview(
       wrongByQuestion.set(attempt.questionId, (wrongByQuestion.get(attempt.questionId) ?? 0) + 1);
       if (question?.type === 'multi_select') bump(breakdownCounts, 'multi_select', '複数選択ミス');
       if (attempt.nearMiss) bump(breakdownCounts, 'near_miss', 'ニアミス');
-      if (timingBand(attempt.elapsedMs, answerModeFor(attempt)) === 'fast') bump(breakdownCounts, 'quick_wrong', '即答ミス');
-      if (timingBand(attempt.elapsedMs, answerModeFor(attempt)) === 'slow') bump(breakdownCounts, 'slow_wrong', '長考して誤答');
+      if (attemptTimingBand(attempt) === 'fast') bump(breakdownCounts, 'quick_wrong', '即答ミス');
+      if (attemptTimingBand(attempt) === 'slow') bump(breakdownCounts, 'slow_wrong', '長考して誤答');
     } else if (attempt.result === 'revealed') {
       bump(breakdownCounts, 'revealed', '答え表示');
       wrongByQuestion.set(attempt.questionId, (wrongByQuestion.get(attempt.questionId) ?? 0) + 1);
-    } else if (timingBand(attempt.elapsedMs, answerModeFor(attempt)) === 'slow') {
+    } else if (attemptTimingBand(attempt) === 'slow') {
       bump(breakdownCounts, 'slow_correct', '時間がかかった正解');
     }
   }

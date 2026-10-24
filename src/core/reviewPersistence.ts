@@ -39,7 +39,11 @@ export function buildReviewPersistence(attempt: Attempt, existingCard?: ReviewCa
     samePresentation && existingCard
       ? existingCard
       : createReviewCard(attempt.questionId, attempt.moduleId, now, attempt.questionMode ?? 'as_stored');
-  const rating = inferReviewRating(attempt.result, attempt.elapsedMs, answerModeFor(attempt), attempt.confidence);
+  const rating = inferReviewRating(attempt.result, attempt.elapsedMs, answerModeFor(attempt), attempt.confidence, {
+    readingChars: attempt.readingChars,
+    hintUsed: attempt.hintUsed,
+    firstReview: baseCard.totalReviews === 0
+  });
   const result = applyReviewRating(baseCard, rating, attempt.result, attempt.elapsedMs, { attemptId: attempt.attemptId, now });
   result.log.reviewLogId = `answer:${attempt.attemptId}`;
   return result;

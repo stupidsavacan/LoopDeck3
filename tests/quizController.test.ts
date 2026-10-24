@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { QuizController } from '../src/core/quizController';
+import { AUTO_ADVANCE_DELAY_MS, QuizController } from '../src/core/quizController';
 import { createSession } from '../src/core/sessionEngine';
 import type { Question, Attempt } from '../src/core/models';
 const question: Question = { id: 'q', moduleId: 'm', type: 'input', prompt: 'Animal', answer: 'dog' };
@@ -45,9 +45,15 @@ describe('headless question runtime', () => {
     controller.answer('dog'); await controller.save();
     expect(vi.getTimerCount()).toBe(0); expect(controller.phase).toBe('disposed');
   });
+  it('holds auto advance once the learner touches the answered card', async () => {
+    const { controller, callbacks } = setup(true); controller.answer('dog'); await controller.save();
+    expect(controller.holdAutoAdvance()).toBe(true); expect(controller.holdAutoAdvance()).toBe(false);
+    await vi.advanceTimersByTimeAsync(AUTO_ADVANCE_DELAY_MS * 2); expect(callbacks.onAdvance).not.toHaveBeenCalled();
+    controller.advance(); expect(callbacks.onAdvance).toHaveBeenCalledOnce();
+  });
   it('does not retry committed data when checkpoint storage fails', async () => {
     const { controller, callbacks } = setup(true); callbacks.onCheckpoint.mockImplementation(() => { throw new Error('Checkpoint full'); });
-    controller.answer('dog'); await controller.save(); await controller.save(); await vi.advanceTimersByTimeAsync(650);
+    controller.answer('dog'); await controller.save(); await controller.save(); await vi.advanceTimersByTimeAsync(AUTO_ADVANCE_DELAY_MS);
     expect(callbacks.persist).toHaveBeenCalledOnce(); expect(callbacks.onCheckpointError).toHaveBeenCalledOnce(); expect(callbacks.onAdvance).toHaveBeenCalledOnce();
   });
   it('excludes hidden time and suspension from answer timing and checkpoints', () => {

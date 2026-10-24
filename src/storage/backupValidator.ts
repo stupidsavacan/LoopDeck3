@@ -122,6 +122,8 @@ export function parseAttempt(value: unknown, index: number): Attempt {
     fail(`${path}.confusedWithQuestionId must be a non-empty string.`);
   if (value.confidence !== undefined && value.confidence !== 'sure' && value.confidence !== 'unsure' && value.confidence !== 'guess')
     fail(`${path}.confidence is unsupported.`);
+  if (value.readingChars !== undefined && !nonNegativeNumber(value.readingChars)) fail(`${path}.readingChars must be non-negative.`);
+  if (value.hintUsed !== undefined && typeof value.hintUsed !== 'boolean') fail(`${path}.hintUsed must be boolean.`);
 
   return {
     attemptId: value.attemptId,
@@ -140,7 +142,9 @@ export function parseAttempt(value: unknown, index: number): Attempt {
     ...(value.answerMode !== undefined ? { answerMode: value.answerMode as AnswerFormat } : {}),
     ...(value.questionMode !== undefined ? { questionMode: value.questionMode as ConcreteStudyQuestionMode } : {}),
     ...(value.confusedWithQuestionId !== undefined ? { confusedWithQuestionId: value.confusedWithQuestionId } : {}),
-    ...(value.confidence !== undefined ? { confidence: value.confidence as Attempt['confidence'] } : {})
+    ...(value.confidence !== undefined ? { confidence: value.confidence as Attempt['confidence'] } : {}),
+    ...(value.readingChars !== undefined ? { readingChars: value.readingChars } : {}),
+    ...(value.hintUsed !== undefined ? { hintUsed: value.hintUsed } : {})
   };
 }
 

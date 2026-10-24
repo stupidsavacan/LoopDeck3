@@ -3558,3 +3558,134 @@ body:has(.cloud-sync-control) .today-hero-top .today-date {
 .v2-quiz-tools:has(> .speak-button:not([hidden])) {
   grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
 }
+
+/* Answer schedule: when the card returns, and a one-tap correction of the speed-based feel */
+.review-schedule {
+  margin-top: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--editorial-line);
+  border-radius: 14px;
+  background: var(--editorial-surface);
+}
+
+.review-schedule-line {
+  margin: 0;
+  color: #3a4252;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.review-schedule-line strong {
+  color: var(--editorial-ink);
+}
+
+.rating-choices {
+  display: grid;
+  grid-template-columns: auto repeat(3, minmax(0, 1fr));
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.rating-choices-label {
+  padding-right: 4px;
+  color: var(--editorial-subtle);
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+
+.rating-choice {
+  min-height: 44px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 4px 6px;
+  border: 1px solid var(--editorial-line);
+  border-radius: 12px;
+  background: var(--editorial-paper);
+  color: var(--editorial-ink);
+  cursor: pointer;
+}
+
+.rating-choice[aria-pressed='true'] {
+  border-color: var(--editorial-blue);
+  background: #e9eeff;
+  color: var(--editorial-blue-ink);
+}
+
+.rating-choice:disabled {
+  opacity: 0.6;
+}
+
+.rating-choice-name {
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.rating-choice-when {
+  color: var(--editorial-subtle);
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+/* A correct answer moves on by itself; the bar shows how long until it does. Any touch holds it. */
+.prototype-next-ready {
+  position: relative;
+  overflow: hidden;
+}
+
+.prototype-next-ready.is-auto-advancing::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 4px;
+  width: 100%;
+  background: var(--editorial-lime);
+  transform-origin: left center;
+  animation: auto-advance var(--auto-advance-ms, 1400ms) linear forwards;
+}
+
+@keyframes auto-advance {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .prototype-next-ready.is-auto-advancing::after {
+    animation: none;
+    transform: scaleX(1);
+  }
+}
+
+/* Phones: once answered, 次へ sits right above the tool bar so it never needs a scroll to reach. */
+@media (max-width: 520px) {
+  .module-screen .quiz-card.is-answered:not(.done),
+  .today-screen .quiz-card.is-answered:not(.done) {
+    padding-bottom: calc(166px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  .module-screen .quiz-card.is-answered .quiz-next-controls,
+  .today-screen .quiz-card.is-answered .quiz-next-controls {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: calc(71px + env(safe-area-inset-bottom, 0px));
+    z-index: 31;
+    max-width: none;
+    margin: 0 !important;
+    padding: 8px max(12px, env(safe-area-inset-right, 0px)) 8px max(12px, env(safe-area-inset-left, 0px));
+    background: linear-gradient(to bottom, rgba(244, 245, 248, 0), var(--editorial-paper) 30%);
+  }
+
+  .module-screen .quiz-card.is-answered .prototype-next-ready,
+  .today-screen .quiz-card.is-answered .prototype-next-ready {
+    width: 100%;
+  }
+}
