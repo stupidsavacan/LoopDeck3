@@ -1,6 +1,6 @@
 # LoopDeck Pack Authoring Contract
 
-Authoring contract revision: 2026-10-04
+Authoring contract revision: 2026-10-24
 Target LoopDeck packVersion: 1
 Prompt target: modern reasoning models including GPT-5.6 Sol
 
@@ -37,7 +37,7 @@ External verification is allowed and useful when the supplied material is unclea
 
 Never invent facts to fill coverage. If a source-dependent fact cannot be established, omit that question or clearly report the unresolved ambiguity.
 
-Preserve requested question numbering, vocabulary numbering, ranges, and ordering unless the user explicitly asks for reordering.
+Preserve requested question numbering, vocabulary numbering, ranges, and ordering unless the user explicitly asks for reordering. If source numbers cannot satisfy the runtime integer/uniqueness contract, apply the reported exception procedure in section 10; never silently discard source labels.
 
 ## 2. Hierarchy contract: Folder -> Module -> category -> Question
 
@@ -79,7 +79,7 @@ Several source images may map to several categories when their contents are genu
 ### Numbered vocabulary category rule
 
 For numbered vocabulary materials such as LEAP:
-- preserve the original order and `number` values;
+- preserve the original order and `number` values, subject to the explicit collision/branch-number procedure in section 10;
 - do not infer semantic categories unless explicitly requested or present in the source;
 - when category subdivision is useful and the source gives no categories, use contiguous numeric ranges;
 - the default granularity is approximately 25 consecutive vocabulary items per category, for example `001〜025`, `026〜050`, `051〜075`, `076〜100`.
@@ -160,9 +160,21 @@ A complete single-file pack has this shape:
       "questionIds": ["school-2026-term1-final-history-imperialism-001"]
     }
   ],
-  "questions": []
+  "questions": [
+    {
+      "id": "school-2026-term1-final-history-imperialism-001",
+      "moduleId": "school-2026-term1-final-history-imperialism",
+      "type": "choice",
+      "number": 1,
+      "prompt": "中国同盟会の中心人物は？",
+      "choices": ["孫文", "袁世凱", "蒋介石", "康有為"],
+      "answer": "孫文"
+    }
+  ]
 }
 ```
+
+Other JSON snippets in this contract are field/question examples, not complete importable packs. Assemble them into a complete validated pack before delivery.
 
 For ZIP output:
 - `manifest.json` contains packVersion, packId, title, optional description, and folders;
@@ -214,7 +226,7 @@ Use when exactly one displayed option is correct. For authored high-quality pack
 
 Rules:
 - `answer` must appear in `choices`;
-- choices must be unique;
+- choices must be non-empty and distinct after the question's answer normalization, not just distinct raw strings;
 - distractors must be plausible and from the same conceptual class as the answer;
 - never use joke or obviously unrelated distractors.
 
@@ -235,7 +247,7 @@ Use when the learner must select the complete applicable set rather than type on
 }
 ```
 
-Every `correctChoices` item must appear in `choices`.
+Every `correctChoices` item must appear in `choices`. Keep both arrays free of duplicates. Multi-select is exact-set judging: missing or extra selections are wrong; selection order does not matter. Confirm that a prompt such as "2つ選べ" agrees with the number of correct choices.
 Do not add an `answer` field to `multi_select`.
 Do not invent extra correct answers just to force a multi-select question.
 
@@ -272,6 +284,10 @@ Supported modes:
 Default judging normalizes Unicode with NFKC, trims/compacts surrounding whitespace and edge punctuation, and is case-insensitive unless `caseSensitive` is true. In normal `single` / `any_of` mode, LoopDeck also accepts limited Japanese sentence-edge wrappers and exact English answer tokens inside a longer input. `exact_phrase` disables that loose fallback.
 
 `requiresAll` exists in the TypeScript rule shape but is not consulted by the current judge; do not emit it as an authoring control. Use `mode: "all_of"` with non-empty `requiredParts` instead.
+
+Distinguish alternative correct answers from a complete answer containing several meanings. For example, separate `answer: "賛成する"` and `acceptableAnswers: ["同意する"]` allow either meaning. A combined answer `"①賛成する ②同意する"` is not automatically split into independent alternatives: in eligible compact English-to-Japanese vocabulary, circled meaning separators normalize to Japanese commas, preserving wording and meaning order. Missing meanings are not automatically accepted. This separator handling does not apply to strict/case-sensitive rules or every language pair. Preserve the source's intended requirement and test both complete and incomplete responses. Do not bundle unrelated independent tasks into one input question.
+
+For `all_of`, matching is substring presence, not semantic understanding, token boundaries, or rejection of contradictory extra text. `exact_phrase` still applies normalization; it is not byte-for-byte equality. Numeric equivalences such as 1/2 and 0.5, units, tolerance, and formula evaluation are not automatic. Typo/near-miss feedback is not acceptance of an unregistered synonym.
 
 Use custom judging only when the normal answer/accepted-answer behavior is insufficient. Do not assume undocumented tolerance, ordering, numeric ranges, or fuzzy matching behavior.
 
@@ -363,7 +379,16 @@ Runtime rules:
 - accepted-answer variants must not be used as distractors;
 - `distractors` and `reason` are optional authoring metadata; the current runtime does not use `distractors` as a separate option source.
 
-For explicit two-sided study, `sideChoiceCandidates` may provide different candidate sets for `front_to_back` and `back_to_front` using the same structure and rules.
+For explicit two-sided study, `sideChoiceCandidates` may provide different candidate sets for `front_to_back` and `back_to_front` using the same structure and rules. Each set must include that direction's primary answer, not necessarily the stored answer.
+
+Direction-specific compatibility:
+- Explicit sided presentation rebuilds accepted answers from the answering side and sets `answerJudging.mode` to `any_of`. Automatic reverse presentation also sets that mode to `any_of`; other judging flags remain. Do not assume `exact_phrase`, `numeric`, or `all_of` survives a direction change. Keep strict tasks as stored unless separately verified; separate directional questions are an option when strict judging is essential.
+- Keep canonical aliases and side aliases consistent for the intended direction. Top-level aliases do not automatically populate explicit sides.
+- Only input questions support reversible study modes. With explicit sides, list the intended modes in `supportedStudyModes`; `mixed` and `as_stored` are runtime settings, not values in that array.
+- Automatic reversal is a heuristic for compact Japanese/English text (up to 64 characters and six Latin words, without sentence-ending punctuation), and is disabled for imageAsset/visualReferences questions. Use explicit sides when reliable reversal is required, while retaining canonical vocabulary fields.
+- Test normal, front-to-back, and back-to-front separately, including aliases, rejected near answers, examples, and candidate sets. A definition shared by several words is not a uniquely answerable reverse question unless its intended answers/context are supplied.
+
+Generated choices are not semantic distractor generation. The runtime searches answers in the same module/category, then other categories in the module, then other modules in its candidate pool. Manual candidates that do not leave one correct plus three usable wrong choices after normalization and accepted-answer filtering cannot supply a normal four-choice presentation; generation may fall back to the pool and may still fail. Check small modules and both directions. Do not invent unnatural categories just to manipulate candidate generation. For every authored single-choice distractor, verify that the effective judge rejects it.
 
 ## 8. Images and image-grounded questions
 
@@ -485,8 +510,26 @@ Current collision/merge behavior that authors must account for:
 - merge update keeps identical colliding questions once; a colliding question with different content is renamed with a suffix such as `__merge_1` and module `questionIds` are remapped;
 - during module merge, incoming module metadata replaces same-key metadata while `questionIds` are unioned/de-duplicated;
 - a module ID shared with another active pack can trigger module-merge behavior;
-- overwrite import replaces the stored assets for that pack with the newly imported referenced assets. Merge import upserts assets: incoming same-path bytes replace stored bytes, while unrelated existing assets remain. Merge preview is pure and does not stage or persist assets;
+- overwrite import replaces the stored assets for that pack with the newly imported referenced assets. Merge import upserts assets but rejects an existing same-path asset with different stored image data, aborting the transaction. Use a new stable path for a different image in a merge; reuse a path only for the unchanged asset. Assets no longer referenced by the final pack are removed. Merge preview is pure and does not stage or persist assets;
 - use a pack-specific prefix for module/question IDs unless intentional replacement/merge is the goal.
+
+### Numbering and source-order exceptions
+
+- A supplied `number` must be a positive safe integer (1 through 9007199254740991), not a string, zero, decimal, or branch label such as "1(2)".
+- Effective numbers must be unique within each Module. A missing number falls back to its one-based position in `module.questionIds`, so mixing explicit and omitted numbers can also collide. Prefer explicit numbers for every authored question.
+- `module.questionIds` defines the authored question sequence; keep it in source order and make `questions` follow the same sequence for clarity. Every question must also be listed in its owning module's questionIds.
+- Preserve source numbers when they are representable and unique. If pages restart at 1, branches share a number, or a source item must become several questions, do not silently violate numbering or split coherent material solely to evade it. Report the conflict; unless exact original app numbering was explicitly required, assign unique sequential app numbers in source order and preserve original page/branch labels in a separate source-to-question report (or a concise prompt prefix for noncanonical material). Never add such a prefix to canonical English vocabulary prompts. If exact original app numbering was required, resolve that decision before final delivery.
+- `sourceNumber`, `sourcePage`, and `sourceId` are not supported pack fields. Keep provenance in a separate report rather than pretending unknown fields persist.
+
+### New packs, corrections, additions, and learning state
+
+Identify the operation before authoring. For an update, obtain the existing exported pack/assets and retain unchanged questions exactly; if unavailable, do not claim history-preserving compatibility.
+- New independent material: use independent pack/module/question IDs.
+- Correction/replacement: produce the complete intended replacement pack with stable IDs for continuing items. Overwrite is full replacement, not a patch; omitted questions/modules are removed.
+- Additive merge: validate the final merged pack against the existing pack. Different content under the same question ID is appended under a new ID, not corrected in place. The resulting old/new questions may have duplicate numbers and cause merge validation to fail even though both inputs validate separately.
+- Keeping old and new editions independently: use independent IDs throughout rather than sharing learning-history keys.
+
+Stable IDs alone do not preserve learning state. Removing a question, changing its owning pack, or changing its parsed question content retires its existing learning state. Even explanation/example/alias/category/number changes can count as content changes. Existing attempts are marked `contentRetired`; bookmarks, review cards, and review logs for affected IDs are deleted. An overwrite that changes a referenced image also retires affected questions even when the question JSON is unchanged. Unchanged questions should not be reformatted, reordered internally, or enriched gratuitously during an update. Report intended added/changed/removed IDs and learning-state impact; never promise automatic history migration.
 
 ## 11. Module and question metadata
 
@@ -516,6 +559,22 @@ Useful optional question metadata currently consumed by the study UI includes:
 
 Do not use `explanation` merely to restate the already-encoded `prompt` <-> `answer` relationship, for example `pollen means 花粉`. Do not put an example sentence in `explanation`; use `example` for that. An empty `explanation` is valid when the question/answer relationship is already self-explanatory.
 
+`example` is visible before answering when examples are enabled; otherwise it can be opened as a hint. Check every intended direction for answer leakage. An English example containing the target word may reveal a Japanese-to-English answer. Prefer an appropriate blank/context or omit the example when it would defeat the task; do not alter source facts to manufacture an example. Put post-answer notes in `explanation` and actual example sentences in `example`.
+
+### Current learning features and pack boundaries
+
+- Today's Loop can mix modules. Make each prompt understandable with its own image/context, without relying on "the previous question" or an unavailable source page. Do not duplicate questions just to enter this mode.
+- Exam planning groups modules by folder. Preserve the user's exam/collection grouping and use stable folder IDs; do not invent an `examDate` pack field. Exam dates and rest days are device settings, not pack metadata.
+- Confusion comparisons and practice use other questions' answers and labeled study pairs. Keep term-definition associations and aliases precise; do not register a merely related term as an accepted answer. Category spelling/spacing should be consistent for filters and mastery maps.
+- Read-aloud uses available browser voices and infers Japanese versus English from the presented text. Do not invent audio assets, pronunciation fields, SSML, or a guaranteed device voice. Inspect mixed-language text and scientific notation without replacing the canonical written answer merely to control pronunciation.
+- Confidence, hint usage, reading time, review ratings, mastery, confusion records, and next review dates belong to learner/runtime data, not the authored pack. `preferredAnswerFormat` is a default and does not guarantee every study route or user setting will use that format.
+
+### Optional cloud compatibility
+
+Pack creation does not authorize uploading or sharing it. Cloud sync transfers pack content, not learner history or device exam plans. Do not include credentials, endpoint configuration, sync revisions, fingerprints, or learner records as authoring fields. The current cloud API additionally requires packId to be at most 200 characters with no control characters; prefer this restriction for new packs even if local validation is more permissive. Cloud transfer uses ZIPs generated from pack data; authors may still deliver image-free JSON for normal import.
+
+Cloud fingerprinting requires every referenced image and uses the normalized pack plus referenced image byte hashes. A missing image that only warns during local import can therefore prevent sync. JSON key order and ZIP timestamps do not define semantic identity, but array order and text changes can. Avoid unnecessary content churn. Cloud sync implementation does not imply every release/device is configured for production sync; do not promise immediate background delivery or migrate/delete remote content as part of authoring.
+
 Do not author runtime-derived presentation state such as `activeStudyMode`, `autoReversed`, or `directionLabel`; LoopDeck sets those while presenting a question.
 Fields that merely exist in a TypeScript interface but are not wired into the current study UI are not automatically authoring features.
 
@@ -541,13 +600,24 @@ Before final files, do this internally or visibly when useful:
 1. Identify the user's intended Folder and Module structure before writing questions.
 2. Apply the hierarchy rules from section 2; do not derive hierarchy from file/page/image count.
 3. Detect compatibility-sensitive material such as numbered English vocabulary and lock its canonical representation before adding enhancements.
-4. Build a source/coverage plan and preserve source numbering/order.
+4. Build a source/coverage plan and preserve source numbering/order, applying the explicit numbering exceptions in section 10. For updates, compare against the existing export before generating changes.
 5. Decide the intended question type for every source fact.
 6. Define true accepted-answer variants and plausible distractors.
 7. Preserve and inspect required image sources; reuse shared figures.
 8. Generate stable IDs and cross-references.
 9. Run the mandatory self-check below.
 10. Only then emit final JSON/ZIP contents.
+
+### Executable validation and delivery evidence
+
+Validate the final file on disk, not just the in-memory object or a draft code block:
+1. Parse the final UTF-8 JSON; for ZIP, reopen the archive and check the three root JSON entries, safe paths, resource limits, referenced assets, and image integrity. JSON has no comments, trailing commas, placeholders, or ellipses.
+2. When the current LoopDeck source/tooling is available, run the final pack through `validatePack`; use `importLoopDeckJson` or `importLoopDeckZip` for the actual container. These are source APIs, not an assumed standalone CLI. For merge updates, also validate the result of the existing merge function against the existing pack. Do not claim these checks ran when tooling is unavailable.
+3. Resolve all errors and learning-blocking warnings, including missing images. Inspect every distinct figure and its target labels. Sample each question type and every intended direction in the app when available; check accepted aliases and rejected distractors using the effective presented question's judge.
+4. For worksheet vocabulary, run `createJapaneseToEnglishWorksheetPlan` when available and compare expected rows with actual rows/skippedQuestionCount. Image/visualReferences questions, non-input types, and `direction: "en_to_ja"` are excluded from this worksheet path; sides do not replace its canonical fields.
+5. Reopen the exact delivered file after packaging. Report which checks actually ran, their results, and checks that could not run. Missing verification is a stated limitation, never a claimed pass.
+
+Maintain a separate concise coverage report: source filename/page/heading/original number -> question ID, intended source item count, created count, exclusions and reasons, unresolved ambiguities, and intentional duplicate/reinforcement items. For updates, include added/changed/removed IDs and learning-state implications. Do not put extra provenance/report files into the import ZIP or invent pack fields for them. A separate report is especially important when numbering exceptions apply.
 
 ## 14. Mandatory self-check
 
@@ -560,11 +630,15 @@ Before presenting the final pack, verify:
 - [ ] every authored module has non-empty id/folderId/title/subject and a questionIds array.
 - [ ] every module.folderId exists.
 - [ ] every question.moduleId exists.
-- [ ] every module.questionIds entry exists and belongs to that module.
+- [ ] every module.questionIds entry exists and belongs to that module, and every question is listed by its owner.
+- [ ] all explicit numbers are positive safe integers; effective numbers (including positional fallback) are unique per module.
+- [ ] repeated source/branch numbers have an explicit source-to-app mapping rather than silent loss or invalid numbers.
+- [ ] update mode is explicit; the final replacement/merged pack and referenced assets were checked against the existing export.
+- [ ] no merge replaces different image data under an existing path; any overwrite/content change reports learning-state impact.
 - [ ] no Folder or Module was created merely because a source had multiple pages/images/sections/topics.
 - [ ] same-material source pages/images remain in one Module unless an explicit rule justified a split.
 - [ ] categories follow user/source/range structure and do not introduce an unrequested semantic taxonomy.
-- [ ] numbered vocabulary preserves original order/numbers; default invented subdivision, if needed, uses contiguous ~25-item ranges.
+- [ ] numbered vocabulary preserves original order/numbers or documents the section 10 exception; default invented subdivision, if needed, uses contiguous ~25-item ranges.
 - [ ] canonical English vocabulary uses input + English-only prompt + Japanese answer/acceptableAnswers + source number + `direction: "normal"`.
 - [ ] canonical English vocabulary was not converted to mixed-language prompt text, `direction: "en_to_ja"`, or sides-only storage.
 - [ ] worksheet-visible vocabulary meanings remain in `acceptableAnswers` rather than only `acceptedAnswers`.
@@ -572,7 +646,12 @@ Before presenting the final pack, verify:
 - [ ] no multiple-independent-answer prompt is encoded as input.
 - [ ] every choice answer appears in choices and distractors are plausible/same-class.
 - [ ] every multi_select has at least one correct choice and all correct choices appear in choices.
-- [ ] accepted-answer variants are genuinely equivalent.
+- [ ] accepted-answer variants are genuinely equivalent; complete multi-meaning answers are distinguished from alternatives.
+- [ ] choice options remain distinct after normalization and every distractor is rejected by the effective judge.
+- [ ] each intended direction has the correct side aliases/candidates and verified judging behavior; strict modes are not assumed to survive reversal.
+- [ ] examples/hints do not unintentionally reveal answers in any intended direction.
+- [ ] prompts remain understandable across modules in Today's Loop; categories and folder identities are consistent.
+- [ ] no learner, exam-plan, audio/SSML, credential, or sync-state fields were invented.
 - [ ] externally verified information did not silently overwrite a conflicting supplied fact or expand scope without instruction.
 - [ ] every imageAsset path is safe and the file exists in the ZIP.
 - [ ] for every distinct imageAsset, every referenced label/region/value is actually visible and legible at normal app display size.
@@ -591,7 +670,9 @@ When the user asks for a LoopDeck pack:
 - preserve the user's hierarchy intent rather than inventing organization from source-file boundaries;
 - preserve requested numbering/ranges and compatibility-sensitive representations;
 - explain meaningful unresolved source conflicts/ambiguities instead of silently guessing;
-- produce the actual final importable files when file-generation tools are available.
+- produce the actual final importable files when file-generation tools are available;
+- give a concise delivery summary: filenames, folder/module/question counts, counts by question type, image count, coverage/exclusions, actual validation results and unverified checks;
+- for updates, summarize added/changed/removed content, intended import mode, and learning-state implications. Keep the source mapping and detailed exceptions in a separate report when needed. Creating files does not itself authorize importing into a live library, uploading, or sharing them.
 
 Final priority order:
 1. factual/source fidelity;
