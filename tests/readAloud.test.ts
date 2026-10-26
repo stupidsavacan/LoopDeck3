@@ -31,6 +31,7 @@ function installSpeech(voices: Array<{ lang: string }>) {
 
 afterEach(() => {
   Reflect.deleteProperty(window, 'speechSynthesis');
+  Reflect.deleteProperty(window, 'LoopDeck3Host');
   vi.unstubAllGlobals();
 });
 
@@ -52,6 +53,16 @@ describe('speech helpers', () => {
     expect(speak('consider')).toBe(true);
     expect(spoken[0]).toMatchObject({ text: 'consider', lang: 'en-US', voice: { lang: 'en-US' } });
     expect(fake.cancel).toHaveBeenCalled();
+  });
+
+  it('never offers read-aloud inside the Android app, even when the WebView reports voices', () => {
+    const { fake } = installSpeech([{ lang: 'ja-JP' }]);
+    Object.defineProperty(window, 'LoopDeck3Host', { configurable: true, value: {} });
+    const ready = vi.fn();
+    whenSpeechReady(ready);
+    expect(ready).not.toHaveBeenCalled();
+    expect(speak('hello')).toBe(false);
+    expect(fake.speak).not.toHaveBeenCalled();
   });
 
   it('does nothing without the API', () => {

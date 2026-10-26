@@ -1,12 +1,19 @@
 /**
- * Read-aloud through the browser's speech synthesis. Android WebView often
- * exposes the API without any voices; then nothing is offered at all.
+ * Read-aloud through the browser's speech synthesis. The Android app's WebView cannot
+ * speak reliably, so inside it read-aloud is never offered; browsers offer it once
+ * they report a voice.
  */
 
 const JAPANESE = /[぀-ヿ㐀-鿿]/;
 
+/** The Android app injects this bridge into its WebView; a phone browser never has it. */
+function insideAndroidApp(): boolean {
+  return typeof window !== 'undefined' && window.LoopDeck3Host !== undefined;
+}
+
 function synthesis(): SpeechSynthesis | undefined {
   try {
+    if (insideAndroidApp()) return undefined;
     return typeof window !== 'undefined' && 'speechSynthesis' in window && typeof SpeechSynthesisUtterance === 'function'
       ? window.speechSynthesis
       : undefined;

@@ -3921,3 +3921,8 @@ button.priority-row {
 .review-list-grid > [hidden] {
   display: none !important;
 }
+
+/* Tool buttons are forced to flex on phones; a hidden one (read-aloud without a voice) must still stay hidden. */
+.v2-quiz-tools .btn[hidden] {
+  display: none !important;
+}
