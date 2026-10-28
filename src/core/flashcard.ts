@@ -1,4 +1,4 @@
-import type { QuizSession } from './sessionEngine';
+import { missedSessionQuestions, restartSession, type QuizSession } from './sessionEngine';
 
 export type FlashcardGesture = 'flip' | 'known' | 'again' | 'none';
 
@@ -12,21 +12,6 @@ export function resolveFlashcardGesture(dx: number, dy: number, duration: number
 
 /** Preserve the round's concrete queue directions, including mixed and explicit sides. */
 export function restartFlashcardSession(session: QuizSession, onlyAgain: boolean, now = Date.now()): QuizSession {
-  const key = (id: string, mode = 'as_stored') => JSON.stringify([id, mode]);
-  const again = new Set(
-    session.attempts.filter((attempt) => attempt.result === 'wrong').map((attempt) => key(attempt.questionId, attempt.questionMode))
-  );
-  const queue = onlyAgain ? session.queue.filter((question) => again.has(key(question.id, question.activeStudyMode))) : [...session.queue];
-  return {
-    ...session,
-    queue,
-    index: 0,
-    attempts: [],
-    startedAt: now,
-    sessionElapsedMs: 0,
-    sessionSegmentStartedAt: now,
-    currentStartedAt: now,
-    currentElapsedMs: 0,
-    currentHiddenTimeExcludedMs: 0
-  };
+  const queue = onlyAgain ? missedSessionQuestions(session, (attempt) => attempt.result === 'wrong') : [...session.queue];
+  return restartSession(session, queue, now);
 }

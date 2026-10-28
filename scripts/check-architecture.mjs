@@ -11,6 +11,8 @@ const lowerAreas = new Set(['core', 'storage', 'packs', 'pdf', 'ui']);
 // must move to an owned shared module or have an explicit narrow justification.
 const screenImportAllowlist = new Map([
   ['src/screens/homeScreen.ts -> src/screens/homeFolders.ts', 'home-only helper currently colocated under screens'],
+  ['src/screens/flashcardSession.ts -> src/screens/inlineQuiz.ts', 'type-only: flashcards take the inline quiz callback/option contract'],
+  ['src/screens/moduleScreen.ts -> src/screens/flashcardSession.ts', 'deliberate composition of the shared flashcard renderer'],
   ['src/screens/moduleScreen.ts -> src/screens/inlineQuiz.ts', 'deliberate composition of the shared inline quiz renderer'],
   ['src/screens/reviewCenter.ts -> src/screens/inlineQuiz.ts', 'deliberate composition of the shared inline quiz renderer'],
   ['src/screens/todayScreen.ts -> src/screens/inlineQuiz.ts', 'deliberate composition of the shared inline quiz renderer']

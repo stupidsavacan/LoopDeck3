@@ -148,6 +148,38 @@ export function createSession(
   };
 }
 
+/** Starts a fresh round over `queue`, keeping the session's pools, sources and settings. */
+export function restartSession(session: QuizSession, queue: Question[], now = Date.now()): QuizSession {
+  return {
+    ...session,
+    queue,
+    index: 0,
+    attempts: [],
+    startedAt: now,
+    sessionElapsedMs: 0,
+    sessionSegmentStartedAt: now,
+    currentStartedAt: now,
+    currentElapsedMs: 0,
+    currentHiddenTimeExcludedMs: 0
+  };
+}
+
+function presentedKey(questionId: string, mode = 'as_stored'): string {
+  return JSON.stringify([questionId, mode]);
+}
+
+/**
+ * The presented questions whose attempt matched `missed`, in queue order. The concrete direction is kept,
+ * so a mixed-direction round retries the direction that was actually missed instead of re-rolling it.
+ */
+export function missedSessionQuestions(
+  session: QuizSession,
+  missed: (attempt: Attempt) => boolean = (attempt) => attempt.result !== 'correct'
+): Question[] {
+  const keys = new Set(session.attempts.filter(missed).map((attempt) => presentedKey(attempt.questionId, attempt.questionMode)));
+  return session.queue.filter((question) => keys.has(presentedKey(question.id, question.activeStudyMode)));
+}
+
 export function currentQuestion(session: QuizSession): Question | undefined {
   return session.queue[session.index];
 }

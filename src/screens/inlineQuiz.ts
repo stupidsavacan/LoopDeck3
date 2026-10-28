@@ -1,5 +1,5 @@
 import { writeDebugLog } from '../debug/debugLog';
-import { judgeInputAnswer, judgeQuestion, normalizeAnswerForQuestion } from '../core/answerJudge';
+import { getCorrectAnswer, judgeInputAnswer, judgeQuestion, normalizeAnswerForQuestion } from '../core/answerJudge';
 import { buildGeneratedChoiceOptions, type GeneratedChoiceOption } from '../core/choiceGenerator';
 import type { AnswerConfidence, Attempt, Question } from '../core/models';
 import { createIdleRevealController, type IdleRevealController } from '../core/idleRevealController';
@@ -27,7 +27,6 @@ import {
 import { renderQuestionVisualReferences } from '../ui/questionVisualReferences';
 import { renderRivalDetour } from '../ui/rivalDetour';
 import { speak, stopSpeaking, whenSpeechReady } from '../platform/speech';
-import { getCorrectAnswer } from '../core/answerJudge';
 
 export interface InlineQuizCallbacks {
   onSessionChange(session: QuizSession): void;
@@ -173,6 +172,7 @@ export function renderInlineQuiz(
   let composing = false;
   let idleController: IdleRevealController | undefined;
   let hintUsed = false;
+  let stopWaitingForSpeech: () => void = () => undefined;
   let savedReview: SavedReview | undefined;
   const readingChars = countReadingChars(question.prompt, [
     ...nativeChoices,
@@ -222,6 +222,7 @@ export function renderInlineQuiz(
   }
 
   function stopObserving(): void {
+    stopWaitingForSpeech();
     idleController?.dispose();
     idleController = undefined;
     document.removeEventListener('visibilitychange', handleVisibilityChange);
@@ -562,7 +563,7 @@ export function renderInlineQuiz(
   if (confidencePicker) card.append(confidencePicker.element);
   card.append(answerArea, controls, resultArea);
   container.append(card);
-  whenSpeechReady(() => {
+  stopWaitingForSpeech = whenSpeechReady(() => {
     if (isCurrentRender()) readAloud.hidden = false;
   });
   window.requestAnimationFrame(() => {

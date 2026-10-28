@@ -3,11 +3,10 @@ import { indexCardsByQuestion } from './mastery';
 import type { Attempt, ModuleInfo, Question, ReviewCard } from './models';
 import { getSupportedStudyQuestionModes, presentQuestionForStudy } from './questionPresentation';
 import { buildRivalPairs, placeRivalsTogether } from './rivalPairs';
-import { buildSrsReviewQueue } from './scheduler';
+import { buildSrsReviewQueue, estimateReviewMinutes } from './scheduler';
 
 export const DEFAULT_FRESH_COUNT = 10;
 export const DEFAULT_REVIEW_LIMIT = 30;
-const ESTIMATED_SECONDS_PER_QUESTION = 20;
 
 export interface TodayPlanInput {
   questions: Question[];
@@ -102,7 +101,7 @@ export function buildTodayPlan(input: TodayPlanInput): TodayPlan {
     review: placeRivalsTogether(review, buildRivalPairs(input.attempts)),
     fresh,
     focusModule,
-    estimatedMinutes: Math.ceil(((review.length + fresh.length) * ESTIMATED_SECONDS_PER_QUESTION) / 60),
+    estimatedMinutes: estimateReviewMinutes(review.length + fresh.length),
     answeredToday: countAnsweredToday(input.attempts, now)
   };
 }
