@@ -26,19 +26,24 @@ export function speechLanguage(text: string): 'ja-JP' | 'en-US' {
   return JAPANESE.test(text) ? 'ja-JP' : 'en-US';
 }
 
-/** Calls `ready` once voices exist, now or when the browser finishes loading them. */
-export function whenSpeechReady(ready: () => void): void {
+/**
+ * Calls `ready` once voices exist, now or when the browser finishes loading them.
+ * Returns a cancel function; a browser that never loads voices would otherwise keep every waiting caller alive.
+ */
+export function whenSpeechReady(ready: () => void): () => void {
   const speech = synthesis();
-  if (!speech) return;
+  if (!speech) return () => undefined;
   if (speech.getVoices().length > 0) {
     ready();
-    return;
+    return () => undefined;
   }
-  speech.addEventListener('voiceschanged', function handle() {
+  const handle = () => {
     if (speech.getVoices().length === 0) return;
     speech.removeEventListener('voiceschanged', handle);
     ready();
-  });
+  };
+  speech.addEventListener('voiceschanged', handle);
+  return () => speech.removeEventListener('voiceschanged', handle);
 }
 
 export function speak(text: string): boolean {

@@ -9,6 +9,8 @@ import {
   createSession,
   filterStudyQuestions,
   listQuestionCategories,
+  missedSessionQuestions,
+  restartSession,
   selectSessionQuestions,
   type QuizSession
 } from '../core/sessionEngine';
@@ -335,8 +337,7 @@ export async function renderModuleScreen(context: ScreenContext & { moduleId: st
   }
 
   function nextSteps(done: QuizSession): SessionNextSteps {
-    const missedIds = [...new Set(done.attempts.filter((attempt) => attempt.result !== 'correct').map((attempt) => attempt.questionId))];
-    const missed = missedIds.flatMap((id) => questionsById.get(id) ?? []);
+    const missed = missedSessionQuestions(done);
     const seen = new Set(done.queue.map((question) => question.id));
     // Filter the whole module first so numbered ranges keep their original ordinals.
     const eligible = filterStudyQuestions(questions, settings, { wrongQuestionIds: wrongIds, bookmarkedQuestionIds: bookmarkIds }).filter(
@@ -353,7 +354,7 @@ export async function renderModuleScreen(context: ScreenContext & { moduleId: st
         label: `間違えた${missed.length}問だけもう一周`,
         detail: '答えを見た問題も入ります',
         primary: true,
-        run: () => mountSession(createSession(module, missed, done.settings, 'review', sessionQuestionPool))
+        run: () => mountSession({ ...restartSession(done, missed), mode: 'review' })
       });
     }
     if (rest.length) {

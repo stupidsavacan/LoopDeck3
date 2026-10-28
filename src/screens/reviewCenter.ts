@@ -1,12 +1,12 @@
 import type { SessionNextSteps } from '../ui/inlineQuizView';
 import { buildQuizAnswerSources } from '../core/reviewPersistence';
 import { presentQuestionForStudy } from '../core/questionPresentation';
-import { buildSrsReviewQueue } from '../core/scheduler';
+import { buildSrsReviewQueue, estimateReviewMinutes } from '../core/scheduler';
 import type { ScreenContext } from '../app/context';
 import type { ModuleInfo, Question, ReviewCard, StudySettings } from '../core/models';
 import { DEFAULT_REVIEW_LOOKBACK_DAYS } from '../core/reviewEngine';
 import { buildReviewCenterModel, type ReviewScope } from '../core/reviewCenterModel';
-import { createSession, type QuizSession } from '../core/sessionEngine';
+import { createSession, missedSessionQuestions, restartSession, type QuizSession } from '../core/sessionEngine';
 import { getActiveQuestions } from '../packs/packResolver';
 
 import { button, clear, el, toast } from '../ui/dom';
@@ -149,14 +149,7 @@ export async function renderReviewCenter(context: ScreenContext): Promise<void> 
     if (items.some((question) => question.activeStudyMode !== undefined))
       session.queue = session.queue.map((question, index) => items[index] ?? question);
     const nextSteps = (done: QuizSession): SessionNextSteps => {
-      const missed = new Set(
-        done.attempts
-          .filter((attempt) => attempt.result !== 'correct')
-          .map((attempt) => JSON.stringify([attempt.questionId, attempt.questionMode ?? 'as_stored']))
-      );
-      const retryQuestions = done.queue.filter((question) =>
-        missed.has(JSON.stringify([question.id, question.activeStudyMode ?? 'as_stored']))
-      );
+      const retryQuestions = missedSessionQuestions(done);
       const actions: SessionNextSteps['actions'] = [];
       if (retryQuestions.length) {
         actions.push({
@@ -164,12 +157,7 @@ export async function renderReviewCenter(context: ScreenContext): Promise<void> 
           label: `間違えた${retryQuestions.length}問だけもう一周`,
           detail: '答えを見た問題も入ります',
           primary: true,
-          run: () => {
-            const retry = createSession(reviewModule, retryQuestions, done.settings, 'review', questions);
-            retry.queue = [...retryQuestions];
-            retry.sourceByQuestionId = sourceByQuestionId;
-            update(retry);
-          }
+          run: () => update(restartSession(done, retryQuestions))
         });
       }
       actions.push({ id: 'finish', label: '今日はここまで', detail: '復習の画面に戻ります', run: rerender });
@@ -194,13 +182,16 @@ export async function renderReviewCenter(context: ScreenContext): Promise<void> 
   const srsCard = el('section', 'card action-card');
   srsCard.append(el('h2', '', '今日の復習'));
   const nowCount = srsQueue.length;
+  // The queue is capped, so only the overdue cards inside it belong in the same sentence as its size.
+  const overdueIds = new Set(buckets.overdue);
+  const overdueNow = srsQueue.filter((card) => overdueIds.has(card)).length;
   const later = laterToday.firstDueAt ? `あと${laterToday.count}問は ${clockLabel(laterToday.firstDueAt)} 以降に出ます。` : '';
   srsCard.append(
     el(
       'p',
       'review-summary-line',
       nowCount
-        ? `今すぐ ${nowCount}問・目安 ${Math.max(1, Math.ceil((nowCount * 20) / 60))}分${schedule.overdue ? `（期限切れ ${schedule.overdue}問を含む）` : ''}`
+        ? `今すぐ ${nowCount}問・目安 ${Math.max(1, estimateReviewMinutes(nowCount))}分${overdueNow ? `（期限切れ ${overdueNow}問を含む）` : ''}`
         : later || '今は復習する問題がありません。'
     )
   );

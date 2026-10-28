@@ -1,7 +1,7 @@
 import { getCorrectAnswer, judgeInputAnswer, normalizeAnswer } from '../core/answerJudge';
 import type { Attempt, Question } from '../core/models';
 import { getPresentedStudyPair, type StudyPair } from '../core/questionPresentation';
-import { correctRatingIntervals, type CorrectRating } from '../core/scheduler';
+import { AGAIN_DELAY_MINUTES, correctRatingIntervals, type CorrectRating } from '../core/scheduler';
 import { elapsedForSession, type QuizSession } from '../core/sessionEngine';
 import type { WrongAnswerExplanation } from '../core/wrongAnswerExplanation';
 import { isSafeImageAssetRef, isSafeImageDataUrl } from '../packs/assetSafety';
@@ -183,7 +183,7 @@ export function renderReviewSchedule(
     line.replaceChildren();
     if (current.log.rating === 'again') {
       const subject = current.log.result === 'revealed' ? '答えを見た問題' : '間違えた問題';
-      line.append(document.createTextNode(`${subject}は、10分後から復習に並びます`));
+      line.append(document.createTextNode(`${subject}は、${AGAIN_DELAY_MINUTES}分後から復習に並びます`));
       return;
     }
     line.append(document.createTextNode('次の復習は '), el('strong', '', describeInterval(current.log.nextIntervalDays)));

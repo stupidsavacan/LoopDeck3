@@ -13,7 +13,8 @@ import { endOfLocalCalendarDay, startOfLocalCalendarDay } from './calendarDay';
 const DEFAULT_EASE = 2.5;
 const MIN_EASE = 1.3;
 const MAX_EASE = 3.0;
-const AGAIN_DELAY_MINUTES = 10;
+/** A missed card comes back this many minutes later. */
+export const AGAIN_DELAY_MINUTES = 10;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const ESTIMATED_SECONDS_PER_CARD = 20;
 const LEECH_PRESSURE_THRESHOLD = 3;
@@ -66,6 +67,10 @@ function dueTime(card: ReviewCard): number | undefined {
 
 function isSuspended(card: ReviewCard): boolean {
   return card.suspended || card.state === 'suspended';
+}
+
+export function estimateReviewMinutes(cardCount: number): number {
+  return Math.ceil((cardCount * ESTIMATED_SECONDS_PER_CARD) / 60);
 }
 
 export function clampEase(ease: number): number {
@@ -245,7 +250,7 @@ export function canReviseReviewRating(card: ReviewCard, log: ReviewLog): boolean
   return (
     log.rating !== 'again' &&
     card.questionId === log.questionId &&
-    (card.questionMode ?? 'as_stored') === log.questionMode &&
+    (card.questionMode ?? 'as_stored') === (log.questionMode ?? 'as_stored') &&
     card.lastReviewedAt === log.reviewedAt
   );
 }
@@ -329,6 +334,6 @@ export function summarizeReviewSchedule(cards: ReviewCard[], now = new Date()): 
     relearning: active.filter((card) => card.state === 'relearning' || card.state === 'learning').length,
     leech: active.filter((card) => card.state === 'leech').length,
     mastered: active.filter((card) => card.state === 'mastered').length,
-    estimatedMinutes: Math.ceil((dueToday * ESTIMATED_SECONDS_PER_CARD) / 60)
+    estimatedMinutes: estimateReviewMinutes(dueToday)
   };
 }
