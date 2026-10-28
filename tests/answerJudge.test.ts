@@ -54,6 +54,13 @@ describe('answer judging', () => {
     expect(judgeInputAnswer(englishQuestion, 'APPLE')).toBe(true);
   });
 
+  it('accepts the English answer inside a short sentence but not inside a list of guesses', () => {
+    expect(judgeInputAnswer(englishQuestion, 'The answer is apple.')).toBe(true);
+    expect(judgeInputAnswer(englishQuestion, 'an apple')).toBe(true);
+    expect(judgeInputAnswer(englishQuestion, 'apple banana orange')).toBe(false);
+    expect(judgeInputAnswer(englishQuestion, 'banana or apple')).toBe(false);
+  });
+
   it('does not accept English substrings inside another word', () => {
     expect(judgeInputAnswer({ ...englishQuestion, answer: 'war' }, 'reward')).toBe(false);
   });

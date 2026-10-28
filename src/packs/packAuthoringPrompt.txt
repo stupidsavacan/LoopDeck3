@@ -281,7 +281,7 @@ Supported modes:
 - `exact_phrase`: require an exact normalized accepted answer and do not apply the normal loose sentence-edge matching;
 - `numeric`: currently requires an exact normalized accepted answer; it does not provide numeric tolerance/range handling.
 
-Default judging normalizes Unicode with NFKC, trims/compacts surrounding whitespace and edge punctuation, and is case-insensitive unless `caseSensitive` is true. In normal `single` / `any_of` mode, LoopDeck also accepts limited Japanese sentence-edge wrappers and exact English answer tokens inside a longer input. `exact_phrase` disables that loose fallback.
+Default judging normalizes Unicode with NFKC, trims/compacts surrounding whitespace and edge punctuation, and is case-insensitive unless `caseSensitive` is true. In normal `single` / `any_of` mode, LoopDeck also accepts limited Japanese sentence-edge wrappers and an exact single-word English answer wrapped only in filler words such as "the answer is" or "a"/"an"/"the"/"to"; a list of several guesses is rejected. `exact_phrase` disables that loose fallback.
 
 `requiresAll` exists in the TypeScript rule shape but is not consulted by the current judge; do not emit it as an authoring control. Use `mode: "all_of"` with non-empty `requiredParts` instead.
 
