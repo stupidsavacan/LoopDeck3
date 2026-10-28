@@ -234,3 +234,32 @@ describe('durable pack cloud intent', () => {
     expect(await contentFingerprint(pack('cloud-test', 'B'), [])).not.toBe(original);
   });
 });
+describe('cloud pull isolation', () => {
+  it('still installs healthy cloud packs when another pack fails to download', async () => {
+    const { repo, cloud } = context();
+    await login(cloud, true);
+    const { createLoopDeckZipBytes } = await import('../src/packs/zipExporter');
+    const { sha256 } = await import('../src/packs/contentFingerprint');
+    const healthy = pack('z-healthy');
+    const bytes = await createLoopDeckZipBytes(healthy, []);
+    const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+    const good: CloudRevision = {
+      ...head(healthy.packId),
+      contentFingerprint: await contentFingerprint(healthy, []),
+      sha256: await sha256(buffer),
+      size: buffer.byteLength
+    };
+    const broken = head('a-broken');
+    const api = {
+      heads: async () => [broken, good],
+      download: async (revision: CloudRevision) => {
+        if (revision.packId === broken.packId) throw new Error('network down');
+        return buffer;
+      }
+    } as unknown as CloudApi;
+    const engine = new SyncEngine(cloud, repo, () => true, () => api);
+    await engine.tick();
+    expect(engine.status).toBe('error');
+    expect((await repo.getImportedPacks()).map((p) => p.packId)).toContain('z-healthy');
+  });
+});

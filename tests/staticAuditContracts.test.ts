@@ -102,7 +102,7 @@ describe('answer and pack contracts from the static audit', () => {
     { ...q, number: 0 },
     { ...q, number: 1.5 },
     { ...q, answerJudging: { mode: 'all_of' as const, requiredParts: [] } },
-    { ...q, type: 'choice' as const, choices: ['dog', 'hot dog', 'cat'] },
+    { ...q, type: 'choice' as const, choices: ['dog', 'the dog', 'cat'] },
     { ...q, type: 'choice' as const, choices: ['dog', 'cat', 'CAT'] },
     { ...q, type: 'multi_select' as const, choices: ['A', 'a'], correctChoices: ['A'] },
     { ...q, type: 'choice' as const, choices: ['dog', 'cat'], supportedStudyModes: ['front_to_back' as const] }
@@ -123,7 +123,7 @@ describe('answer and pack contracts from the static audit', () => {
     ).toEqual(['as_stored']);
   });
   it('falls back to input when all candidate distractors satisfy the judge', () => {
-    expect(buildGeneratedChoiceOptions(q, [q, { ...q, id: 'd', answer: 'hot dog' }])).toBeUndefined();
+    expect(buildGeneratedChoiceOptions(q, [q, { ...q, id: 'd', answer: 'the dog' }])).toBeUndefined();
   });
   it('does not trust a forged origin with an unrelated selected answer', () => {
     const other = { ...q, id: 'other', answer: 'cat' };
@@ -231,7 +231,7 @@ describe('quiz asynchronous ownership', () => {
   });
   it('reports an explicit choice format fallback and excludes accepted legacy distractors', () => {
     const container = document.createElement('div');
-    const session = createSession(pack().modules[0], [{ ...q, type: 'choice', choices: ['dog', 'hot dog'] }], {
+    const session = createSession(pack().modules[0], [{ ...q, type: 'choice', choices: ['dog', 'the dog'] }], {
       ...settings,
       answerFormat: 'choice'
     });
