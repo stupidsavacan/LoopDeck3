@@ -18,7 +18,7 @@ tests/.generated/results.json と two-clients-results.json に結果を保存す
 
 1. 新しい本番Site・D1・R2を作り、実験データから分離する。GitHubの別リポジトリは作らない。
 2. .openai/hosting.json に返されたSite IDを設定。DB/BUCKETの論理バインディングを維持する。
-3. Sites SecretのSYNC_PASSPHRASEを設定。ALLOWED_ORIGINSはappassetsのオリジンだけ、PC file利用用にALLOW_NULL_ORIGIN=trueを明示。値はソース・ログに保存しない。
+3. Sites SecretのSYNC_PASSPHRASEを設定。ALLOWED_ORIGINSには許可する画面のOriginをカンマ区切りで指定する。現在の実験構成では `https://appassets.androidplatform.net,https://loopdeck-study.salmon1124.chatgpt.site`。別の学習Siteへ置き換える場合は、その正確なHTTPS Originを確認して設定する。PC file利用用にALLOW_NULL_ORIGIN=trueを明示。Secretの値はソース・ログに保存しない。環境変数変更後は保存済みバージョンを再デプロイして反映する。
 4. drizzle/0000__.sql、0001__.sqlを順にSitesのDB移行として適用。要求処理中にDDLを実行しない。
 5. 正本ルートから共有モジュールを再生成後、Sites source helperのチェックアウトへserver配下を渡してビルドする。配布対象はdist。この経路は専用実験Siteで登録・公開・再デプロイを実測済み。
 6. Sitesネイティブのsave/deployフローで公開。他サービスや通常のwrangler deployへ切り替えない。ビルド内のプレースホルダーDB IDを実サービスへ流用しない。
@@ -26,3 +26,9 @@ tests/.generated/results.json と two-clients-results.json に結果を保存す
 8. 公開URLをAndroidの -PsyncApiOrigin=https://...chatgpt.site に固定して再ビルドし、PC・実機・終了中Workerを試験する。
 
 ローカルbuild成功だけでSites登録・公開・128 MB環境の最大サイズ対応を成功扱いにしない。本番APIの指定・Secret・データ移行は実験Siteとは別のリリース判断とする。
+
+## 別のSites画面で Failed to fetch が出る場合
+
+APIのURLと、呼び出す学習画面のOriginは別。API自身、Android、file HTMLで成功しても、別の学習SiteがALLOWED_ORIGINSに未登録なら失敗する。2026-11-13に `loopdeck-study` のログインOPTIONSが403/origin_not_allowedになり、ブラウザではFailed to fetchと表示された。上記の正確なOriginだけを追加し、同じ保存済み版を環境revision 4で再デプロイして復旧した。合言葉や認証処理の不具合ではなかった。
+
+変更時はブラウザのNetworkで実際のOriginとAPI URLを確認し、ログインとAuthorization付き一覧取得のOPTIONS/本要求を調べる。許可Originのプリフライト204・対応するAccess-Control-Allow-Origin、ログイン200・一覧200、未認証一覧401、未許可Origin403を実HTTPで確認する。ページ再読込後の一覧200も確認する。ワイルドカードや `*.chatgpt.site` の一括許可、認証省略で対処しない。環境値はGitの設定ファイルでは管理しないため、ソースの再ビルドだけでは修復できない。
