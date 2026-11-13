@@ -10,7 +10,8 @@ export async function readImportFile(file: File): Promise<ImportFileResult> {
   const issues = validateImportFileSize(file);
   if (issues.length) return { kind: 'pack', result: { ok: false, issues } };
   const name = file.name.toLowerCase();
-  if (name.endsWith('.zip')) return { kind: 'pack', result: await importLoopDeckZip(file) };
+  // Strict: a shared ZIP can understate its entry sizes, and only the streamed check catches that before inflating.
+  if (name.endsWith('.zip')) return { kind: 'pack', result: await importLoopDeckZip(file, true) };
   if (!name.endsWith('.json'))
     return {
       kind: 'pack',

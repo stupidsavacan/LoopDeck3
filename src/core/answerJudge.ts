@@ -85,10 +85,19 @@ function englishTokens(value: string): string[] {
   return tokens;
 }
 
+/** Words a full-sentence answer may wrap around the answer, like "the answer is apple". */
+const ENGLISH_FILLER_TOKENS = new Set(['a', 'an', 'the', 'to', 'it', 'its', 's', 'is', 'answer']);
+
+/**
+ * Accepts the answer word inside a short sentence, but not inside a list of guesses:
+ * "apple banana orange" must not count as knowing "apple".
+ */
 function containsEnglishAnswer(input: string, answer: string, caseSensitive = false): boolean {
   if (answer.length < 2) return false;
   const target = caseSensitive ? answer : answer.toLowerCase();
-  return englishTokens(input).some((token) => (caseSensitive ? token : token.toLowerCase()) === target);
+  const tokens = englishTokens(input).map((token) => (caseSensitive ? token : token.toLowerCase()));
+  const hits = tokens.filter((token) => token === target).length;
+  return hits === 1 && tokens.every((token) => token === target || ENGLISH_FILLER_TOKENS.has(token.toLowerCase()));
 }
 
 function isAcceptableJapaneseExpansion(input: string, target: string): boolean {

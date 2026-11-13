@@ -115,8 +115,18 @@ export class SyncEngine {
         }
       }
       const heads = await api.heads();
-      for (const head of heads) await this.pull(api, head);
+      // One broken cloud pack must not stop every other pack from arriving.
+      let pullFailure: unknown;
+      for (const head of heads) {
+        try {
+          await this.pull(api, head);
+        } catch (e) {
+          if (e instanceof CloudHttpError && e.status === 401) throw e;
+          pullFailure ??= e;
+        }
+      }
       await this.applyStaged();
+      if (pullFailure) throw pullFailure;
       await mirrorNative(this.store.db);
       const outstanding = await this.store.db.all('cloudOutbox'),
         staged = await this.store.db.all('cloudStaging');

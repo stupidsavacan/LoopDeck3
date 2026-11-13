@@ -9,6 +9,24 @@ import { retiredQuestionIds, retireQuestionLearningState } from './packLearningS
 import type { StoredPackAsset } from './storageTypes';
 import { writeNewContentEpoch } from './packEpoch';
 
+const cardKey = (card: ReviewCard): string => JSON.stringify([card.questionId, card.questionMode ?? 'as_stored']);
+
+function updatedTime(card: ReviewCard): number {
+  const time = Date.parse(card.updatedAt);
+  return Number.isFinite(time) ? time : 0;
+}
+
+/** Incoming cards that would roll back a schedule this device has advanced since the backup was taken. */
+function staleIncomingCards(current: readonly ReviewCard[], incoming: readonly ReviewCard[]): Set<string> {
+  const local = new Map(current.map((card) => [cardKey(card), card]));
+  const stale = new Set<string>();
+  for (const card of incoming) {
+    const existing = local.get(cardKey(card));
+    if (existing && updatedTime(existing) > updatedTime(card)) stale.add(cardKey(card));
+  }
+  return stale;
+}
+
 function mergedRows<T>(current: T[], incoming: T[], key: (row: T) => string): T[] {
   return [...new Map([...current, ...incoming].map((row) => [key(row), row])).values()];
 }
@@ -17,6 +35,7 @@ export async function importBackup(database: LocalDatabase, rawBackup: unknown, 
   if (mode !== 'merge' && mode !== 'replace') throw new Error('Explicit backup import mode is required.');
   const backup = validateBackupPayload(rawBackup);
   let restoreError: unknown;
+  let staleCards = new Set<string>();
   try {
     await database.transact(
       [...USER_DATA_STORES, 'packSync', 'cloudOutbox', 'cloudStaging', ...(mode === 'replace' ? (['contentMetadata'] as const) : [])],
@@ -54,6 +73,9 @@ export async function importBackup(database: LocalDatabase, rawBackup: unknown, 
                     retiredIds.add(question.id);
                 }
             }
+            const localCards = mode === 'merge' ? cardsRequest.result.filter((row) => !retiredIds.has(row.questionId)) : [];
+            // Attempts and logs are history and simply union; a card is current state, so the newer one wins.
+            staleCards = staleIncomingCards(localCards, backup.reviewCards ?? []);
             validateBackupRelationships(
               {
                 ...backup,
@@ -65,9 +87,9 @@ export async function importBackup(database: LocalDatabase, rawBackup: unknown, 
                   (row) => row.attemptId
                 ),
                 reviewCards: mergedRows(
-                  mode === 'merge' ? cardsRequest.result.filter((row) => !retiredIds.has(row.questionId)) : [],
-                  backup.reviewCards ?? [],
-                  (row) => JSON.stringify([row.questionId, row.questionMode ?? 'as_stored'])
+                  localCards,
+                  (backup.reviewCards ?? []).filter((card) => !staleCards.has(cardKey(card))),
+                  cardKey
                 ),
                 reviewLogs: mergedRows(
                   mode === 'merge' ? logsRequest.result.filter((row) => !retiredIds.has(row.questionId)) : [],
@@ -113,7 +135,7 @@ export async function importBackup(database: LocalDatabase, rawBackup: unknown, 
           for (const asset of backup.importedPackAssets ?? []) packAssets.put(asset);
 
           const reviewCards = tx.objectStore('reviewCards');
-          for (const card of backup.reviewCards ?? []) reviewCards.put(card);
+          for (const card of backup.reviewCards ?? []) if (!staleCards.has(cardKey(card))) reviewCards.put(card);
 
           const reviewLogs = tx.objectStore('reviewLogs');
           for (const log of backup.reviewLogs ?? []) reviewLogs.put(log);

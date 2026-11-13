@@ -75,12 +75,12 @@ describe('static audit regressions', () => {
     const q = question('q');
     const options = buildGeneratedChoiceOptions(
       q,
-      [q, question('d', 'hot dog'), question('c', 'cat'), question('f', 'fish'), question('b', 'bird')],
+      [q, question('d', 'the dog'), question('c', 'cat'), question('f', 'fish'), question('b', 'bird')],
       4,
       () => 0
     );
     expect(options).toHaveLength(4);
-    expect(options!.some((option) => option.text === 'hot dog')).toBe(false);
+    expect(options!.some((option) => option.text === 'the dog')).toBe(false);
     for (const option of options!) expect(judgeQuestion(q, option.text)).toBe(option.kind === 'correct');
   });
 

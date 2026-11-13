@@ -92,6 +92,16 @@ describe('backup integrity', () => {
     expect(await db.getReviewCards()).toEqual([newReview.card]);
     expect(await db.getReviewLogs()).toEqual([newReview.log]);
   });
+  it('keeps a review card this device advanced after the merged backup was taken', async () => {
+    await db.saveImportedPack(pack());
+    const first = applyReviewRating(createReviewCard('integrity-q', 'integrity-m', new Date(stamp)), 'good', 'correct', 1000, {
+      now: new Date(stamp)
+    });
+    const later = applyReviewRating(first.card, 'good', 'correct', 1000, { now: new Date('2026-01-05T00:00:00.000Z') });
+    await db.restoreSnapshot(backup({ importedPacks: [pack()], reviewCards: [later.card], reviewLogs: [first.log, later.log] }), 'replace');
+    await db.restoreSnapshot(backup({ importedPacks: [pack()], reviewCards: [first.card], reviewLogs: [first.log] }), 'merge');
+    expect(await db.getReviewCards()).toEqual([later.card]);
+  });
   it('rejects duplicate primary keys after legacy identity normalization', () => {
     const review = applyReviewRating(createReviewCard('integrity-q', 'integrity-m', new Date(stamp)), 'good', 'correct', 1000, {
       now: new Date(stamp)
