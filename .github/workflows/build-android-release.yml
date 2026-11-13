@@ -75,6 +75,7 @@ jobs:
       - name: Verify signature and identical HTML payload
         run: |
           set -euo pipefail
+          node scripts/verify-android-release.mjs
           cp android/app/build/outputs/apk/release/app-release.apk LoopDeck3.apk
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose LoopDeck3.apk
           unzip -p LoopDeck3.apk assets/loopdeck/index.html > packaged.html
@@ -92,7 +93,7 @@ jobs:
           cp LoopDeck3.apk "$apk_asset_name"
           cp LoopDeck3.html "$html_asset_name"
           sha256sum "$apk_asset_name" "$html_asset_name" > SHA256SUMS.txt
-          gh release create "$release_tag" "$apk_asset_name" "$html_asset_name" SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "$release_title" --notes "Signed APK and single-file HTML built from ${GITHUB_SHA}. APK embeds the exact HTML attached to this release. Independent Android app ID: com.loopdeck3.app." --draft
+          gh release create "$release_tag" "$apk_asset_name" "$html_asset_name" SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "$release_title" --notes "Signed APK and single-file HTML built from ${GITHUB_SHA}. Cloud Pack sharing is enabled for the configured LoopDeck3 sync API; sign in with your passphrase and choose shared packs. APK embeds the exact HTML attached to this release. Existing Android app ID: com.loopdeck3.app; install as an update without uninstalling." --draft
           gh release edit "$release_tag" --repo "$GITHUB_REPOSITORY" --draft=false --latest
       - uses: actions/upload-artifact@v7
         if: always()

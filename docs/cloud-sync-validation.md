@@ -34,6 +34,6 @@
 
 PC単体HTMLとAndroidから同じSites/D1/R2教材を送受信できることは実測できた。教材の自動同期は実装・範囲内で検証済み。WorkManagerはOS都合による遅延を含み、常時・即時の完全自動同期は保証しない。
 
-署名済み実機releaseの背景実行一式、自然な長時間Doze/保守窓、メーカー独自電池制限、Google/OEMクラウド復元・機種移行、実利用者の既存DB移行、PC file自身の32 MiB境界は未検証。本番Site・Secret・実データへの切替は別途受入が必要。通常APKビルドはAPI未設定でクラウド通信を無効化し、HTMLの初期URLは実験Siteを示す。
+署名済み実機releaseの背景実行一式、自然な長時間Doze/保守窓、メーカー独自電池制限、Google/OEMクラウド復元・機種移行、実利用者の既存DB移行、PC file自身の32 MiB境界は未検証。本番Site・Secret・実データへの切替は別途受入が必要。2026-11-13の公開APK修正で、通常APKにも現在の同期APIを既定設定し、公開時にBuildConfigと実APKの接続先を検査するよう変更した。初回共有は引き続き使用者が選択する。別サービスへの移行や学習履歴の送信は行わない。
 
 補助的な `npm run check:architecture` は既存の循環2件（flashcardSession→inlineQuiz、moduleScreen→flashcardSession）で失敗し、この変更で解消したとは扱わない。
