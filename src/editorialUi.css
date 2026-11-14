@@ -127,44 +127,6 @@ body {
   pointer-events: none;
 }
 
-.home-screen .hero-copy {
-  position: relative;
-  z-index: 2;
-  max-width: 620px !important;
-}
-
-.home-screen .hero-copy::before {
-  content: 'LOOPDECK · STUDY LIBRARY';
-  display: block;
-  margin-bottom: 16px;
-  color: var(--editorial-lime);
-  font-size: 0.66rem;
-  font-weight: var(--weight-black);
-  letter-spacing: 0.18em;
-}
-
-.home-screen .hero-copy h1 {
-  max-width: 340px;
-  margin: 0 !important;
-  color: #fff !important;
-  font-size: clamp(2.25rem, 9vw, 4.7rem) !important;
-  line-height: 0.98 !important;
-  letter-spacing: -0.06em !important;
-  font-weight: var(--weight-black) !important;
-}
-
-.home-heading-line {
-  white-space: nowrap;
-}
-
-.home-screen .hero-copy p {
-  max-width: 390px !important;
-  margin: 18px 0 0 !important;
-  color: rgba(255, 255, 255, 0.68) !important;
-  font-size: 0.86rem !important;
-  line-height: 1.65 !important;
-}
-
 .home-screen .toolbar {
   position: relative;
   z-index: 4;
@@ -251,7 +213,6 @@ body {
 }
 
 .home-screen .folder-titlebox h2::before {
-  content: 'COLLECTION';
   display: block;
   margin-bottom: 5px;
   color: var(--editorial-muted);
@@ -272,11 +233,8 @@ body {
 .home-screen .folder-content,
 .home-screen .folder-content.open {
   width: 100%;
-  min-width: 0;
   display: flex;
   gap: 12px;
-  margin: 0 -18px;
-  padding: 0 18px 8px;
   overflow-x: auto;
   overflow-y: hidden;
   scroll-snap-type: x proximity;
@@ -436,13 +394,6 @@ body {
 }
 
 .topbar .btn {
-  min-height: 42px;
-  padding: 0 13px;
-  border: 1px solid var(--editorial-line);
-  border-radius: var(--radius-control);
-  background: rgba(255, 255, 255, 0.82);
-  color: var(--editorial-ink);
-  font-size: 0.82rem;
   backdrop-filter: blur(14px);
 }
 
@@ -803,7 +754,6 @@ body {
   min-height: 58px;
   padding: 0 17px;
   border: 1px solid var(--editorial-line-strong);
-  border-radius: var(--radius-control);
   background: #fff;
   font-size: 1rem;
 }
@@ -850,14 +800,6 @@ body {
   margin-top: 0;
   padding: 17px;
   border-radius: var(--radius-md);
-}
-
-.result.correct {
-  background: var(--editorial-success-soft) !important;
-}
-
-.result.wrong {
-  background: var(--editorial-danger-soft);
 }
 
 .explanation,
@@ -1036,8 +978,7 @@ body {
   border-top: 1px solid var(--editorial-line);
 }
 
-.v2-danger-zone > summary,
-.v2-dev-zone > summary {
+.v2-danger-zone > summary {
   cursor: pointer;
   list-style: none;
   color: var(--editorial-subtle);
@@ -1045,8 +986,7 @@ body {
   font-weight: var(--weight-black);
 }
 
-.v2-danger-zone > summary::-webkit-details-marker,
-.v2-dev-zone > summary::-webkit-details-marker {
+.v2-danger-zone > summary::-webkit-details-marker {
   display: none;
 }
 
@@ -1061,34 +1001,7 @@ body {
   border-radius: var(--radius-sm);
 }
 
-.v2-dev-zone {
-  padding: 0 !important;
-  overflow: hidden;
-}
-
-.v2-dev-zone > summary {
-  min-height: 52px;
-  display: flex;
-  align-items: center;
-  padding: 0 16px;
-}
-
-.v2-dev-zone[open] > summary {
-  border-bottom: 1px solid var(--editorial-line);
-}
-
-.v2-dev-body {
-  padding: 16px;
-}
-
-.v2-dev-body h2 {
-  margin-top: 0;
-}
-
 /* Bottom navigation */
-.screen:has(.bottom-nav) {
-  padding-bottom: calc(110px + var(--safe-bottom)) !important;
-}
 
 .bottom-nav {
   position: fixed;
@@ -1162,14 +1075,6 @@ body {
     margin-right: -14px;
   }
 
-  .home-screen .folder-content,
-  .home-screen .folder-content.open {
-    margin-left: -14px;
-    margin-right: -14px;
-    padding-left: 14px;
-    padding-right: 14px;
-  }
-
   .home-screen .toolbar {
     margin-top: -66px;
   }
@@ -1182,11 +1087,6 @@ body {
   .v2-quick-start {
     grid-template-columns: 1fr;
     gap: 12px;
-  }
-
-  .v2-lengths {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
   .v2-length {
@@ -1205,12 +1105,6 @@ body {
   .setting-row {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .check-label {
-    min-height: 48px;
-    display: flex;
-    align-items: center;
   }
 
   .review-action-grid,
@@ -1246,14 +1140,6 @@ body {
 @media (max-width: 420px) {
   .home-screen .hero {
     min-height: 268px;
-  }
-
-  .home-screen .hero-copy h1 {
-    font-size: clamp(2.2rem, 13vw, 3.4rem) !important;
-  }
-
-  .home-screen .hero-copy p {
-    max-width: 295px !important;
   }
 
   .home-screen .toolbar {
@@ -1297,13 +1183,7 @@ body {
   }
 
   .v2-quiz-tools {
-    gap: 2px;
     margin-bottom: 24px;
-  }
-
-  .v2-quiz-tools .btn {
-    padding: 0 8px;
-    font-size: 0.7rem;
   }
 
   .bottom-nav {
@@ -1312,13 +1192,6 @@ body {
 }
 
 @media (min-width: 1000px) {
-  .home-screen .folder-content,
-  .home-screen .folder-content.open {
-    margin-left: 0;
-    margin-right: 0;
-    padding-left: 0;
-    padding-right: 0;
-  }
 
   .home-screen .module-card {
     flex-basis: 178px;
@@ -1407,7 +1280,6 @@ body {
 .home-screen .folder-content,
 .home-screen .folder-content.open {
   min-width: 0;
-  max-width: calc(100% + 36px);
   contain: inline-size;
 }
 
@@ -1907,48 +1779,12 @@ body {
   display: none;
 }
 
-.home-tools-icon {
-  width: 36px;
-  height: 36px;
-  display: grid;
-  place-items: center;
-  flex: 0 0 auto;
-  border-radius: var(--radius-sm);
-  background: var(--editorial-fill);
-  color: var(--editorial-ink-2);
-}
-
-.home-tools-svg {
-  width: 20px;
-  height: 20px;
-}
-
-.home-tools-summary-copy {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
-
-.home-tools-summary-copy strong {
-  color: var(--editorial-ink-2);
-  font-size: 0.82rem;
-}
-
-.home-tools-summary-copy small {
-  color: var(--editorial-subtle);
-  font-size: 0.67rem;
-}
-
 .home-tools[open] .home-tools-summary {
   border-bottom: 1px solid var(--editorial-line);
 }
 
 .home-tools-body {
   padding: 14px;
-}
-
-.home-tools-body .small-note {
-  margin: 0 0 10px !important;
 }
 
 .home-tools-body .update-actions {
@@ -2009,18 +1845,6 @@ body {
   cursor: default;
 }
 
-.choice-btn.is-correct {
-  border: 2px solid var(--editorial-blue);
-  background: var(--editorial-blue-soft);
-  color: var(--editorial-blue-ink);
-}
-
-.choice-btn.is-wrong-pick {
-  border: 2px solid var(--editorial-orange);
-  background: var(--editorial-orange-soft);
-  color: var(--editorial-orange-ink);
-}
-
 .choice-mark {
   flex: none;
   font-size: 0.72rem;
@@ -2043,7 +1867,6 @@ body {
 }
 
 .result-tab-list {
-  display: grid;
   grid-auto-columns: minmax(0, 1fr);
   grid-auto-flow: column;
   gap: 4px;
@@ -3763,7 +3586,6 @@ body {
   position: relative;
   width: 40px;
   height: 24px;
-  margin: 0 10px 0 0;
   border-radius: var(--radius-pill);
   background: var(--editorial-line-strong);
   cursor: pointer;

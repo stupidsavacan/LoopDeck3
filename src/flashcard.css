@@ -55,17 +55,6 @@
   background: var(--editorial-blue-soft);
   color: var(--editorial-blue);
 }
-.flashcard-brand {
-  text-align: center;
-  font-size: 0.64rem;
-  font-weight: var(--weight-black);
-  letter-spacing: 0.16em;
-  color: var(--editorial-subtle);
-  min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 .flashcard-direction {
   color: var(--editorial-ink-2);
   font-size: 0.84rem;
@@ -274,25 +263,6 @@
   line-height: 1.55;
   overflow-wrap: anywhere;
   text-align: center;
-}
-.flashcard-flip-hint {
-  position: absolute;
-  bottom: 24px;
-  left: 0;
-  right: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  font-size: 0.68rem;
-  font-weight: var(--weight-heavy);
-  color: var(--editorial-muted);
-}
-.flashcard-tap-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--editorial-line-strong);
 }
 .flashcard-content .question-image {
   display: block;
@@ -603,9 +573,6 @@
   .flashcard-session {
     padding-left: 16px;
     padding-right: 16px;
-  }
-  .flashcard-brand {
-    font-size: 0.56rem;
   }
   .flashcard-stage {
     min-height: 430px;

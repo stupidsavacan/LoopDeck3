@@ -7,26 +7,16 @@
 
 .field-label {
   display: grid;
-  gap: 6px;
   min-width: 0;
-  color: var(--muted);
-  font-size: 0.86rem;
-  font-weight: var(--weight-heavy);
 }
 
 .study-select {
-  min-height: 42px;
   width: 100%;
-  padding: 0 12px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-control);
   background: #fff;
-  color: var(--text);
   font: inherit;
 }
 
 .study-select:disabled {
-  color: var(--muted);
   background: #f8fafc;
 }
 
@@ -149,7 +139,6 @@
 
 .review-details summary,
 .review-analysis > summary {
-  color: var(--primary-dark);
   font-weight: var(--weight-heavy);
   cursor: pointer;
 }
