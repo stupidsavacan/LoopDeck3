@@ -19,6 +19,7 @@ import { LAST_MODULE_KEY } from '../storage/libraryState';
 
 import { button, clear, el } from '../ui/dom';
 import { appendIconLabel } from '../ui/icons';
+import { renderEmptyState } from '../ui/emptyState';
 
 const percent = (value: number): string => `${Math.round(value * 100)}%`;
 const seconds = (value: number): string => `${Math.round(value / 100) / 10}秒`;
@@ -268,10 +269,7 @@ export async function renderGraphsScreen(context: ScreenContext): Promise<void> 
   header.append(back, review);
 
   const hero = el('section', 'hero-card study-hero-card');
-  hero.append(
-    el('h1', '', '学習の記録'),
-    el('p', '', '続けた日、正答率、ミスの傾向をまとめて振り返ります。')
-  );
+  hero.append(el('h1', '', '学習の記録'), el('p', '', '続けた日、正答率、ミスの傾向をまとめて振り返ります。'));
   const stats = el('div', 'stats-row');
   stats.append(
     el('span', '', `${overview.totalAttempts}回答`),
@@ -279,11 +277,12 @@ export async function renderGraphsScreen(context: ScreenContext): Promise<void> 
     el('span', '', `ミス ${overview.mistakes}`)
   );
   const weekly = button('今週のふりかえり', 'btn weekly-open');
-  weekly.onclick = () =>
-    openWeeklyStory(buildWeeklyRecap(attempts, getActiveModules(packView), questionsById, new Date()), '今週のあなた');
+  weekly.onclick = () => openWeeklyStory(buildWeeklyRecap(attempts, getActiveModules(packView), questionsById, new Date()), '今週のあなた');
   hero.append(stats, weekly);
 
   const grid = el('section', 'graph-grid');
+  // Nothing studied yet: one composed empty state leads, and the per-chart cards (each only an empty line) stay folded away.
+  const noHistory = overview.totalAttempts === 0 && cards.length === 0;
   renderHeatmap(grid, overview.dailyStudyStats, overview.totalAttempts > 0);
   renderDueForecast(grid, buildDueForecast(cards), cards.length > 0, context.navigation.today);
   renderMasteryMap(
@@ -296,6 +295,20 @@ export async function renderGraphsScreen(context: ScreenContext): Promise<void> 
   renderTrend(grid, overview.mistakeTrend);
   renderBreakdown(grid, overview.mistakeBreakdown);
 
-  screen.append(header, hero, grid);
+  if (noHistory) {
+    stats.hidden = true;
+    weekly.hidden = true;
+    grid.hidden = true;
+    const empty = renderEmptyState({
+      icon: 'chart',
+      title: 'まだ記録がありません',
+      body: '問題を解くと、続けた日・復習の予定・ミスの傾向がここにまとまります。',
+      actionLabel: '今日のループを始める',
+      onAction: context.navigation.today
+    });
+    screen.append(header, hero, empty, grid);
+  } else {
+    screen.append(header, hero, grid);
+  }
   root.append(screen);
 }

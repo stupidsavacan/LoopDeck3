@@ -204,7 +204,8 @@ export function renderHomeScreen(context: ScreenContext): void {
     progressNodes.set(module.id, [...(progressNodes.get(module.id) ?? []).filter((node) => screen.contains(node)), progress]);
     fillProgress(progress, module.id);
 
-    card.append(top, el('p', 'desc', meta.description), tags, progress);
+    const count = el('span', 'module-card-count', `${module.questionIds.length}問`);
+    card.append(top, count, el('p', 'desc', meta.description), tags, progress);
     return card;
   }
 
