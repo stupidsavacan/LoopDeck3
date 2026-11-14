@@ -1,11 +1,11 @@
 .module-screen:has(.quiz-mount > .flashcard-session) {
-  width: 100% !important;
-  max-width: none !important;
+  width: 100%;
+  max-width: none;
   min-height: 100dvh;
-  padding: 0 !important;
+  padding: 0;
 }
 .module-screen:has(.quiz-mount > .flashcard-session) > :not(.quiz-mount) {
-  display: none !important;
+  display: none;
 }
 .flashcard-session {
   --flashcard-danger: #e95061;

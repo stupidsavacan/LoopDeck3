@@ -1,9 +1,9 @@
 .quiz-card.with-question-image .question-prompt {
-  font-size: clamp(1.25rem, 2.2vw, 1.5rem) !important;
-  line-height: 1.5 !important;
-  letter-spacing: normal !important;
-  font-weight: 700 !important;
-  margin: 0 0 16px !important;
+  font-size: clamp(1.25rem, 2.2vw, 1.5rem);
+  line-height: 1.5;
+  letter-spacing: normal;
+  font-weight: 700;
+  margin: 0 0 16px;
 }
 .quiz-card.with-question-image .question-image-mount {
   margin: 12px 0 16px;
