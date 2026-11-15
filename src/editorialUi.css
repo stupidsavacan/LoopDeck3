@@ -4159,3 +4159,51 @@ summary:focus-visible {
 .import-screen .pack-row {
   border-radius: var(--radius-md);
 }
+
+/* ==== Wide screens ====
+   The phone layout stretched: navigation becomes a side rail and headings stop growing with the viewport. */
+@media (min-width: 1100px) {
+  #app:has(> .bottom-nav) {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  #app:has(> .bottom-nav) > main.screen {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  #app > .bottom-nav {
+    grid-column: 1;
+    grid-row: 1;
+    align-self: center;
+    width: 92px;
+    margin: 0 0 0 16px;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  :is(.review-screen, .graphs-screen, .import-screen, .pdf-worksheet-screen, .debug-log-screen) .hero-card h1,
+  .exam-title h1,
+  .today-screen-title h1 {
+    font-size: 2.75rem;
+  }
+
+  .module-cover h1 {
+    font-size: 3rem;
+  }
+
+  :is(.review-screen, .graphs-screen, .import-screen, .pdf-worksheet-screen, .debug-log-screen) .hero-card > p:not(.eyebrow) {
+    font-size: 0.95rem;
+  }
+
+  /* One reading width for every sub-screen. */
+  .module-screen,
+  .review-screen,
+  .graphs-screen,
+  .import-screen,
+  .pdf-worksheet-screen,
+  .debug-log-screen,
+  .exam-screen {
+    width: min(960px, 100%);
+  }
+}
