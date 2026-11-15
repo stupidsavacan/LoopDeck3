@@ -330,7 +330,7 @@ for (const width of [412, 1280]) test(`flashcard tap swipe result retry and resu
   await expect(page.locator('.flashcard-donut-center')).toHaveText('50%知ってる');
   await expect(page.locator('.flashcard-stat')).toHaveCount(2);
   await expect(page.locator('.flashcard-missed-chip')).toHaveText('agree');
-  await expect(page.locator('.flashcard-result-actions button')).toHaveText(['AGAINだけもう一度', '全部やり直す', '教材へ戻る']);
+  await expect(page.locator('.flashcard-result-actions button')).toHaveText(['知らないカードだけもう一度', '全部やり直す', '教材へ戻る']);
   const resultLayout = await page.locator('.flashcard-result-panel').evaluate(panel => {
     const stats = [...panel.querySelectorAll('.flashcard-stat')].map(stat => stat.getBoundingClientRect());
     return { sameRow: stats[0].top === stats[1].top, missedInPanel: !!panel.querySelector('.flashcard-missed'),
@@ -354,14 +354,14 @@ for (const width of [412, 1280]) test(`flashcard tap swipe result retry and resu
   expect(records.attempts).toHaveLength(2);
   for (const attempt of records.attempts) expect(attempt).toMatchObject({ answerMode: 'flashcard', input: '', questionMode: 'front_to_back' });
   expect(records.logs.map(log => log.rating).sort()).toEqual(['again', 'good']);
-  await page.getByRole('button', { name: 'AGAINだけもう一度', exact: true }).click();
+  await page.getByRole('button', { name: '知らないカードだけもう一度', exact: true }).click();
   await expect(page.locator('.flashcard-front .flashcard-term')).toHaveText('agree');
   await expect(page.locator('.flashcard-position')).toHaveText('1 / 1');
   await expect(page.locator('.flashcard-counts')).toHaveText('知ってる 0 · 知らない 0');
   await wrap.press('Space'); await expect(wrap).toHaveClass(/is-flipped/);
   await wrap.press('ArrowRight');
   await expect(page.locator('.flashcard-donut-center')).toHaveText('100%知ってる');
-  await expect(page.getByRole('button', { name: 'AGAINだけもう一度', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: '知らないカードだけもう一度', exact: true })).toBeDisabled();
   await expect(page.locator('.flashcard-missed-chips')).toHaveText('なし');
   await page.locator('.flashcard-result-actions').getByRole('button', { name: '教材へ戻る', exact: true }).click();
   await expect(page.locator('.module-screen')).toBeVisible();

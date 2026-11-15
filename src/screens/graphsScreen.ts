@@ -36,7 +36,7 @@ function renderHeatmap(root: HTMLElement, stats: DailyStudyStat[], hasAttempts: 
   const max = Math.max(1, ...stats.map((item) => item.attempts));
   const grid = el('div', 'heatmap-grid');
   for (const day of stats) {
-    const cell = el('span', 'heat-cell') as HTMLSpanElement;
+    const cell = el('span', 'heat-cell');
     cell.style.setProperty('--level', String(day.attempts / max));
     cell.title = `${day.date}: ${day.attempts}問 / 正答率 ${percent(day.accuracy)}`;
     cell.setAttribute('aria-label', cell.title);
@@ -118,10 +118,10 @@ function renderMasteryMap(
   const field = el('label', 'mastery-select-field');
   field.htmlFor = 'mastery-module';
   field.append(el('span', '', '教材'));
-  const select = el('select', 'study-select') as HTMLSelectElement;
+  const select = el('select', 'study-select');
   select.id = 'mastery-module';
   for (const module of studied) {
-    const option = el('option', '', module.title) as HTMLOptionElement;
+    const option = el('option', '', module.title);
     option.value = module.id;
     select.append(option);
   }
@@ -208,7 +208,7 @@ function renderTrend(root: HTMLElement, trend: MistakeTrendPoint[]): void {
   const max = Math.max(1, ...trend.map((item) => item.mistakes));
   const bars = el('div', 'trend-bars');
   for (const item of trend) {
-    const bar = el('span', 'trend-bar') as HTMLSpanElement;
+    const bar = el('span', 'trend-bar');
     bar.style.setProperty('--height', `${Math.max(6, (item.mistakes / max) * 100)}%`);
     bar.title = `${item.date}: ${item.mistakes}件`;
     bar.setAttribute('aria-label', bar.title);
@@ -244,7 +244,7 @@ function renderBreakdown(root: HTMLElement, breakdown: MistakeBreakdownItem[]): 
 }
 
 export async function renderGraphsScreen(context: ScreenContext): Promise<void> {
-  const { store: studyStore, root: root, catalog: packView, isCurrent } = context;
+  const { store: studyStore, root, catalog: packView, isCurrent } = context;
   const { home: navigateHome, review: navigateReview } = context.navigation;
 
   if (!isCurrent()) return;

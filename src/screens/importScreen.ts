@@ -85,7 +85,7 @@ function appendMergeReport(container: HTMLElement, report: MergePackReport): voi
 }
 
 export async function renderImportScreen(context: ScreenContext): Promise<void> {
-  const { store: studyStore, root: root, catalog: packView, isCurrent, refreshCatalog: onImported } = context;
+  const { store: studyStore, root, catalog: packView, isCurrent, refreshCatalog: onImported } = context;
   const { home: navigateHome } = context.navigation;
 
   if (!isCurrent()) return;
@@ -136,7 +136,7 @@ export async function renderImportScreen(context: ScreenContext): Promise<void> 
   downloadPrompt.onclick = () => void exportPackAuthoringPrompt();
   authoringCard.append(downloadPrompt);
 
-  const input = el('input', 'file-input visually-hidden') as HTMLInputElement;
+  const input = el('input', 'file-input visually-hidden');
   input.type = 'file';
   input.accept = '.json,.zip,.loopdeck.zip,application/json,application/zip';
 

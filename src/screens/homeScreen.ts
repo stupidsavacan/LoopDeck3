@@ -1,4 +1,5 @@
-import type { ScreenContext } from '../app/context';
+import { version } from '../../package.json';
+import type { Navigation, ScreenContext } from '../app/context';
 import { currentStreak } from '../core/analyticsEngine';
 import { endOfLocalCalendarDay, startOfLocalCalendarDay } from '../core/calendarDay';
 import { buildExamPlan, examCountdownLabel, examFolders, examLoopOptions, nearestExamPlan } from '../core/examPlan';
@@ -94,8 +95,27 @@ function dueTodayByModule(cards: ReviewCard[], now: Date): Map<string, number> {
   return new Map([...questionsByModule].map(([moduleId, ids]) => [moduleId, ids.size]));
 }
 
+/** Entry points that are not study itself: materials, PDF worksheets and diagnostics. */
+function renderHomeTools(navigation: Navigation): HTMLElement[] {
+  const tools = el('details', 'home-tools management-card');
+  tools.dataset.homeManagement = 'true';
+  tools.append(el('summary', 'home-tools-summary', '教材・データ・PDF'));
+  const body = el('div', 'home-tools-body');
+  const actions = el('div', 'update-actions');
+  const materials = button('教材とデータを開く', 'tool-link');
+  materials.onclick = navigation.import;
+  const worksheet = button('PDFプリントを作る', 'tool-link secondary');
+  worksheet.onclick = navigation.pdfWorksheet;
+  actions.append(materials, worksheet);
+  body.append(actions);
+  tools.append(body);
+  const diagnostics = button(`LoopDeck3 v${version} · 診断`, 'version-trigger');
+  diagnostics.onclick = navigation.debugLog;
+  return [tools, diagnostics];
+}
+
 export function renderHomeScreen(context: ScreenContext): void {
-  const { root: root, catalog: packView } = context;
+  const { root, catalog: packView } = context;
   const { module: onOpenModule } = context.navigation;
 
   clear(root);
@@ -136,7 +156,7 @@ export function renderHomeScreen(context: ScreenContext): void {
   const progressNodes = new Map<string, HTMLElement[]>();
 
   const toolbar = el('div', 'toolbar');
-  const search = el('input', 'search') as HTMLInputElement;
+  const search = el('input', 'search');
   search.placeholder = '教材を検索';
   search.autocomplete = 'off';
   search.setAttribute('aria-label', '教材を検索');
@@ -174,7 +194,7 @@ export function renderHomeScreen(context: ScreenContext): void {
 
   function renderModuleCard(module: ModuleInfo): HTMLButtonElement {
     const meta = moduleMeta(module);
-    const card = el('button', 'module-card ready') as HTMLButtonElement;
+    const card = el('button', 'module-card ready');
     card.type = 'button';
     card.style.setProperty('--deck-accent', meta.accent);
     card.onclick = () => openModule(module.id);
@@ -204,7 +224,7 @@ export function renderHomeScreen(context: ScreenContext): void {
   function renderModuleSpine(module: ModuleInfo): HTMLButtonElement {
     const meta = moduleMeta(module);
     const count = module.questionIds.length;
-    const spine = el('button', 'module-spine') as HTMLButtonElement;
+    const spine = el('button', 'module-spine');
     spine.type = 'button';
     spine.dataset.title = module.title;
     spine.dataset.count = String(count);
@@ -401,7 +421,7 @@ export function renderHomeScreen(context: ScreenContext): void {
     for (const [moduleId, nodes] of progressNodes) for (const node of nodes) if (screen.contains(node)) fillProgress(node, moduleId);
   }
 
-  screen.append(hero, resumeSlot, weeklySlot, shelfHeading, toolbar, list);
+  screen.append(hero, resumeSlot, weeklySlot, shelfHeading, toolbar, list, ...renderHomeTools(context.navigation));
   root.append(screen);
   renderList();
   void loadStudyState().catch(() => {

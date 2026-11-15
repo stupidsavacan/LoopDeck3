@@ -30,7 +30,7 @@ function pack(module: ModuleInfo): LoopDeckPack {
 
 function renderSingleCard(module: ModuleInfo): { card: HTMLElement; icon: HTMLElement } {
   const root = document.createElement('div');
-  renderHomeScreen(screenContext({ root: root, catalog: resolveActivePacks([pack(module)]), navigation: { module: () => {} } })
+  renderHomeScreen(screenContext({ root, catalog: resolveActivePacks([pack(module)]), navigation: { module: () => {} } })
   );
 
   const card = root.querySelector<HTMLElement>('.module-card');

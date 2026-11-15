@@ -87,7 +87,7 @@ describe('Review Center large-history layout bounds', () => {
 
   it('keeps hundreds of synthetic review records behind bounded previews', async () => {
     const root = document.createElement('div');
-    await renderReviewCenter(screenContext({ root: root, catalog: resolveActivePacks([pack]), navigation: { home: () => {}, graphs: () => {} } }));
+    await renderReviewCenter(screenContext({ root, catalog: resolveActivePacks([pack]), navigation: { home: () => {}, graphs: () => {} } }));
 
     const listCards = [...root.querySelectorAll<HTMLElement>('.review-list-grid > .card')];
     expect(listCards).toHaveLength(2);

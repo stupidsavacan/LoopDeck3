@@ -50,13 +50,13 @@ function takeAutoResume(moduleId: string): boolean {
 function makeSelect(labelText: string, className = 'study-select'): { wrap: HTMLElement; select: HTMLSelectElement } {
   const wrap = el('label', 'field-label');
   const label = el('span', '', labelText);
-  const select = el('select', className) as HTMLSelectElement;
+  const select = el('select', className);
   wrap.append(label, select);
   return { wrap, select };
 }
 
 export async function renderModuleScreen(context: ScreenContext & { moduleId: string }): Promise<void> {
-  const { store: studyStore, root: root, catalog: packView, resolveImage, isCurrent, moduleId } = context;
+  const { store: studyStore, root, catalog: packView, resolveImage, isCurrent, moduleId } = context;
   const { home: navigateHome, review: navigateReview } = context.navigation;
 
   if (!isCurrent()) return;
@@ -155,7 +155,7 @@ export async function renderModuleScreen(context: ScreenContext & { moduleId: st
     ['50', '50問'],
     ['all', '全部']
   ] as const) {
-    const option = el('option', '', label) as HTMLOptionElement;
+    const option = el('option', '', label);
     option.value = value;
     countField.select.append(option);
   }
@@ -167,7 +167,7 @@ export async function renderModuleScreen(context: ScreenContext & { moduleId: st
 
   const rangeField = makeSelect('範囲');
   for (const optionInfo of rangeOptions) {
-    const option = el('option', '', optionInfo.label) as HTMLOptionElement;
+    const option = el('option', '', optionInfo.label);
     option.value = optionInfo.value;
     rangeField.select.append(option);
   }
@@ -184,11 +184,11 @@ export async function renderModuleScreen(context: ScreenContext & { moduleId: st
   };
 
   const categoryField = makeSelect('カテゴリ');
-  const allCategory = el('option', '', '全部') as HTMLOptionElement;
+  const allCategory = el('option', '', '全部');
   allCategory.value = 'all';
   categoryField.select.append(allCategory);
   for (const category of categories) {
-    const option = el('option', '', category) as HTMLOptionElement;
+    const option = el('option', '', category);
     option.value = encodeStudyCategory(category);
     categoryField.select.append(option);
   }
@@ -206,7 +206,7 @@ export async function renderModuleScreen(context: ScreenContext & { moduleId: st
     ['input', '入力'],
     ['flashcard', 'カード']
   ] as const) {
-    const option = el('option', '', label) as HTMLOptionElement;
+    const option = el('option', '', label);
     option.value = value;
     answerField.select.append(option);
   }

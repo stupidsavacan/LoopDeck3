@@ -118,7 +118,7 @@ describe('pack authoring prompt', () => {
   it('downloads a non-empty UTF-8 text prompt from the import screen action', async () => {
     const root = document.createElement('div');
     await renderImportScreen(
-      screenContext({ root: root, catalog: resolveActivePacks([]), refreshCatalog: async () => {}, navigation: { home: () => {} } })
+      screenContext({ root, catalog: resolveActivePacks([]), refreshCatalog: async () => {}, navigation: { home: () => {} } })
     );
 
     const originalCreateObjectURL = Object.getOwnPropertyDescriptor(URL, 'createObjectURL');

@@ -122,7 +122,7 @@ export function renderFlashcardResult(session: QuizSession, onAgain: () => void,
   if (!missed.length) chips.append(el('p', '', 'なし'));
   missedSection.append(chips);
   const actions = el('div', 'flashcard-result-actions');
-  const again = button('AGAINだけもう一度', 'btn primary');
+  const again = button('知らないカードだけもう一度', 'btn primary');
   again.disabled = missed.length === 0;
   again.onclick = onAgain;
   const all = button('全部やり直す', 'btn');

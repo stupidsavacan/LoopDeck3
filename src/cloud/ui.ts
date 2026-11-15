@@ -64,7 +64,8 @@ export function mountCloudSync(store: CloudStore, repository: StudyRepository, e
       el('p', 'cloud-sync-lead', '教材と画像だけを共有します。回答・復習・ブックマークは送信しません。')
     );
     if (!settings?.token) {
-      if (nativeCloud() && !nativeCloud()!.origin()) {
+      const native = nativeCloud();
+      if (native && !native.origin()) {
         content.append(
           el(
             'p',
@@ -82,8 +83,8 @@ export function mountCloudSync(store: CloudStore, repository: StudyRepository, e
         phrase = el('input', 'cloud-sync-input');
       url.type = 'url';
       url.placeholder = 'https://…chatgpt.site';
-      url.value = settings?.apiUrl ?? nativeCloud()?.origin() ?? 'https://loopdeck3-sync-20261022.salmon1124.chatgpt.site';
-      url.disabled = !!settings?.setupComplete || !!nativeCloud();
+      url.value = settings?.apiUrl ?? native?.origin() ?? 'https://loopdeck3-sync-20261022.salmon1124.chatgpt.site';
+      url.disabled = !!settings?.setupComplete || !!native;
       url.setAttribute('aria-label', 'API URL');
       name.placeholder = 'この端末の名前';
       name.value = settings?.deviceName ?? '';
