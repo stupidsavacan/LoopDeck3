@@ -69,7 +69,8 @@ final class ReleaseUiHarness {
         }
     }
     private JSONObject run(String socketName) throws Exception {
-        check(instrumentation.getTargetContext().getPackageName().equals("com.loopdeck3.app.syncpreview.release"));
+        String packageName = instrumentation.getTargetContext().getPackageName();
+        check(packageName.equals("com.loopdeck3.app.syncpreview.release") || packageName.equals("com.loopdeck3.app"));
         check(!BuildConfig.DEBUG && (instrumentation.getTargetContext().getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE) == 0);
         check(socketName != null && socketName.matches("loopdeck-release-qa-[a-f0-9-]{36}"));
         JSONObject input;
@@ -82,6 +83,9 @@ final class ReleaseUiHarness {
                 byte[] bytes = new byte[length]; stream.readFully(bytes); input = new JSONObject(new String(bytes, StandardCharsets.UTF_8));
             }
         }
+        String phase = input.getString("phase");
+        boolean publicCheck = "loginOnly".equals(phase) || "snapshotOnly".equals(phase);
+        check(packageName.equals("com.loopdeck3.app.syncpreview.release") || publicCheck);
         stage = "launch";
         Activity activity = instrumentation.startActivitySync(new Intent(instrumentation.getTargetContext(), MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
         instrumentation.runOnMainSync(() -> web = findWeb(activity.getWindow().getDecorView())); check(web != null);
@@ -89,6 +93,34 @@ final class ReleaseUiHarness {
         evaluate("(()=>{const original=window.fetch,records=[];window.__releaseQaHttp=records;window.__releaseQaOriginalFetch=original;window.fetch=function(...args){return Reflect.apply(original,this,args).then(response=>{const request=args[0];if(records.length<128)records.push({path:new URL(typeof request==='string'?request:request.url).pathname,method:args[1]?.method??request.method??'GET',status:response.status});return response;});};})()");
         String id = input.getString("packId"); evaluate("window.__releaseQaTarget=" + JSONObject.quote(id));
         JSONObject before = snapshot(); boolean upload = "upload".equals(input.getString("phase"));
+        if (publicCheck) {
+            stage = "public-login-only";
+            check(!before.getBoolean("setupComplete"));
+            boolean loginPerformed = false;
+            if (!"snapshotOnly".equals(phase)) {
+                evaluate("document.querySelector('.cloud-sync-icon').click()");
+                waitFor("document.querySelector('input[type=password]') || Array.from(document.querySelectorAll('button')).some(b=>b.textContent.trim()==='この設定で自動同期を開始')");
+                if ("true".equals(evaluate("Boolean(document.querySelector('input[type=password]'))"))) {
+                    evaluate("document.querySelector('input[type=password]').value=" + JSONObject.quote(input.getString("phrase")));
+                    input.remove("phrase"); click("ログイン"); loginPerformed = true;
+                }
+                waitFor("Array.from(document.querySelectorAll('button')).some(b=>b.textContent.trim()==='この設定で自動同期を開始')");
+                new CloudTransfer(new CloudCredentials(instrumentation.getTargetContext()).load()).get("/auth/me");
+            }
+            JSONObject after = snapshot();
+            check(before.getJSONObject("learning").toString().equals(after.getJSONObject("learning").toString()));
+            check(before.getJSONObject("packs").toString().equals(after.getJSONObject("packs").toString()));
+            check(before.getInt("outboxCount") == after.getInt("outboxCount") && !after.getBoolean("setupComplete"));
+            String data = after.getJSONObject("learning").toString() + after.getJSONObject("packs").toString() + after.getInt("outboxCount");
+            String dataSha = CloudFiles.hex(java.security.MessageDigest.getInstance("SHA-256").digest(data.getBytes(StandardCharsets.UTF_8)));
+            JSONArray http = new JSONArray((String) new JSONTokener(evaluate("JSON.stringify(window.__releaseQaHttp)")).nextValue());
+            String origin = (String) new JSONTokener(evaluate("LoopDeckCloud.origin()")).nextValue();
+            evaluate("window.fetch=window.__releaseQaOriginalFetch;delete window.__releaseQaOriginalFetch;delete window.__releaseQaHttp;delete window.__releaseQaSnapshot;delete window.__releaseQaTarget;");
+            return new JSONObject().put("status", "PASS").put("applicationId", packageName).put("phase", phase)
+                .put("apiOrigin", origin).put("loginPerformed", loginPerformed).put("dataSha256", dataSha)
+                .put("packCount", after.getJSONObject("packs").length()).put("learningUnchanged", true)
+                .put("packsUnchanged", true).put("sharingStarted", false).put("debuggable", false).put("http", http);
+        }
         if (upload) {
             stage = "login-form"; evaluate("document.querySelector('.cloud-sync-icon').click()");
             waitFor("document.querySelector('input[type=password]')");

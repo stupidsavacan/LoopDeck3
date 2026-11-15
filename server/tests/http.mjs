@@ -8,7 +8,8 @@ const evidence=[];
 const check=(name,fn)=>Promise.resolve().then(fn).then(()=>{evidence.push({name,status:'PASS'});console.log('PASS',name);});
 await mkdir('tests/.generated',{recursive:true});
 await build({entryPoints:['tests/worker.ts'],outfile:'tests/.generated/worker.mjs',bundle:true,format:'esm',platform:'browser',target:'es2022'});
-const mf=new Miniflare({modules:true,scriptPath:'tests/.generated/worker.mjs',compatibilityDate:'2026-05-15',d1Databases:{DB:'sync-test'},r2Buckets:['BUCKET'],bindings:{SYNC_PASSPHRASE:'local-fixture-only',ALLOWED_ORIGINS:'https://appassets.androidplatform.net',ALLOW_NULL_ORIGIN:'true'}});
+const studyOrigin='https://loopdeck-study.salmon1124.chatgpt.site';
+const mf=new Miniflare({modules:true,scriptPath:'tests/.generated/worker.mjs',compatibilityDate:'2026-05-15',d1Databases:{DB:'sync-test'},r2Buckets:['BUCKET'],bindings:{SYNC_PASSPHRASE:'local-fixture-only',ALLOWED_ORIGINS:'https://appassets.androidplatform.net, '+studyOrigin,ALLOW_NULL_ORIGIN:'true'}});
 const db=await mf.getD1Database('DB'),bucket=await mf.getR2Bucket('BUCKET');
 for(const f of (await readdir('drizzle')).filter(f=>f.endsWith('.sql')).sort())for(const sql of (await readFile('drizzle/'+f,'utf8')).split('--> statement-breakpoint'))if(sql.trim())await db.prepare(sql).run();
 let token;
@@ -23,9 +24,15 @@ async function zip(title='Pack',id='test-pack',targetSize=0,date=new Date('2026-
 async function upload(bytes,op=randomUUID(),id='test-pack'){return api('/packs/'+id+'/revisions',{method:'POST',headers:{'content-type':'application/zip','idempotency-key':op},body:bytes});}
 let first;
 try{
- await check('CORS null and appassets preflight; unknown origin denied',async()=>{
-  for(const origin of ['null','https://appassets.androidplatform.net']){const r=await mf.dispatchFetch('https://sync.test/api/v1/packs',{method:'OPTIONS',headers:{Origin:origin,'Access-Control-Request-Method':'POST','Access-Control-Request-Headers':'authorization,content-type,idempotency-key,x-content-fingerprint'}});assert.equal(r.status,204);assert.equal(r.headers.get('access-control-allow-origin'),origin);}
-  assert.equal((await mf.dispatchFetch('https://sync.test/api/v1/health',{headers:{Origin:'https://evil.test'}})).status,403);
+ await check('CORS null, Android and separate study Site; exact origins only and authentication retained',async()=>{
+  for(const origin of ['null','https://appassets.androidplatform.net',studyOrigin]){
+   const r=await mf.dispatchFetch('https://sync.test/api/v1/packs',{method:'OPTIONS',headers:{Origin:origin,'Access-Control-Request-Method':'POST','Access-Control-Request-Headers':'authorization,content-type,idempotency-key,x-content-fingerprint,if-none-match'}});assert.equal(r.status,204);assert.equal(r.headers.get('access-control-allow-origin'),origin);assert.equal(r.headers.get('vary'),'Origin');
+   const denied=await mf.dispatchFetch('https://sync.test/api/v1/packs',{headers:{Origin:origin}});assert.equal(denied.status,401);assert.equal(denied.headers.get('access-control-allow-origin'),origin);
+  }
+  for(const origin of ['https://evil.test',studyOrigin+'.evil.test','http://loopdeck-study.salmon1124.chatgpt.site',studyOrigin+':444']){
+   const r=await mf.dispatchFetch('https://sync.test/api/v1/auth/login',{method:'OPTIONS',headers:{Origin:origin,'Access-Control-Request-Method':'POST','Access-Control-Request-Headers':'content-type'}});assert.equal(r.status,403);assert.equal(r.headers.get('access-control-allow-origin'),null);
+  }
+  const badHeader=await mf.dispatchFetch('https://sync.test/api/v1/auth/login',{method:'OPTIONS',headers:{Origin:studyOrigin,'Access-Control-Request-Method':'POST','Access-Control-Request-Headers':'x-unapproved'}});assert.equal(badHeader.status,403);
  });
  await check('unauthenticated operations denied; login and indefinite token',async()=>{assert.equal((await api('/packs')).status,401);await login();const r=await api('/auth/me');assert.equal(r.status,200);assert.equal((await r.json()).expiresAt,null);});
  await check('valid ZIP stored with exact SHA-256 and downloaded bytes',async()=>{const bytes=await zip();const r=await upload(bytes);assert.equal(r.status,201,await r.clone().text());first=await r.json();assert.equal(first.sha256,createHash('sha256').update(bytes).digest('hex'));const get=await api(`/packs/test-pack/revisions/${first.revision}/download`);assert.equal(get.status,200);assert.deepEqual(Buffer.from(await get.arrayBuffer()),Buffer.from(bytes));});
