@@ -68,7 +68,7 @@
 }
 .flashcard-progress-section .eyebrow {
   margin: 0 0 3px;
-  font-size: 0.62rem;
+  font-size: 0.75rem;
   letter-spacing: 0.15em;
   font-weight: var(--weight-black);
   color: var(--editorial-subtle);
@@ -223,7 +223,7 @@
   top: 25px;
   left: 28px;
   right: 28px;
-  font-size: 0.59rem;
+  font-size: 0.75rem;
   letter-spacing: 0.15em;
   font-weight: var(--weight-black);
   color: var(--editorial-muted);
@@ -246,7 +246,7 @@
   margin: 0;
   font-size: clamp(2.2rem, 9vw, 4.9rem);
   line-height: 1.25;
-  letter-spacing: -0.055em;
+  letter-spacing: -0.02em;
   font-weight: var(--weight-black);
   text-align: center;
   overflow-wrap: anywhere;
@@ -254,7 +254,7 @@
 }
 .flashcard-term.jp {
   font-size: clamp(1.8rem, 8vw, 3.8rem);
-  letter-spacing: -0.035em;
+  letter-spacing: -0.02em;
 }
 .flashcard-explanation,
 .flashcard-example {
@@ -301,11 +301,11 @@
 }
 .flashcard-judge-label strong {
   font-size: 1.72rem;
-  letter-spacing: -0.04em;
+  letter-spacing: -0.02em;
   font-weight: var(--weight-black);
 }
 .flashcard-judge-label span {
-  font-size: 0.64rem;
+  font-size: 0.75rem;
   font-weight: var(--weight-black);
   letter-spacing: 0.12em;
 }
@@ -360,7 +360,7 @@
   min-height: 44px;
   padding: 0 4px;
   background: transparent;
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   color: var(--editorial-subtle);
 }
 .flashcard-arrow {
@@ -380,7 +380,7 @@
 }
 .flashcard-key-hint {
   text-align: center;
-  font-size: 0.61rem;
+  font-size: 0.75rem;
   color: var(--editorial-muted);
   letter-spacing: 0.05em;
   margin: 18px 0 0;
@@ -410,7 +410,7 @@
 .flashcard-result .eyebrow {
   margin-top: 16px;
   color: var(--editorial-subtle);
-  font-size: 0.64rem;
+  font-size: 0.75rem;
   font-weight: var(--weight-black);
   letter-spacing: 0.14em;
 }
@@ -418,7 +418,7 @@
   font-size: clamp(2.25rem, 8vw, 4.4rem);
   margin: 8px 0 5px;
   line-height: 0.98;
-  letter-spacing: -0.06em;
+  letter-spacing: -0.02em;
 }
 .flashcard-result-description {
   margin: 8px 0 26px;
@@ -473,10 +473,10 @@
   font-size: 2.55rem;
   line-height: 1;
   font-weight: var(--weight-black);
-  letter-spacing: -0.06em;
+  letter-spacing: -0.02em;
 }
 .flashcard-donut-center span {
-  font-size: 0.67rem;
+  font-size: 0.75rem;
   font-weight: var(--weight-black);
   color: var(--editorial-subtle);
 }
@@ -503,17 +503,17 @@
 }
 .flashcard-stat span:first-child {
   font-weight: var(--weight-black);
-  font-size: 0.65rem;
+  font-size: 0.75rem;
   letter-spacing: 0.11em;
   color: var(--editorial-subtle);
 }
 .flashcard-stat strong {
   font-size: 2rem;
-  letter-spacing: -0.045em;
+  letter-spacing: -0.02em;
   line-height: 1;
 }
 .flashcard-stat span:last-child {
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   font-weight: var(--weight-heavy);
   color: var(--editorial-subtle);
 }
@@ -537,7 +537,7 @@
   padding: 7px 9px;
   border-radius: var(--radius-xs);
   background: var(--editorial-fill);
-  font-size: 0.74rem;
+  font-size: 0.75rem;
   font-weight: var(--weight-heavy);
   max-width: 100%;
   overflow-wrap: anywhere;
@@ -630,6 +630,13 @@
   }
   .flashcard-wrap {
     transition-duration: 0.01ms !important;
+  }
+}
+
+/* Narrow phones: the labels matter more than the arrow badges. */
+@media (max-width: 360px) {
+  .flashcard-arrow {
+    display: none;
   }
 }
 
