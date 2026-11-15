@@ -415,8 +415,9 @@ button {
 .heat-cell {
   aspect-ratio: 1;
   border-radius: var(--radius-xs);
-  background: color-mix(in srgb, #dbe7ff calc(100% - (var(--level) * 75%)), var(--primary));
-  border: 1px solid rgba(37, 99, 235, 0.12);
+  /* Ink scale: the darker the day, the more was answered. */
+  background: color-mix(in srgb, var(--editorial-fill) calc(100% - (var(--level) * 88%)), var(--editorial-ink));
+  border: 1px solid rgba(10, 16, 32, 0.06);
 }
 .trend-bars {
   height: 130px;

@@ -288,6 +288,8 @@ body {
   display: grid;
   place-items: center;
   border-radius: var(--radius-control);
+  background: var(--deck-accent);
+  background: color-mix(in srgb, var(--deck-accent) 76%, var(--editorial-ink));
   color: #fff;
   box-shadow: none;
 }
@@ -402,10 +404,11 @@ body {
   padding: 96px 26px 26px;
   border: 0;
   border-radius: var(--radius-xl);
+  /* Same ink surface as the home hero; the module colour is an accent glow and the icon tile, not the whole card. */
   background:
-    radial-gradient(circle at 78% 18%, color-mix(in srgb, var(--module-accent) 54%, white), transparent 34%),
-    linear-gradient(140deg, var(--module-accent), color-mix(in srgb, var(--module-accent) 72%, #10162b));
-  box-shadow: 0 24px 60px color-mix(in srgb, var(--module-accent) 20%, transparent);
+    radial-gradient(circle at 88% 12%, color-mix(in srgb, var(--module-accent) 62%, transparent), transparent 46%),
+    linear-gradient(145deg, #0a1020 0%, #101932 58%, #142548 100%);
+  box-shadow: none;
   color: #fff;
   overflow: hidden;
 }
@@ -808,12 +811,39 @@ body {
   font-size: 0.88rem;
 }
 
-.review-screen .stats-row span,
-.graphs-screen .stats-row span {
+.review-screen .stats-row span {
   padding: 7px 10px;
   border-radius: var(--radius-xs);
   background: var(--editorial-fill);
   color: var(--editorial-ink-2);
+}
+
+/* Analytics headline: the accuracy leads on ink, the counts follow as plain tiles. */
+.graphs-screen .stats-row {
+  display: grid;
+  grid-template-columns: 1.3fr repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.graphs-screen .stats-row span {
+  display: grid;
+  align-content: center;
+  min-height: 56px;
+  padding: 8px 10px;
+  border: 1px solid var(--editorial-line);
+  border-radius: var(--radius-sm);
+  background: var(--editorial-surface);
+  color: var(--editorial-ink);
+  font-size: 0.82rem;
+  font-weight: var(--weight-heavy);
+}
+
+.graphs-screen .stats-row .stat-key {
+  border-color: var(--editorial-ink);
+  background: var(--editorial-ink);
+  color: var(--editorial-lime);
+  font-size: 1rem;
+  font-weight: var(--weight-black);
 }
 
 .review-screen .card,
@@ -2016,6 +2046,8 @@ body {
 }
 
 .today-hero .today-heading {
+  word-break: auto-phrase;
+  text-wrap: balance;
   margin: 0;
   color: #fff;
   font-size: clamp(1.55rem, 6.4vw, 2.6rem);
@@ -2099,8 +2131,8 @@ body {
   display: grid;
   place-items: center;
   border-radius: var(--radius-control);
-  background: var(--editorial-blue);
-  color: #fff;
+  background: var(--editorial-ink);
+  color: var(--editorial-lime);
 }
 
 .resume-banner-svg {
@@ -2129,7 +2161,7 @@ body {
 }
 
 .resume-banner-action {
-  color: var(--editorial-blue-ink);
+  color: var(--editorial-ink);
   font-size: 0.82rem;
   font-weight: var(--weight-black);
 }
@@ -2697,11 +2729,19 @@ body {
   max-width: 34px;
   align-self: end;
   border-radius: 8px 8px 3px 3px;
-  background: #c6cfe4;
+  background: var(--editorial-line-strong);
+}
+
+.due-forecast-day:first-child .due-forecast-bar {
+  background: var(--editorial-ink);
 }
 
 .due-forecast-day.is-focus .due-forecast-bar {
   background: var(--editorial-orange);
+}
+
+.due-forecast .btn {
+  margin-top: 12px;
 }
 
 .due-forecast-label {
@@ -2797,11 +2837,11 @@ body {
 }
 
 .level-learning {
-  background: #8fa6ff;
+  background: #8b93a7;
 }
 
 .level-solid {
-  background: #1f3fd1;
+  background: var(--editorial-ink);
 }
 
 /* Weekly story */
@@ -2877,7 +2917,8 @@ body {
 .weekly-stage {
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: flex-start;
+  padding-top: 24px;
   align-items: flex-start;
   gap: 16px;
   min-height: 0;
@@ -2941,11 +2982,17 @@ body {
   width: 100%;
   height: 40px;
   border-radius: var(--radius-xs);
-  background: color-mix(in srgb, var(--story-text) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--story-text) 22%, transparent);
+  background: color-mix(in srgb, var(--story-text) 10%, transparent);
 }
 
 .weekly-day.is-studied .weekly-day-mark {
-  background: #c7ff55;
+  border-color: transparent;
+  background: var(--editorial-lime);
+}
+
+.weekly-story[data-theme='lime'] .weekly-day.is-studied .weekly-day-mark {
+  background: var(--editorial-ink);
 }
 
 .weekly-day-name {
@@ -2977,8 +3024,13 @@ body {
 
 .weekly-next {
   border: 0;
-  background: var(--story-text);
-  color: var(--story-bg);
+  background: var(--editorial-lime);
+  color: var(--editorial-ink);
+}
+
+.weekly-story[data-theme='lime'] .weekly-next {
+  background: var(--editorial-ink);
+  color: #fff;
 }
 
 .weekly-footer button:focus-visible,
@@ -3012,7 +3064,7 @@ body {
   gap: 6px;
   padding-top: 8px;
   padding-bottom: 18px;
-  background: linear-gradient(to top, transparent 0 4px, var(--editorial-ink) 4px 16px, transparent 16px);
+  background: linear-gradient(to top, transparent 0 14px, var(--editorial-ink) 14px 16px, transparent 16px);
   scroll-snap-type: none;
 }
 
@@ -3031,6 +3083,8 @@ body {
   border: 0;
   border-radius: 7px 7px 3px 3px;
   background: var(--deck-accent, var(--editorial-blue));
+  /* Module colours come from packs at full saturation; a little ink keeps them inside the palette. */
+  background: color-mix(in srgb, var(--deck-accent, var(--editorial-blue)) 76%, var(--editorial-ink));
   color: #fff;
   font: inherit;
   cursor: pointer;
@@ -3053,6 +3107,8 @@ body {
   max-height: 150px;
   overflow: hidden;
   writing-mode: vertical-rl;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   font-size: 0.88rem;
   font-weight: var(--weight-black);
   letter-spacing: 0.08em;
@@ -3442,7 +3498,7 @@ body {
 }
 
 .setting-row .check-label input[role='switch']:checked {
-  background: var(--editorial-blue);
+  background: var(--editorial-ink);
 }
 
 .setting-row .check-label input[role='switch']:checked::after {
