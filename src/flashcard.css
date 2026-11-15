@@ -337,7 +337,6 @@
   border: 0;
   border-radius: 0;
   background: transparent;
-  box-shadow: none;
   color: var(--editorial-subtle);
   font-size: 0.7rem;
   font-weight: var(--weight-black);
@@ -543,14 +542,9 @@
 }
 .flashcard-result-actions .btn {
   width: 100%;
-  min-height: 50px;
-  padding: 8px;
   border: 1px solid var(--editorial-line);
-  border-radius: var(--radius-control);
   background: #fff;
   color: var(--editorial-ink);
-  font-weight: var(--weight-black);
-  font-size: 0.85rem;
   white-space: normal;
 }
 .flashcard-result-actions .btn.primary {
