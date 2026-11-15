@@ -1793,6 +1793,57 @@ body {
 }
 
 /* Session end: three headline numbers, the rest folded, then what to do next */
+.session-result {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 12px;
+  padding: 16px;
+  border-radius: var(--radius-lg);
+  background: var(--editorial-ink);
+  color: #fff;
+}
+
+.session-ring {
+  flex: 0 0 auto;
+  width: 96px;
+  height: 96px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: conic-gradient(var(--editorial-lime) calc(var(--ratio, 0) * 1%), rgba(255, 255, 255, 0.14) 0);
+}
+
+.session-ring-center {
+  width: 74px;
+  height: 74px;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 2px;
+  border-radius: 50%;
+  background: var(--editorial-ink);
+}
+
+.session-ring-center strong {
+  font-size: 1.3rem;
+  font-weight: var(--weight-black);
+  line-height: 1;
+}
+
+.session-ring-center span {
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.75rem;
+  font-weight: var(--weight-heavy);
+}
+
+.session-result-headline {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: var(--weight-black);
+  line-height: 1.3;
+}
+
 .session-summary-main {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
@@ -3192,29 +3243,94 @@ body {
   }
 }
 
-/* Phones: once answered, 次へ sits right above the tool bar so it never needs a scroll to reach. */
+/* Phones: once answered, the hint and reveal are spent. The tools that remain shrink to icons beside 次へ,
+   so one bar is fixed to the bottom instead of two and the explanation keeps the screen. */
 @media (max-width: 520px) {
   .module-screen .quiz-card.is-answered:not(.done),
   .today-screen .quiz-card.is-answered:not(.done) {
-    padding-bottom: calc(166px + env(safe-area-inset-bottom, 0px));
+    --quiz-tools-width: 48px;
+    padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .module-screen .quiz-card.is-answered:not(.done):has(.v2-quiz-tools > .btn:not(:disabled):not([hidden]) ~ .btn:not(:disabled):not([hidden])),
+  .today-screen .quiz-card.is-answered:not(.done):has(.v2-quiz-tools > .btn:not(:disabled):not([hidden]) ~ .btn:not(:disabled):not([hidden])) {
+    --quiz-tools-width: 104px;
+  }
+
+  /* One backdrop for the shared bar. */
+  .module-screen .quiz-card.is-answered:not(.done)::after,
+  .today-screen .quiz-card.is-answered:not(.done)::after {
+    content: '';
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 30;
+    height: calc(72px + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid var(--editorial-line);
+    background: var(--editorial-paper);
+  }
+
+  .module-screen .quiz-card.is-answered:not(.done) .v2-quiz-tools,
+  .today-screen .quiz-card.is-answered:not(.done) .v2-quiz-tools {
+    display: flex;
+    gap: 8px;
+    right: auto;
+    z-index: 32;
+    padding: 12px 0 calc(12px + env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px));
+    border-top: 0;
+    background: transparent;
+  }
+
+  .module-screen .quiz-card.is-answered:not(.done) .v2-quiz-tools .btn,
+  .today-screen .quiz-card.is-answered:not(.done) .v2-quiz-tools .btn {
+    flex: 0 0 48px;
+    width: 48px;
+    height: 48px;
+    min-height: 48px;
+    padding: 0;
+    border: 1px solid var(--editorial-line);
+    border-radius: var(--radius-control);
+    background: var(--editorial-surface);
+  }
+
+  .module-screen .quiz-card.is-answered:not(.done) .v2-quiz-tools .btn:disabled,
+  .today-screen .quiz-card.is-answered:not(.done) .v2-quiz-tools .btn:disabled {
+    display: none;
+  }
+
+  /* Icon-only, but the label stays in the accessibility tree. */
+  .module-screen .quiz-card.is-answered:not(.done) .v2-quiz-tools .icon-button-label,
+  .today-screen .quiz-card.is-answered:not(.done) .v2-quiz-tools .icon-button-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 
   .module-screen .quiz-card.is-answered .quiz-next-controls,
   .today-screen .quiz-card.is-answered .quiz-next-controls {
     position: fixed;
-    left: 0;
+    left: calc(max(12px, env(safe-area-inset-left, 0px)) + var(--quiz-tools-width, 48px));
     right: 0;
-    bottom: calc(71px + env(safe-area-inset-bottom, 0px));
+    bottom: 0;
     z-index: 31;
     max-width: none;
     margin: 0;
-    padding: 8px max(12px, env(safe-area-inset-right, 0px)) 8px max(12px, env(safe-area-inset-left, 0px));
-    background: linear-gradient(to bottom, rgba(244, 245, 248, 0), var(--editorial-paper) 30%);
+    padding: 12px max(12px, env(safe-area-inset-right, 0px)) calc(12px + env(safe-area-inset-bottom, 0px)) 8px;
   }
 
   .module-screen .quiz-card.is-answered .prototype-next-ready,
   .today-screen .quiz-card.is-answered .prototype-next-ready {
     width: 100%;
+    min-height: 48px;
+  }
+
+  /* Scrolling the result into view must clear the fixed bar. */
+  .quiz-card .result-area {
+    scroll-margin-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
   }
 }
 

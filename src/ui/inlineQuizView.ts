@@ -404,14 +404,32 @@ export function renderQuizMeta(session: QuizSession, question: Question): HTMLEl
   return wrap;
 }
 
-function summaryGrid(items: Array<[string, string]>, className = 'session-summary-grid'): HTMLElement {
+type SummaryTone = 'correct' | 'wrong';
+
+function summaryGrid(items: Array<[string, string, SummaryTone?]>, className = 'session-summary-grid'): HTMLElement {
   const grid = el('div', className);
-  for (const [label, value] of items) {
-    const item = el('div', 'summary-stat');
+  for (const [label, value, tone] of items) {
+    const item = el('div', tone ? `summary-stat is-${tone}` : 'summary-stat');
     item.append(el('span', '', label), el('strong', '', value));
     grid.append(item);
   }
   return grid;
+}
+
+/** The headline of a finished session: how much of it was right, drawn like the home hero's ring. */
+function sessionResult(answered: number, correct: number, accuracy: number): HTMLElement {
+  const result = el('div', 'session-result');
+  const ring = el('div', 'session-ring');
+  ring.style.setProperty('--ratio', String(accuracy));
+  ring.setAttribute('role', 'img');
+  ring.setAttribute('aria-label', `正答率 ${accuracy}%`);
+  const center = el('div', 'session-ring-center');
+  center.append(el('strong', '', `${accuracy}%`), el('span', '', '正答率'));
+  ring.append(center);
+  const copy = el('div', 'session-result-copy');
+  copy.append(el('p', 'session-result-headline', `${answered}問中 ${correct}問正解`));
+  result.append(ring, copy);
+  return result;
 }
 
 export function renderSessionSummary(session: QuizSession, now = Date.now()): HTMLElement {
@@ -426,11 +444,12 @@ export function renderSessionSummary(session: QuizSession, now = Date.now()): HT
   const average = answered > 0 ? attempts.reduce((sum, attempt) => sum + attempt.elapsedMs, 0) / answered : 0;
 
   const summary = el('div', 'session-summary');
+  if (answered > 0) summary.append(sessionResult(answered, correct, accuracy));
   summary.append(
     summaryGrid(
       [
-        ['正解', `${correct}問`],
-        ['ミス', `${wrong}問`],
+        ['正解', `${correct}問`, 'correct'],
+        ['ミス', `${wrong}問`, 'wrong'],
         ['所要時間', formatDuration(elapsed)]
       ],
       'session-summary-grid session-summary-main'

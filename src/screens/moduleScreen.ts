@@ -306,6 +306,7 @@ export async function renderModuleScreen(context: ScreenContext & { moduleId: st
         onExit: () => {
           // Disposing writes the last checkpoint, so the cover shows a resume button.
           disposeInlineQuizzes(quizMount);
+          disposeFlashcardSessions(quizMount);
           rerender();
         },
         nextSteps

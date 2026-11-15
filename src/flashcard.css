@@ -28,6 +28,7 @@
   flex-shrink: 0;
 }
 .flashcard-header-leading,
+.flashcard-header .flashcard-exit,
 .flashcard-header .flashcard-bookmark-button {
   width: 40px;
   height: 40px;
@@ -59,7 +60,7 @@
   color: var(--editorial-ink-2);
   font-size: 0.84rem;
   font-weight: var(--weight-black);
-  text-align: right;
+  text-align: center;
   overflow-wrap: anywhere;
 }
 .flashcard-progress-section {
@@ -201,10 +202,7 @@
   display: flex;
   flex-direction: column;
   border-radius: var(--radius-xl);
-  /* The accent band is part of the face's own background, so it follows the rounded corners and the edge. */
-  background:
-    linear-gradient(90deg, var(--editorial-blue), var(--editorial-cyan)) top / 100% 5px no-repeat border-box,
-    var(--editorial-surface);
+  background: var(--editorial-surface);
   border: 1px solid rgba(10, 16, 32, 0.08);
   box-shadow: 0 22px 55px rgba(21, 31, 59, 0.1);
   padding: 40px 34px;
@@ -213,6 +211,8 @@
   transform: rotateY(0deg) translateZ(0.1px);
 }
 .flashcard-back {
+  /* The answer side is tinted, so front and back read differently without a decorative band. */
+  background: #fbfcf6;
   transform: rotateY(180deg) translateZ(0.1px);
 }
 .flashcard-face[aria-hidden='true'] {
@@ -332,41 +332,50 @@
 }
 .flashcard-controls .btn {
   min-width: 0;
-  min-height: 44px;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  color: var(--editorial-subtle);
-  font-size: 0.7rem;
-  font-weight: var(--weight-black);
+  min-height: 52px;
+  padding: 0 14px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  font-size: 0.9rem;
+  font-weight: var(--weight-heavy);
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   white-space: nowrap;
 }
-.flashcard-known {
-  justify-content: flex-end;
+/* The two judgments are the session's main actions: large, tinted, and within thumb reach. */
+.flashcard-controls .flashcard-again {
+  justify-content: center;
+  border-color: #f6ccd1;
+  background: var(--editorial-danger-soft);
+  color: var(--editorial-danger-ink);
+}
+.flashcard-controls .flashcard-known {
+  justify-content: center;
+  border-color: #bfe3c8;
+  background: var(--editorial-success-soft);
+  color: var(--editorial-success-ink);
 }
 .flashcard-controls .flashcard-flip {
-  font-size: 0.63rem;
-  font-weight: var(--weight-heavy);
-  color: var(--editorial-muted);
+  min-height: 44px;
+  padding: 0 4px;
+  background: transparent;
+  font-size: 0.72rem;
+  color: var(--editorial-subtle);
 }
 .flashcard-arrow {
-  width: 31px;
-  height: 31px;
-  border: 1px solid var(--editorial-line);
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
-  background: #fff;
+  background: rgba(255, 255, 255, 0.7);
   display: grid;
   place-items: center;
   font-style: normal;
   flex-shrink: 0;
 }
 .flashcard-arrow-svg {
-  width: 15px;
-  height: 15px;
+  width: 14px;
+  height: 14px;
   display: block;
 }
 .flashcard-key-hint {
@@ -588,8 +597,12 @@
   .flashcard-term.jp {
     font-size: clamp(1.8rem, 10vw, 3rem);
   }
+  .flashcard-controls {
+    gap: 6px;
+  }
   .flashcard-controls .btn {
-    font-size: 0.66rem;
+    padding: 0 8px;
+    font-size: 0.84rem;
   }
   .flashcard-result-grid {
     grid-template-columns: 1fr;
