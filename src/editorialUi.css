@@ -4207,3 +4207,48 @@ summary:focus-visible {
     width: min(960px, 100%);
   }
 }
+
+/* ==== Motion ====
+   Four places only, all short, all off under reduced motion: a new screen, a verdict appearing,
+   a choice changing state, and a dialog opening. Opacity only on screens, so fixed bars never shift. */
+:root {
+  --ease-out: cubic-bezier(0.22, 0.72, 0.18, 1);
+  --motion-fast: 120ms;
+  --motion-base: 200ms;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  main.screen {
+    animation: screen-in var(--motion-base) var(--ease-out);
+  }
+
+  .choice-btn {
+    transition:
+      border-color var(--motion-fast) var(--ease-out),
+      background-color var(--motion-fast) var(--ease-out),
+      color var(--motion-fast) var(--ease-out);
+  }
+
+  .result-area > .result,
+  .session-result {
+    animation: rise-in var(--motion-base) var(--ease-out);
+  }
+
+  .cloud-sync-dialog[open],
+  .weekly-story[open] {
+    animation: rise-in var(--motion-base) var(--ease-out);
+  }
+}
+
+@keyframes screen-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
