@@ -3849,6 +3849,30 @@ summary:focus-visible {
   margin: 0;
 }
 
+/* Dropping a file is a pointer gesture; touch screens only get the button. */
+@media (hover: none) {
+  .upload-drop-title {
+    display: none;
+  }
+}
+
+/* Destructive, rarely needed: below the explanation, text-sized, never in the row of everyday actions. */
+.review-danger-zone {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--editorial-line);
+}
+
+.review-screen .review-danger-zone .btn.danger {
+  min-height: 44px;
+  padding: 0 12px;
+  border-color: transparent;
+  background: transparent;
+  font-size: 0.82rem;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 /* Disclosures: one chevron that turns on open, on a 44px row, instead of the browser's ▶. */
 :is(
     .cloud-sync-endpoint,
