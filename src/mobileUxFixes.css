@@ -164,9 +164,7 @@ textarea:focus-visible,
 }
 
 .folder-head:focus-visible,
-.choice-btn:focus-visible,
-.module-card:focus-visible,
-.bottom-nav-item:focus-visible {
+.module-card:focus-visible {
   box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.18);
 }
 

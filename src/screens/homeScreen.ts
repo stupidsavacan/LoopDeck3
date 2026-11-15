@@ -25,13 +25,6 @@ import {
 const HOME_IN_PLAYER_KEY = 'loopdeck3.library.in-player';
 const FOLDER_STATE_PREFIX = 'loopdeck3.library.folders.';
 
-function hexToRgba(hexColor: string, alpha: number): string {
-  const red = Number.parseInt(hexColor.slice(1, 3), 16);
-  const green = Number.parseInt(hexColor.slice(3, 5), 16);
-  const blue = Number.parseInt(hexColor.slice(5, 7), 16);
-  return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
-}
-
 function safeGetStorage(key: string): string | null {
   try {
     return localStorage.getItem(key);
@@ -184,8 +177,6 @@ export function renderHomeScreen(context: ScreenContext): void {
     const card = el('button', 'module-card ready') as HTMLButtonElement;
     card.type = 'button';
     card.style.setProperty('--deck-accent', meta.accent);
-    card.style.borderColor = hexToRgba(meta.accent, 0.2);
-    if (meta.accentColor) card.style.background = `linear-gradient(180deg, ${meta.accentColor}, rgba(255, 255, 255, 0.94) 70%)`;
     card.onclick = () => openModule(module.id);
 
     const top = el('div', 'card-top');

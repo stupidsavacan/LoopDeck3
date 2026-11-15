@@ -304,10 +304,6 @@ button {
   cursor: pointer;
 }
 @media (hover: hover) and (pointer: fine) {
-  .choice-btn:hover {
-    border-color: var(--primary);
-    background: #eaf1ff;
-  }
 }
 .result {
   display: grid;

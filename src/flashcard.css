@@ -542,16 +542,10 @@
 }
 .flashcard-result-actions .btn {
   width: 100%;
-  border: 1px solid var(--editorial-line);
-  background: #fff;
-  color: var(--editorial-ink);
   white-space: normal;
 }
 .flashcard-result-actions .btn.primary {
   grid-column: 1 / -1;
-  border-color: var(--editorial-ink);
-  background: var(--editorial-ink);
-  color: #fff;
 }
 .flashcard-toggle-notice {
   margin-top: 16px;

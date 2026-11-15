@@ -41,17 +41,18 @@ function renderSingleCard(module: ModuleInfo): { card: HTMLElement; icon: HTMLEl
 }
 
 describe('Home module card colors', () => {
-  it('uses module.color for the card border and icon background', () => {
+  it('uses module.color for the icon tile and exposes it to the stylesheet', () => {
     const { card, icon } = renderSingleCard(moduleInfo({ color: '#15803D', accentColor: '#DCFCE7' }));
 
-    expect(card.style.borderColor).toBe('rgba(21, 128, 61, 0.2)');
+    expect(card.style.getPropertyValue('--deck-accent')).toBe('#15803D');
     expect(icon.style.background).toBe('rgb(21, 128, 61)');
   });
 
-  it('uses module.accentColor as the soft card background', () => {
+  it('leaves the card surface and border to the stylesheet', () => {
     const { card } = renderSingleCard(moduleInfo({ color: '#15803D', accentColor: '#DCFCE7' }));
 
-    expect(card.style.background).toContain('#DCFCE7');
+    expect(card.style.background).toBe('');
+    expect(card.style.borderColor).toBe('');
   });
 
   it('keeps final-term subject colors for imported module IDs', () => {

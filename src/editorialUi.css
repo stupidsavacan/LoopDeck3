@@ -64,14 +64,14 @@ body {
 .filter,
 .choice-btn,
 .bottom-nav-item {
-  box-shadow: none !important;
+  box-shadow: none;
 }
 
 .icon-button {
-  display: inline-flex !important;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px !important;
+  gap: 8px;
 }
 
 .icon-button-mark {
@@ -253,9 +253,9 @@ body {
   flex-direction: column;
   gap: 8px;
   padding: 16px;
-  border: 1px solid var(--editorial-line) !important;
+  border: 1px solid var(--editorial-line);
   border-radius: var(--radius-lg);
-  background: var(--editorial-surface) !important;
+  background: var(--editorial-surface);
   /* Kept inside the shelf's bottom padding: a larger shadow was clipped by the scroller into a gray band. */
   box-shadow: 0 2px 6px rgba(21, 31, 59, 0.05);
   scroll-snap-align: start;
@@ -327,7 +327,7 @@ body {
 
 @media (hover: hover) and (pointer: fine) {
   .home-screen .module-card:hover {
-    border-color: var(--editorial-line-strong) !important;
+    border-color: var(--editorial-line-strong);
     box-shadow: 0 2px 8px rgba(21, 31, 59, 0.08);
   }
 }
@@ -484,7 +484,7 @@ body {
 .module-cover .tag,
 .module-cover .stats-row span {
   border: 1px solid rgba(255, 255, 255, 0.18);
-  background: rgba(255, 255, 255, 0.13) !important;
+  background: rgba(255, 255, 255, 0.13);
   color: #fff;
 }
 
@@ -710,7 +710,7 @@ body {
 
 .answer-area > .btn.primary {
   min-height: 50px;
-  border: 0 !important;
+  border: 0;
 }
 
 .choice-list {
@@ -724,9 +724,9 @@ body {
   overflow-wrap: anywhere;
   min-height: 58px;
   padding: 13px 16px;
-  border: 1px solid var(--editorial-line-strong) !important;
+  border: 1px solid var(--editorial-line-strong);
   border-radius: var(--radius-control);
-  background: #fff !important;
+  background: #fff;
   color: var(--editorial-ink);
   text-align: left;
   font-size: 0.94rem;
@@ -734,8 +734,8 @@ body {
 }
 
 .choice-btn.selected {
-  border-color: var(--editorial-ink) !important;
-  background: var(--editorial-fill) !important;
+  border-color: var(--editorial-ink);
+  background: var(--editorial-fill);
 }
 
 .result-area {
@@ -1167,7 +1167,7 @@ body {
   .v2-quiz-tools .btn {
     min-width: 0;
     min-height: 54px;
-    display: flex !important;
+    display: flex;
     flex-direction: column;
     gap: 5px;
     padding: 6px 3px;
@@ -1196,7 +1196,7 @@ body {
   flex: 1 1 0;
   padding-left: 4px;
   padding-right: 4px;
-  gap: 5px !important;
+  gap: 5px;
   white-space: nowrap;
 }
 
@@ -1739,7 +1739,8 @@ body {
   min-width: 0;
 }
 
-.quiz-exit {
+.btn.quiz-exit,
+.btn.quiz-exit:hover {
   flex: none;
   display: inline-flex;
   align-items: center;
@@ -1748,9 +1749,9 @@ body {
   height: 44px;
   min-height: 44px;
   padding: 0;
-  border: 1px solid var(--editorial-line) !important;
+  border: 1px solid var(--editorial-line);
   border-radius: var(--radius-control);
-  background: var(--editorial-surface) !important;
+  background: var(--editorial-surface);
   color: var(--editorial-ink);
 }
 
@@ -1958,26 +1959,26 @@ body {
   min-width: 0;
 }
 
-.today-heading {
+.today-hero .today-heading {
   margin: 0;
   color: #fff;
-  font-size: clamp(1.55rem, 6.4vw, 2.6rem) !important;
+  font-size: clamp(1.55rem, 6.4vw, 2.6rem);
   font-weight: var(--weight-black);
   line-height: 1.15;
-  letter-spacing: -0.04em !important;
+  letter-spacing: -0.04em;
 }
 
-.today-plan,
-.today-minutes {
-  margin: 0 !important;
-  color: rgba(255, 255, 255, 0.76) !important;
+.today-hero .today-plan,
+.today-hero .today-minutes {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.76);
   font-size: 0.82rem;
-  line-height: 1.6 !important;
+  line-height: 1.6;
   overflow-wrap: anywhere;
 }
 
-.today-minutes {
-  color: #fff !important;
+.today-hero .today-minutes {
+  color: #fff;
   font-weight: var(--weight-black);
 }
 
@@ -1988,10 +1989,8 @@ body {
 .today-start {
   width: 100%;
   min-height: 56px;
-  display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
   border: 0;
   border-radius: var(--radius-md);
   background: var(--editorial-lime);
@@ -3295,10 +3294,6 @@ body {
   padding: 0;
 }
 
-.module-cover .stats-row .tag {
-  background: rgba(255, 255, 255, 0.14);
-}
-
 /* Settings: switches instead of bare browser checkboxes. */
 .setting-row .check-label input[role='switch'] {
   appearance: none;
@@ -3439,9 +3434,9 @@ button.priority-row {
 .flashcard-result-actions .btn {
   min-height: var(--control-height);
   padding: 0 16px;
-  border: 1px solid var(--editorial-line) !important;
+  border: 1px solid var(--editorial-line);
   border-radius: var(--radius-control);
-  background: var(--editorial-surface) !important;
+  background: var(--editorial-surface);
   color: var(--editorial-ink);
   box-shadow: none;
   font-size: 0.88rem;
@@ -3458,15 +3453,15 @@ button.priority-row {
 .btn.prototype-next-ready,
 .v2-start:not(.is-secondary),
 .v2-resume {
-  border-color: var(--editorial-ink) !important;
-  background: var(--editorial-ink) !important;
+  border-color: var(--editorial-ink);
+  background: var(--editorial-ink);
   color: #fff;
 }
 
 :is(.review-screen, .graphs-screen, .import-screen, .pdf-worksheet-screen, .debug-log-screen, .module-screen, .exam-screen, .today-screen)
   .btn.danger {
-  border-color: var(--editorial-danger-soft) !important;
-  background: var(--editorial-danger-soft) !important;
+  border-color: var(--editorial-danger-soft);
+  background: var(--editorial-danger-soft);
   color: var(--editorial-danger-ink);
 }
 
@@ -3485,9 +3480,9 @@ button.priority-row {
   .btn:disabled:where(:not(.v2-quiz-tools .btn, .flashcard-controls .btn)),
 .answer-area > .btn.primary:disabled,
 .v2-start:disabled {
-  border-color: var(--editorial-line) !important;
-  background: var(--editorial-fill) !important;
-  color: var(--editorial-subtle) !important;
+  border-color: var(--editorial-line);
+  background: var(--editorial-fill);
+  color: var(--editorial-subtle);
   box-shadow: none;
   opacity: 1;
   cursor: not-allowed;
@@ -3506,7 +3501,7 @@ button.priority-row {
 .check-label:focus-within,
 .study-select:focus-visible,
 summary:focus-visible {
-  outline: 2px solid var(--editorial-blue) !important;
+  outline: 2px solid var(--editorial-blue);
   outline-offset: 2px;
 }
 
@@ -3615,10 +3610,10 @@ summary:focus-visible {
   border: 1px solid var(--editorial-line-strong);
   border-radius: var(--radius-control);
   background-color: var(--editorial-surface);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 6l4 4 4-4' fill='none' stroke='%234a5263' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") !important;
-  background-repeat: no-repeat !important;
-  background-position: right 14px center !important;
-  background-size: 16px 16px !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 6l4 4 4-4' fill='none' stroke='%234a5263' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  background-size: 16px 16px;
   color: var(--editorial-ink);
   font-size: 0.94rem;
   font-weight: 400;
@@ -3803,20 +3798,20 @@ summary:focus-visible {
 /* Answer semantics: success = correct, danger = wrong, on both the marked option and the panel.
    Blue stays for "selected, not yet judged". */
 .choice-btn.selected:not(.is-correct):not(.is-wrong-pick) {
-  border-color: var(--editorial-blue) !important;
-  background: var(--editorial-blue-soft) !important;
-  color: var(--editorial-blue-ink) !important;
+  border-color: var(--editorial-blue);
+  background: var(--editorial-blue-soft);
+  color: var(--editorial-blue-ink);
 }
 
 .choice-btn.is-correct {
-  border: 2px solid var(--editorial-success) !important;
-  background: var(--editorial-success-soft) !important;
+  border: 2px solid var(--editorial-success);
+  background: var(--editorial-success-soft);
   color: var(--editorial-success-ink);
 }
 
 .choice-btn.is-wrong-pick {
-  border: 2px solid var(--editorial-danger) !important;
-  background: var(--editorial-danger-soft) !important;
+  border: 2px solid var(--editorial-danger);
+  background: var(--editorial-danger-soft);
   color: var(--editorial-danger-ink);
 }
 
