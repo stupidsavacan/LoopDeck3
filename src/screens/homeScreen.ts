@@ -201,7 +201,6 @@ export function renderHomeScreen(context: ScreenContext): void {
 
     const top = el('div', 'card-top');
     const icon = el('div', 'module-icon');
-    icon.style.background = meta.accent;
     icon.append(createUiIcon(iconNameForModule(module), 'deck-icon-svg'));
     const title = el('div', 'title');
     title.append(el('h2', '', module.title), el('div', 'subtitle', meta.subtitle));

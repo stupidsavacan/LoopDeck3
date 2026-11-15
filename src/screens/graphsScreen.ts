@@ -85,7 +85,7 @@ function renderDueForecast(root: HTMLElement, forecast: DueForecastDay[], hasCar
     column.append(el('span', 'due-forecast-value', String(day.due)), bar, el('span', 'due-forecast-label', forecastLabel(offset)));
     bars.append(column);
   }
-  card.append(bars);
+  card.append(bars, el('p', 'hint', '復習しないまま過ごした場合に、その日までにたまる問題数です。'));
   if (today > 0) {
     const start = button('今日のループで復習する', 'btn primary');
     start.onclick = startToday;
@@ -271,7 +271,9 @@ export async function renderGraphsScreen(context: ScreenContext): Promise<void> 
   const hero = el('section', 'hero-card study-hero-card');
   hero.append(el('h1', '', '学習の記録'), el('p', '', '続けた日、正答率、ミスの傾向をまとめて振り返ります。'));
   const stats = el('div', 'stats-row');
+  const accuracy = overview.totalAttempts > 0 ? Math.round((overview.correct / overview.totalAttempts) * 100) : 0;
   stats.append(
+    el('span', 'stat-key', `正答率 ${accuracy}%`),
     el('span', '', `${overview.totalAttempts}回答`),
     el('span', '', `正解 ${overview.correct}`),
     el('span', '', `ミス ${overview.mistakes}`)

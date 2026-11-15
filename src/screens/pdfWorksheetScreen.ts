@@ -187,8 +187,11 @@ export async function renderPdfWorksheetScreen(context: ScreenContext): Promise<
   const statusLog = el('ol', 'export-status-log');
   statusBody.append(statusMessage, statusDetail, statusLog);
   statusCard.append(statusSummary, statusBody);
+  // The status card has nothing to show until an export has started.
+  statusCard.hidden = true;
 
   function reportProgress(code: string, message: string, detail = ''): void {
+    statusCard.hidden = false;
     statusCard.open = true;
     statusMessage.textContent = message;
     statusDetail.textContent = detail || '詳細なし';

@@ -63,7 +63,17 @@ export function renderFlashcardSession(
   if (!question) return;
   const bookmark = createQuizBookmarkButton(question.id, isCurrent, options.store);
   bookmark.classList.add('flashcard-bookmark-button');
-  screen.append(renderFlashcardHeader(session, bookmark), renderFlashcardProgress(session));
+  let exit: HTMLButtonElement | undefined;
+  if (callbacks.onExit) {
+    exit = button('', 'btn ghost quiz-exit flashcard-exit');
+    exit.append(createUiIcon('close', 'quiz-exit-svg'));
+    exit.setAttribute('aria-label', '学習を中断');
+    exit.title = '学習を中断（続きから再開できます）';
+    exit.onclick = () => {
+      if (isCurrent()) callbacks.onExit?.();
+    };
+  }
+  screen.append(renderFlashcardHeader(session, exit, bookmark), renderFlashcardProgress(session));
   const stage = el('section', 'flashcard-stage');
   const stack = el('div', 'flashcard-stack');
   const wrap = el('div', 'flashcard-wrap');

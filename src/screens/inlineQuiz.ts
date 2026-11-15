@@ -302,6 +302,8 @@ export function renderInlineQuiz(
       }
       card.classList.add('is-answered');
       showReviewSchedule();
+      // The verdict and explanation are what the learner needs next; bring them above the fixed bar.
+      resultArea.scrollIntoView?.({ block: 'nearest' });
       return;
     }
     console.error('Failed to persist answer/SRS state', error);

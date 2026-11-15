@@ -79,7 +79,7 @@ describe('Review Center scope', () => {
     expect(root.textContent).toContain('RECENT QUESTION');
     expect(root.textContent).not.toContain('OLD QUESTION');
     expect(root.textContent).not.toContain('学習中');
-    expect(root.textContent).toContain('自動の復習日程はSRSだけが決めます');
+    expect(root.textContent).toContain('次に出す日は、これまでの正誤から自動で決まります');
     expect(root.textContent).toContain('ミス・答え表示・遅い正解から');
     expect(root.textContent).toContain('過去教材の復習予定 1問は非表示です。');
 

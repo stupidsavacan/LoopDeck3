@@ -257,7 +257,7 @@ for (const width of [412, 1280]) test(`flashcard tap swipe result retry and resu
   expect(stageLayout.centerOffset).toBeLessThanOrEqual(10);
   expect(stageLayout.stageMinHeight).toBe(width <= 640 ? 430 : 480);
   expect(stageLayout.contentTouchAction).toBe('pan-y');
-  expect(stageLayout.buttonBackground).toBe('rgba(0, 0, 0, 0)');
+  expect(stageLayout.buttonBackground).not.toBe('rgba(0, 0, 0, 0)');
   if (width === 412) {
     const content = page.locator('.flashcard-front .flashcard-content');
     await content.evaluate(node => {

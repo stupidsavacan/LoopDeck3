@@ -41,7 +41,7 @@ This filter does not delete attempts or change the Review Center's history analy
 
 The two data sets are intentionally independent:
 
-- **SRS予定だけリセット** deletes `ReviewCard` / `ReviewLog`. It does not delete answer history, so a question may still appear as a history-based weak candidate.
+- **復習スケジュールをリセット** deletes `ReviewCard` / `ReviewLog`. It does not delete answer history, so a question may still appear as a history-based weak candidate.
 - **ミス履歴だけ消す** deletes wrong/revealed attempt history. It does not delete SRS state or due dates, so a question may still appear in "今日の復習".
 
 UI confirmation text must state these independent effects explicitly.

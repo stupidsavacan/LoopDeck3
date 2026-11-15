@@ -41,11 +41,11 @@ function renderSingleCard(module: ModuleInfo): { card: HTMLElement; icon: HTMLEl
 }
 
 describe('Home module card colors', () => {
-  it('uses module.color for the icon tile and exposes it to the stylesheet', () => {
+  it('exposes module.color to the stylesheet, which paints the icon tile', () => {
     const { card, icon } = renderSingleCard(moduleInfo({ color: '#15803D', accentColor: '#DCFCE7' }));
 
     expect(card.style.getPropertyValue('--deck-accent')).toBe('#15803D');
-    expect(icon.style.background).toBe('rgb(21, 128, 61)');
+    expect(icon.style.background).toBe('');
   });
 
   it('leaves the card surface and border to the stylesheet', () => {

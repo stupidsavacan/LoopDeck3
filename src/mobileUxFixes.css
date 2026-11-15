@@ -67,8 +67,17 @@
 }
 
 .summary-stat strong {
-  color: var(--primary-dark);
+  color: var(--editorial-ink);
   font-size: 1.08rem;
+}
+
+/* Numbers carry their meaning: blue is reserved for links and selection. */
+.summary-stat.is-correct strong {
+  color: var(--editorial-success-ink);
+}
+
+.summary-stat.is-wrong strong {
+  color: var(--editorial-danger-ink);
 }
 
 .visually-hidden {

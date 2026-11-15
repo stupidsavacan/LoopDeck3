@@ -59,9 +59,9 @@ function writeReviewScope(scope: ReviewScope): void {
 function reviewStateLabel(card: ReviewCard): string {
   switch (card.state) {
     case 'relearning':
-      return '再学習';
+      return '覚え直し中';
     case 'leech':
-      return '重点復習';
+      return '苦手';
     case 'mastered':
       return '習得済み';
     case 'new':
@@ -203,25 +203,28 @@ export async function renderReviewCenter(context: ScreenContext): Promise<void> 
 
   const srsDetails = el('details', 'review-details');
   srsDetails.append(el('summary', '', '内訳・個別メニュー'));
-  const detailedStats = el('p', 'hint', `再学習 ${schedule.relearning}問・重点復習 ${schedule.leech}問・習得済み ${schedule.mastered}問`);
+  const detailedStats = el('p', 'hint', `覚え直し中 ${schedule.relearning}問・苦手 ${schedule.leech}問・習得済み ${schedule.mastered}問`);
   const srsActions = el('div', 'data-actions');
   const overdue = button('期限切れだけ復習', 'btn');
   overdue.onclick = () => startReviewSession(questionsForCards(buckets.overdue, questionsById), '期限切れ復習', 'srs-overdue', 30, false);
-  const leech = button('重点復習だけ', 'btn');
+  const leech = button('苦手な問題だけ', 'btn');
   leech.onclick = () =>
-    startReviewSession(questionsForCards(buildSrsReviewQueue(buckets.leech), questionsById), '重点復習', 'srs-leech', 30, false);
-  const reset = button('SRS予定だけリセット', 'btn ghost danger');
+    startReviewSession(questionsForCards(buildSrsReviewQueue(buckets.leech), questionsById), '苦手な問題', 'srs-leech', 30, false);
+  const reset = button('復習スケジュールをリセット', 'btn ghost danger');
   reset.onclick = async () => {
-    if (!window.confirm('SRSの次回予定・状態・ReviewLogだけ削除します。回答履歴は残るため、履歴ベースの弱点候補は残ります。')) return;
+    if (!window.confirm('復習スケジュール（次に出す日と覚え具合）だけ削除します。回答履歴は残るため、履歴から見つけた弱点は残ります。')) return;
     await studyStore.clearReviewData();
-    toast('SRSの復習予定だけリセットしました。回答履歴は残っています。');
+    toast('復習スケジュールをリセットしました。回答履歴は残っています。');
     rerender();
   };
-  srsActions.append(overdue, leech, reset);
+  srsActions.append(overdue, leech);
+  const srsDanger = el('div', 'review-danger-zone');
+  srsDanger.append(reset);
   srsDetails.append(
     detailedStats,
     srsActions,
-    el('p', 'hint', '自動の復習日程はSRSだけが決めます。重点復習は直近の失敗が続いたときに入り、正解すると通常の復習へ戻れます。')
+    el('p', 'hint', '次に出す日は、これまでの正誤から自動で決まります。続けて間違えた問題は「苦手」に入り、正解すると通常の復習へ戻ります。'),
+    srsDanger
   );
   srsCard.append(srsDetails);
 
@@ -248,12 +251,12 @@ export async function renderReviewCenter(context: ScreenContext): Promise<void> 
   clearWrong.onclick = async () => {
     if (
       !window.confirm(
-        '不正解・答え表示の回答履歴だけ削除します。SRSの次回予定・状態は別データなので残り、「今日の復習」に同じ問題が残ることがあります。'
+        '不正解・答え表示の回答履歴だけ削除します。復習スケジュールは別のデータなので残り、「今日の復習」に同じ問題が残ることがあります。'
       )
     )
       return;
     await studyStore.clearWrongAttempts();
-    toast('ミス履歴を削除しました。SRSの復習予定は変更していません。');
+    toast('ミス履歴を削除しました。復習スケジュールは変更していません。');
     rerender();
   };
   weakDetails.append(clearWrong);
