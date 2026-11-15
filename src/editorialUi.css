@@ -398,7 +398,8 @@ body {
   flex-direction: column;
   justify-content: flex-end;
   margin: 4px 0 20px;
-  padding: 26px;
+  /* The top padding reserves the icon tile's corner so a long title can never run under it. */
+  padding: 96px 26px 26px;
   border: 0;
   border-radius: var(--radius-xl);
   background:
@@ -967,7 +968,7 @@ body {
 
   .module-cover {
     min-height: 282px;
-    padding: 22px;
+    padding: 90px 22px 22px;
   }
 
   .v2-quick-start {
@@ -1184,6 +1185,10 @@ body {
   .import-screen .authoring-card .btn.primary {
     width: 100%;
   }
+}
+
+.import-screen .authoring-card .btn {
+  margin-top: 12px;
 }
 
 /* Quiz control hardening after Chromium audit */
