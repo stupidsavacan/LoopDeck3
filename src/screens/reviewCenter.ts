@@ -30,7 +30,7 @@ function clockLabel(date: Date): string {
 
 /** A compact row: the prompt, a muted line, and the whole row starts that one question. */
 function previewRow(className: string, prompt: string, note: string, onStart: () => void): HTMLElement {
-  const row = el('button', `priority-row ${className}`) as HTMLButtonElement;
+  const row = el('button', `priority-row ${className}`);
   row.type = 'button';
   row.title = 'この1問だけ解く';
   const meta = el('span', 'pack-meta');
@@ -72,7 +72,7 @@ function reviewStateLabel(card: ReviewCard): string {
 }
 
 export async function renderReviewCenter(context: ScreenContext): Promise<void> {
-  const { store: studyStore, root: root, catalog: packView, resolveImage, isCurrent } = context;
+  const { store: studyStore, root, catalog: packView, resolveImage, isCurrent } = context;
   const { home: navigateHome, graphs: navigateGraphs } = context.navigation;
 
   if (!isCurrent()) return;

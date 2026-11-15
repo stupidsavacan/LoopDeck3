@@ -73,7 +73,7 @@ describe('Review Center scope', () => {
     const root = document.createElement('div');
     const view = resolveActivePacks([pack]);
 
-    await renderReviewCenter(screenContext({ root: root, catalog: view, navigation: { home: () => {}, graphs: () => {} } })
+    await renderReviewCenter(screenContext({ root, catalog: view, navigation: { home: () => {}, graphs: () => {} } })
     );
 
     expect(root.textContent).toContain('RECENT QUESTION');

@@ -43,7 +43,7 @@ describe('same-packId import UI', () => {
     await studyStore.saveImportedPack(existing);
 
     const root = document.createElement('div');
-    await renderImportScreen(screenContext({ root: root, catalog: resolveActivePacks([existing]), refreshCatalog: async () => {}, navigation: { home: () => {} } }));
+    await renderImportScreen(screenContext({ root, catalog: resolveActivePacks([existing]), refreshCatalog: async () => {}, navigation: { home: () => {} } }));
 
     const input = root.querySelector<HTMLInputElement>('input[type="file"]')!;
     const file = new File([JSON.stringify(incoming)], 'same-id.loopdeck.json', { type: 'application/json' });

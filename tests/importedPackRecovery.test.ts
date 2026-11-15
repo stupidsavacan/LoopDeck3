@@ -39,7 +39,7 @@ function putRawStoredPack(pack: unknown): Promise<void> {
 function expectHomeToRender(pack: LoopDeckPack): void {
   const root = document.createElement('div');
   expect(() =>
-    renderHomeScreen(screenContext({ root: root, catalog: resolveActivePacks([pack]), navigation: { module: () => {} } })
+    renderHomeScreen(screenContext({ root, catalog: resolveActivePacks([pack]), navigation: { module: () => {} } })
     )
   ).not.toThrow();
   expect(root.querySelector('.module-card')).toBeTruthy();

@@ -424,7 +424,7 @@ export function renderInlineQuiz(
 
   if (session.settings.showExample && question.example) answerArea.append(el('p', 'example-line', question.example));
   if (answerMode === 'input') {
-    const input = el('input', 'text-input') as HTMLInputElement;
+    const input = el('input', 'text-input');
     input.placeholder = '答えを入力';
     let lastInputValue = input.value;
     input.addEventListener('input', () => {

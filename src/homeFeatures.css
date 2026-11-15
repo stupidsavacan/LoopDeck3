@@ -1,33 +1,23 @@
 .settings-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
+  gap: 12px;
   margin-bottom: 12px;
 }
 
 .field-label {
   display: grid;
-  gap: 6px;
   min-width: 0;
-  color: var(--muted);
-  font-size: 0.86rem;
-  font-weight: 800;
 }
 
 .study-select {
-  min-height: 42px;
   width: 100%;
-  padding: 0 12px;
-  border: 1px solid var(--line);
-  border-radius: 14px;
   background: #fff;
-  color: var(--text);
   font: inherit;
 }
 
 .study-select:disabled {
-  color: var(--muted);
-  background: #f8fafc;
+  background-color: #f8fafc;
 }
 
 .btn.danger {
@@ -38,7 +28,6 @@
 
 .bookmark-btn.selected {
   border-color: #f59e0b;
-  background: #fffbeb;
   color: #92400e;
 }
 
@@ -54,9 +43,8 @@
   align-items: center;
   min-height: 24px;
   padding: 3px 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: #edf4ff;
-  color: var(--primary-dark);
 }
 
 .example-line,
@@ -64,7 +52,7 @@
   margin: 0;
   padding: 12px 14px;
   border: 1px dashed #bfdbfe;
-  border-radius: 14px;
+  border-radius: var(--radius-control);
   background: #f8fbff;
   color: #1e3a8a;
   line-height: 1.65;
@@ -81,11 +69,10 @@
 .problem-row {
   display: flex;
   justify-content: space-between;
-  gap: 10px;
+  gap: 12px;
   align-items: center;
-  padding: 12px 14px;
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: var(--radius-control);
   background: var(--card-soft);
 }
 
@@ -109,13 +96,11 @@
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
-
 .review-scope-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
-  margin-top: 12px;
+  gap: 12px;
 }
 
 .review-action-grid,
@@ -148,20 +133,13 @@
   border-top: 1px solid var(--line);
 }
 
-.review-details summary,
-.review-analysis > summary {
-  color: var(--primary-dark);
-  font-weight: 800;
-  cursor: pointer;
-}
-
 .review-details[open] summary,
 .review-analysis[open] > summary {
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 
 .review-details .data-actions {
-  margin-top: 10px;
+  margin-top: 12px;
 }
 
 .review-analysis {
@@ -169,7 +147,7 @@
 }
 
 .review-analysis-grid {
-  margin-top: 14px;
+  margin-top: 16px;
 }
 
 .review-subsection {
@@ -193,13 +171,6 @@
 
 .review-screen .priority-row .btn {
   flex: 0 0 auto;
-}
-
-@media (max-width: 900px) {
-  .settings-grid,
-  .data-actions {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 }
 
 @media (max-width: 760px) {

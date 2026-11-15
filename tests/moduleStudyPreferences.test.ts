@@ -197,7 +197,7 @@ describe('module screen study preferences', () => {
     const root = document.createElement('div');
     await renderModuleScreen(
       screenContext({
-        root: root,
+        root,
         catalog: view,
         moduleId: moduleInfo.id,
         navigation: { home: () => {}, review: () => {}, graphs: () => {} }
@@ -232,7 +232,7 @@ describe('module screen study preferences', () => {
 
     await renderModuleScreen(
       screenContext({
-        root: root,
+        root,
         catalog: view,
         moduleId: moduleInfo.id,
         navigation: { home: () => {}, review: () => {}, graphs: () => {} }
@@ -252,7 +252,7 @@ describe('module screen study preferences', () => {
     const root = document.createElement('div');
     await renderModuleScreen(
       screenContext({
-        root: root,
+        root,
         catalog: view,
         moduleId: moduleInfo.id,
         navigation: { home: () => {}, review: () => {}, graphs: () => {} }

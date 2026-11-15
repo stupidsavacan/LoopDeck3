@@ -45,7 +45,7 @@ describe('graphs screen rendering safety', () => {
     await studyStore.addAttempt(attempt);
 
     const root = document.createElement('div');
-    await renderGraphsScreen(screenContext({ root: root, catalog: resolveActivePacks([pack]), navigation: { home: () => {}, review: () => {} } }));
+    await renderGraphsScreen(screenContext({ root, catalog: resolveActivePacks([pack]), navigation: { home: () => {}, review: () => {} } }));
 
     expect(root.querySelector('.module-stat-row strong')?.textContent).toBe(maliciousTitle);
     expect(root.querySelector('.module-stat-row img')).toBeNull();

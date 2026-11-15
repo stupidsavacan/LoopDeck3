@@ -23,7 +23,7 @@ interface WorksheetModuleOption {
 }
 
 function makeOption(value: string, label: string): HTMLOptionElement {
-  const option = el('option', '', label) as HTMLOptionElement;
+  const option = el('option', '', label);
   option.value = value;
   return option;
 }
@@ -90,7 +90,7 @@ function worksheetModuleOptions(packView: ResolvedPackView): WorksheetModuleOpti
 }
 
 export async function renderPdfWorksheetScreen(context: ScreenContext): Promise<void> {
-  const { root: root, catalog: packView } = context;
+  const { root, catalog: packView } = context;
   const { home: navigateHome } = context.navigation;
 
   const modules = worksheetModuleOptions(packView);
@@ -119,12 +119,12 @@ export async function renderPdfWorksheetScreen(context: ScreenContext): Promise<
 
   const grid = el('div', 'settings-grid');
   const moduleLabel = el('label', 'field-label');
-  const moduleSelect = el('select', 'study-select') as HTMLSelectElement;
+  const moduleSelect = el('select', 'study-select');
   modules.forEach((option, index) => moduleSelect.append(makeOption(String(index), option.label)));
   moduleLabel.append(el('span', '', '教材'), moduleSelect);
 
   const rangeLabel = el('label', 'field-label');
-  const rangeSelect = el('select', 'study-select') as HTMLSelectElement;
+  const rangeSelect = el('select', 'study-select');
   rangeLabel.append(el('span', '', '範囲'), rangeSelect);
 
   const shuffleLabel = el('label', 'check-label');

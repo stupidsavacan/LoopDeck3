@@ -108,7 +108,7 @@ function appendWrongAnswerExplanation(
     intro.append(el('strong', '', `${label}：`), document.createTextNode(confusionNote(explanation, explanation.pair)));
     block.append(intro, table);
     if (onDetour) {
-      const detour = el('button', 'btn rival-open', '寄り道して見分ける') as HTMLButtonElement;
+      const detour = el('button', 'btn rival-open', '寄り道して見分ける');
       detour.type = 'button';
       detour.onclick = () => onDetour(explanation);
       block.append(detour);
@@ -293,7 +293,7 @@ function appendResultTabs(container: HTMLElement, panels: ResultPanel[]): void {
   };
 
   panels.forEach((panel, index) => {
-    const tab = el('button', 'result-tab', panel.label) as HTMLButtonElement;
+    const tab = el('button', 'result-tab', panel.label);
     tab.type = 'button';
     tab.id = `${prefix}-${panel.id}`;
     tab.dataset.panel = panel.id;
@@ -364,7 +364,7 @@ export function renderQuestionImage(question: Question, resolveImageAsset: Quest
         mount.replaceChildren(fallback(IMAGE_UNSAFE_MESSAGE));
         return;
       }
-      const image = el('img', 'question-image') as HTMLImageElement;
+      const image = el('img', 'question-image');
       image.src = resolvedAsset;
       image.alt = '問題資料画像';
       image.loading = 'lazy';
@@ -396,7 +396,7 @@ export function renderQuizMeta(session: QuizSession, question: Question): HTMLEl
   progressNode.setAttribute('aria-valuemin', '0');
   progressNode.setAttribute('aria-valuemax', '100');
   progressNode.setAttribute('aria-valuenow', String(Math.round(progress)));
-  const fill = el('div', 'quiz-progress-fill') as HTMLDivElement;
+  const fill = el('div', 'quiz-progress-fill');
   fill.style.width = `${progress}%`;
   progressNode.append(fill);
 
@@ -473,7 +473,7 @@ export function renderNextActions(steps: SessionNextSteps): HTMLElement {
   section.append(el('h4', 'next-actions-title', '次にやること'));
   const list = el('div', 'next-actions-list');
   for (const action of steps.actions) {
-    const item = el('button', action.primary ? 'next-action primary' : 'next-action') as HTMLButtonElement;
+    const item = el('button', action.primary ? 'next-action primary' : 'next-action');
     item.type = 'button';
     item.dataset.action = action.id;
     item.append(el('strong', 'next-action-label', action.label));

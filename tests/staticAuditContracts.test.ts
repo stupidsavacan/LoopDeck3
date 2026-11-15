@@ -162,7 +162,7 @@ describe('settings and aggregation contracts', () => {
     data.questions.push({ ...q, id: 'q2', moduleId: 'unfiled' });
     const root = document.createElement('div');
     const render = () =>
-      renderHomeScreen(screenContext({ root: root, catalog: resolveActivePacks([data]), navigation: { module: () => {} } }));
+      renderHomeScreen(screenContext({ root, catalog: resolveActivePacks([data]), navigation: { module: () => {} } }));
     render();
     root.querySelector<HTMLButtonElement>('.folder-head')!.click();
     render();
@@ -210,7 +210,7 @@ describe('settings and aggregation contracts', () => {
     const root = document.createElement('div');
     renderHomeScreen(
       screenContext({
-        root: root,
+        root,
         catalog: resolveActivePacks([pack({ ...q, moduleId: 'english_reverse' })]),
         navigation: { module: () => {} }
       })
