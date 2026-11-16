@@ -25,8 +25,6 @@
     "verify": "npm run check && npm run build",
     "qa:chrome": "npm run build:single && playwright test",
     "qa:chrome:report": "playwright show-report qa-report",
-    "format": "node scripts/format-changed.mjs --write",
-    "format:check": "node scripts/format-changed.mjs",
     "lint": "tsc --noEmit --noUnusedLocals --allowUnreachableCode false --noFallthroughCasesInSwitch && tsc -p tsconfig.device.json --noEmit --allowUnreachableCode false",
     "code:map": "node scripts/code-map.mjs",
     "readability": "node scripts/source-guardrails.mjs report"

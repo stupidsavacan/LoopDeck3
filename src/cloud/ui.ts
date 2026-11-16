@@ -1,4 +1,5 @@
 import { el, button } from '../ui/dom';
+import { createUiIcon } from '../ui/icons';
 import { saveBlob } from '../platform/fileSave';
 import { CloudApi, type CloudRevision } from './api';
 import { CloudStore } from './store';
@@ -16,14 +17,29 @@ const labels = {
 const modeLabels = { enabled: '共有', localOnly: 'この端末のみ', excludedByDeletion: '削除済み・自動取得しない' };
 export function mountCloudSync(store: CloudStore, repository: StudyRepository, engine: SyncEngine): () => void {
   const host = el('div', 'cloud-sync-control'),
-    open = button('☁', 'cloud-sync-icon'),
+    open = button('', 'cloud-sync-icon'),
     dialog = el('dialog', 'cloud-sync-dialog'),
     content = el('div'),
     close = button('閉じる', 'cloud-sync-close');
   open.setAttribute('aria-label', 'クラウド教材同期の設定');
+  open.append(createUiIcon('cloud', 'cloud-sync-svg'));
   dialog.append(content, close);
   host.append(open, dialog);
   document.body.append(host);
+  // The trigger belongs to the home hero and scrolls away with it; the dialog stays on <body> so a hero
+  // re-render never closes it. Outside home the trigger rests (hidden) in its host.
+  const placeTrigger = () => {
+    const hero = document.querySelector<HTMLElement>('.home-screen > .hero');
+    const target = hero ?? host;
+    if (open.parentElement === target) return;
+    target.append(open);
+    open.classList.toggle('in-hero', !!hero);
+    hero?.classList.add('has-cloud-trigger');
+  };
+  const appRoot = document.getElementById('app') ?? document.body;
+  const triggerObserver = new MutationObserver(placeTrigger);
+  triggerObserver.observe(appRoot, { childList: true, subtree: true });
+  placeTrigger();
   close.onclick = () => dialog.close();
   let active = true;
   const update = () => {
@@ -44,28 +60,31 @@ export function mountCloudSync(store: CloudStore, repository: StudyRepository, e
     const settings = await store.settings();
     if (!active) return;
     content.replaceChildren(
-      el('h2', '', 'クラウド教材同期'),
-      el('p', '', '教材と画像だけを共有します。回答・復習・ブックマークは送信しません。')
+      el('h2', 'cloud-sync-title', 'クラウド教材同期'),
+      el('p', 'cloud-sync-lead', '教材と画像だけを共有します。回答・復習・ブックマークは送信しません。')
     );
     if (!settings?.token) {
-      if (nativeCloud() && !nativeCloud()!.origin()) {
+      const native = nativeCloud();
+      if (native && !native.origin()) {
         content.append(
           el(
             'p',
-            '',
+            'cloud-sync-note',
             'このAPKは本番API未設定の検証ビルドです。公開URL確定後、接続先を固定して再ビルドします。オフライン学習は利用できます。'
           )
         );
         return;
       }
-      content.append(el('p', '', '合言葉でログインすると、選んだ教材をほかの端末と共有できます。共有する教材はログイン後に選べます。'));
-      const url = el('input'),
-        name = el('input'),
-        phrase = el('input');
+      content.append(
+        el('p', 'cloud-sync-note', '合言葉でログインすると、選んだ教材をほかの端末と共有できます。共有する教材はログイン後に選べます。')
+      );
+      const url = el('input', 'cloud-sync-input'),
+        name = el('input', 'cloud-sync-input'),
+        phrase = el('input', 'cloud-sync-input');
       url.type = 'url';
       url.placeholder = 'https://…chatgpt.site';
-      url.value = settings?.apiUrl ?? nativeCloud()?.origin() ?? 'https://loopdeck3-sync-20261022.salmon1124.chatgpt.site';
-      url.disabled = !!settings?.setupComplete || !!nativeCloud();
+      url.value = settings?.apiUrl ?? native?.origin() ?? 'https://loopdeck3-sync-20261022.salmon1124.chatgpt.site';
+      url.disabled = !!settings?.setupComplete || !!native;
       url.setAttribute('aria-label', 'API URL');
       name.placeholder = 'この端末の名前';
       name.value = settings?.deviceName ?? '';
@@ -96,9 +115,9 @@ export function mountCloudSync(store: CloudStore, repository: StudyRepository, e
           }
         });
       // The endpoint is fixed for almost everyone, so it stays folded away instead of leading the form.
-      const endpoint = el('details', 'cloud-sync-endpoint');
+      const endpoint = el('details', 'cloud-sync-endpoint disclosure');
       endpoint.append(el('summary', '', '接続先を変更'), url);
-      content.append(name, phrase, login, endpoint);
+      content.append(field('端末名', name), field('合言葉', phrase), login, endpoint);
       return;
     }
     const api = new CloudApi(settings.apiUrl, settings.token);
@@ -106,11 +125,11 @@ export function mountCloudSync(store: CloudStore, repository: StudyRepository, e
       content.append(
         el(
           'p',
-          '',
+          'cloud-sync-note',
           '初回設定：既存教材は選んだものだけ共有します。同じ教材がクラウドにある場合はクラウド最新版を優先します。選ばない教材は、今後編集してもローカル専用です。設定後の新規インポートは自動共有されます。変更された設問の復習状態は従来どおり整理されます。'
         )
       );
-      const backup = button('設定前のバックアップを保存');
+      const backup = button('設定前のバックアップを保存', 'btn cloud-sync-secondary');
       backup.onclick = () =>
         void run(async () => {
           const snapshot = await repository.exportSnapshot();
@@ -122,7 +141,7 @@ export function mountCloudSync(store: CloudStore, repository: StudyRepository, e
         selected = new Map<string, HTMLInputElement>(),
         excluded = new Map<string, HTMLInputElement>();
       for (const pack of packs) {
-        const label = el('label'),
+        const label = el('label', 'cloud-sync-check'),
           check = el('input');
         check.type = 'checkbox';
         label.append(check, document.createTextNode(`共有する: ${pack.title} (${pack.packId})`));
@@ -132,14 +151,14 @@ export function mountCloudSync(store: CloudStore, repository: StudyRepository, e
       const local = new Set(packs.map((p) => p.packId));
       for (const head of heads)
         if (!local.has(head.packId)) {
-          const label = el('label'),
+          const label = el('label', 'cloud-sync-check'),
             check = el('input');
           check.type = 'checkbox';
           label.append(check, document.createTextNode(`この端末への取り込みを除外: ${head.title}`));
           content.append(label);
           excluded.set(head.packId, check);
         }
-      const finish = button('この設定で自動同期を開始');
+      const finish = button('この設定で自動同期を開始', 'cloud-sync-primary');
       finish.onclick = () =>
         void run(async () => {
           finish.disabled = true;
@@ -159,14 +178,14 @@ export function mountCloudSync(store: CloudStore, repository: StudyRepository, e
       return;
     }
     content.append(
-      el('p', '', `${labels[engine.status]}${engine.error ? ' — ' + engine.error : ''}`),
+      el('p', `cloud-sync-status is-${engine.status}`, `${labels[engine.status]}${engine.error ? ' — ' + engine.error : ''}`),
       el(
         'p',
-        '',
+        'cloud-sync-note',
         settings.lastSuccess ? `最終同期成功: ${new Date(settings.lastSuccess).toLocaleString()}` : '完全な同期はまだ成功していません。'
       )
     );
-    const retry = button('今すぐ再試行');
+    const retry = button('今すぐ再試行', 'btn cloud-sync-secondary');
     retry.onclick = () =>
       void run(async () => {
         await store.retry();
@@ -181,13 +200,13 @@ export function mountCloudSync(store: CloudStore, repository: StudyRepository, e
       const head = heads.find((h) => h.packId === id),
         pack = packs.find((p) => p.packId === id),
         state = await store.state(id),
-        row = el('section');
+        row = el('section', 'cloud-sync-pack');
       row.append(
         el('h3', '', pack?.title ?? head?.title ?? id),
-        el('p', '', `同期: ${modeLabels[state?.mode ?? 'enabled']}${state?.dirty ? ' / 送信待ち' : ''}`)
+        el('p', 'cloud-sync-note', `同期: ${modeLabels[state?.mode ?? 'enabled']}${state?.dirty ? ' / 送信待ち' : ''}`)
       );
       const enabled = !state || state.mode === 'enabled',
-        toggle = button(enabled ? 'この端末で同期OFF' : 'この端末で同期ON');
+        toggle = button(enabled ? 'この端末で同期OFF' : 'この端末で同期ON', 'btn cloud-sync-secondary');
       toggle.onclick = () =>
         void run(async () => {
           await store.setEnabled(
@@ -200,10 +219,10 @@ export function mountCloudSync(store: CloudStore, repository: StudyRepository, e
         });
       row.append(toggle);
       if (head) {
-        const history = button('クラウド履歴');
+        const history = button('クラウド履歴', 'btn cloud-sync-secondary');
         history.onclick = () =>
           void run(async () => {
-            const area = el('div');
+            const area = el('div', 'cloud-sync-history');
             for (const revision of await api.history(id)) area.append(revisionRow(api, revision));
             row.append(area);
             history.disabled = true;
@@ -212,8 +231,8 @@ export function mountCloudSync(store: CloudStore, repository: StudyRepository, e
       }
       content.append(row);
     }
-    const logout = button('この端末をログアウト'),
-      all = button('全端末をログアウト');
+    const logout = button('この端末をログアウト', 'btn cloud-sync-secondary'),
+      all = button('全端末をログアウト', 'btn cloud-sync-secondary cloud-sync-danger');
     logout.onclick = () =>
       void run(async () => {
         await api.request('/auth/logout', { method: 'POST' });
@@ -227,11 +246,13 @@ export function mountCloudSync(store: CloudStore, repository: StudyRepository, e
         await store.clearToken();
         await show();
       });
-    content.append(logout, all);
+    const accountActions = el('div', 'cloud-sync-actions');
+    accountActions.append(logout, all);
+    content.append(accountActions);
   }
   function revisionRow(api: CloudApi, revision: CloudRevision): HTMLElement {
-    const row = el('p'),
-      restore = button('この版を新しい最新版として復元');
+    const row = el('p', 'cloud-sync-revision'),
+      restore = button('この版を新しい最新版として復元', 'btn cloud-sync-secondary');
     row.append(document.createTextNode(`版${revision.revision} · ${revision.committedAt} `), restore);
     restore.onclick = () =>
       void run(async () => {
@@ -254,6 +275,15 @@ export function mountCloudSync(store: CloudStore, repository: StudyRepository, e
   return () => {
     active = false;
     unwatch();
+    triggerObserver.disconnect();
+    open.remove();
     host.remove();
   };
+}
+
+/** A visible field label; the input keeps its aria-label, so the accessible name does not change. */
+function field(label: string, input: HTMLInputElement): HTMLLabelElement {
+  const wrap = el('label', 'cloud-sync-field');
+  wrap.append(el('span', 'cloud-sync-label', label), input);
+  return wrap;
 }

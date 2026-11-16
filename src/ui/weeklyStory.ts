@@ -131,10 +131,10 @@ async function slideImage(slide: StorySlide, recap: WeeklyRecap): Promise<Blob |
 export function openWeeklyStory(recap: WeeklyRecap, periodLabel: string, onClose?: () => void): HTMLDialogElement {
   const slides = weeklySlides(recap, periodLabel);
   let index = 0;
-  const dialog = el('dialog', 'weekly-story') as HTMLDialogElement;
+  const dialog = el('dialog', 'weekly-story');
   dialog.setAttribute('aria-label', periodLabel);
   const bars = el('div', 'weekly-bars');
-  const stage = el('button', 'weekly-stage') as HTMLButtonElement;
+  const stage = el('button', 'weekly-stage');
   stage.type = 'button';
   stage.setAttribute('aria-label', '次のカードへ');
   const footer = el('div', 'weekly-footer');

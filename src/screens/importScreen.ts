@@ -85,7 +85,7 @@ function appendMergeReport(container: HTMLElement, report: MergePackReport): voi
 }
 
 export async function renderImportScreen(context: ScreenContext): Promise<void> {
-  const { store: studyStore, root: root, catalog: packView, isCurrent, refreshCatalog: onImported } = context;
+  const { store: studyStore, root, catalog: packView, isCurrent, refreshCatalog: onImported } = context;
   const { home: navigateHome } = context.navigation;
 
   if (!isCurrent()) return;
@@ -136,7 +136,7 @@ export async function renderImportScreen(context: ScreenContext): Promise<void> 
   downloadPrompt.onclick = () => void exportPackAuthoringPrompt();
   authoringCard.append(downloadPrompt);
 
-  const input = el('input', 'file-input visually-hidden') as HTMLInputElement;
+  const input = el('input', 'file-input visually-hidden');
   input.type = 'file';
   input.accept = '.json,.zip,.loopdeck.zip,application/json,application/zip';
 
@@ -145,10 +145,12 @@ export async function renderImportScreen(context: ScreenContext): Promise<void> 
   const uploadZone = el('div', 'upload-zone');
   const uploadIcon = el('div', 'upload-icon');
   uploadIcon.append(createUiIcon('tray', 'upload-icon-svg'));
-  const uploadText = el('p', '', '教材ファイルをここにドロップ');
-  const uploadSub = el('p', 'hint', 'またはボタンから .json / .zip / .loopdeck.zip を選びます。');
+  const uploadText = el('p', 'upload-drop-title', '教材ファイルをここにドロップ');
+  const uploadSub = el('p', 'hint', '.json / .zip / .loopdeck.zip を読み込めます。');
   const chooseFile = button('ファイルを選ぶ', 'btn primary');
   const selectedFile = el('p', 'upload-file-name', '選択中のファイル: なし');
+  // Nothing is selected until a file is: the line only appears once it has something to say.
+  selectedFile.hidden = true;
   uploadZone.append(uploadIcon, uploadText, uploadSub, chooseFile, selectedFile, input);
   uploadCard.append(uploadTitle, uploadZone);
 
@@ -172,7 +174,7 @@ export async function renderImportScreen(context: ScreenContext): Promise<void> 
   ): Promise<void> {
     if (
       mode === 'replace' &&
-      !window.confirm('現在の回答履歴・ブックマーク・インポート教材・SRS復習データを、このバックアップの内容で置き換えます。続けますか？')
+      !window.confirm('現在の回答履歴・ブックマーク・インポート教材・復習スケジュールを、このバックアップの内容で置き換えます。続けますか？')
     )
       return;
     replaceButton.disabled = true;
@@ -233,6 +235,7 @@ export async function renderImportScreen(context: ScreenContext): Promise<void> 
       return;
     }
     selectedFile.textContent = `選択中のファイル: ${file.name}`;
+    selectedFile.hidden = false;
     setImporting(true);
     try {
       const imported = await readImportFile(file);

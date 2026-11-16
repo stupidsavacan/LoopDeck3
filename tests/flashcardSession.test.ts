@@ -218,11 +218,11 @@ describe('flashcard session rendering and lifecycle', () => {
     expect(container.querySelectorAll('.flashcard-stat')).toHaveLength(2);
     expect(container.querySelector('.flashcard-missed-chip')?.textContent).toBe(complete.queue[1].prompt);
     expect([...container.querySelectorAll('.flashcard-result-actions button')].map((button) => button.textContent)).toEqual([
-      'AGAINだけもう一度',
+      '知らないカードだけもう一度',
       '全部やり直す',
       '教材へ戻る'
     ]);
-    button('AGAINだけもう一度').click();
+    button('知らないカードだけもう一度').click();
     expect(result.callbacks.onSessionChange.mock.calls[0][0].queue).toEqual([complete.queue[1]]);
     expect(result.callbacks.onSessionChange.mock.calls[0][0].attempts).toEqual([]);
     button('全部やり直す').click();

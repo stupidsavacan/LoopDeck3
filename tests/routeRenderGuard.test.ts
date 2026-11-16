@@ -72,7 +72,7 @@ describe('route render ownership', () => {
     const root = document.createElement('div');
     root.textContent = 'newer route';
     let current = true;
-    const pending = renderGraphsScreen(screenContext({ root: root, catalog: resolveActivePacks([]), isCurrent: () => current, navigation: { home: () => {}, review: () => {} } })
+    const pending = renderGraphsScreen(screenContext({ root, catalog: resolveActivePacks([]), isCurrent: () => current, navigation: { home: () => {}, review: () => {} } })
     );
 
     current = false;

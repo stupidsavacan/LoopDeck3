@@ -1,4 +1,3 @@
-import { version } from '../../package.json';
 import { loadBuiltinPacks } from '../packs/builtinLoader';
 import { resolveActivePacks, type ResolvedPackView } from '../packs/packResolver';
 import { createQuestionImageAssetResolver } from '../packs/packAssetResolver';
@@ -15,7 +14,6 @@ import { renderDebugLogScreen } from '../screens/debugLogScreen';
 import { disposeInlineQuizzes } from '../screens/inlineQuiz';
 import { disposeFlashcardSessions } from '../screens/flashcardSession';
 import { renderBottomNav } from '../ui/bottomNav';
-import { button, el } from '../ui/dom';
 import { renderLoading } from '../ui/loading';
 import { RouteRenderCoordinator, type RouteRenderLease } from '../ui/routeRenderGuard';
 import { navigationFor, parseRoute, routeHash, type AppRoute, type ScreenContext, type Navigation } from './context';
@@ -222,23 +220,5 @@ export class StudyApplication {
         navigation.graphs
       )
     );
-    if (route.name !== 'home') return;
-    const screen = this.root.querySelector('main.home-screen');
-    if (!screen) return;
-    const tools = el('details', 'home-tools management-card');
-    tools.dataset.homeManagement = 'true';
-    tools.append(el('summary', 'home-tools-summary', '教材・データ・PDF'));
-    const body = el('div', 'home-tools-body');
-    const actions = el('div', 'update-actions');
-    const materials = button('教材とデータを開く', 'tool-link');
-    materials.onclick = navigation.import;
-    const worksheet = button('PDFプリントを作る', 'tool-link secondary');
-    worksheet.onclick = navigation.pdfWorksheet;
-    actions.append(materials, worksheet);
-    body.append(actions);
-    tools.append(body);
-    const diagnostics = button(`LoopDeck3 v${version} · 診断`, 'version-trigger');
-    diagnostics.onclick = navigation.debugLog;
-    screen.append(tools, diagnostics);
   }
 }

@@ -33,7 +33,7 @@ describe('PDF worksheet module selection', () => {
     second.modules[0].id = second.questions[0].moduleId = 'second-module';
     second.questions[0].number = 1000;
     const root = document.createElement('div');
-    await renderPdfWorksheetScreen(screenContext({ root: root, catalog: resolveActivePacks([first, second]), navigation: { home: () => {} } }));
+    await renderPdfWorksheetScreen(screenContext({ root, catalog: resolveActivePacks([first, second]), navigation: { home: () => {} } }));
     const select = root.querySelector<HTMLSelectElement>('.settings-grid select');
     const labels = [...(select?.options ?? [])].map((option) => option.textContent);
     expect(labels).toEqual(['First No.1 (1問)', 'Second No.1000 (1問)']);
@@ -43,7 +43,7 @@ describe('PDF worksheet module selection', () => {
     const activePack = pack('active-pack', 'Active module', 'active-question');
     const root = document.createElement('div');
 
-    await renderPdfWorksheetScreen(screenContext({ root: root, catalog: resolveActivePacks([oldPack, activePack]), navigation: { home: () => {} } }));
+    await renderPdfWorksheetScreen(screenContext({ root, catalog: resolveActivePacks([oldPack, activePack]), navigation: { home: () => {} } }));
 
     const moduleSelect = root.querySelector<HTMLSelectElement>('.settings-grid select');
     const labels = [...(moduleSelect?.options ?? [])].map((option) => option.textContent);

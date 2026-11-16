@@ -1,9 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <style name="LoopDeckTheme" parent="android:style/Theme.Material.Light.NoActionBar">
+        <!-- System bars use the app's paper color (#f4f5f8, the editorial-paper token) with dark icons. -->
         <item name="android:windowLightStatusBar">true</item>
-        <item name="android:statusBarColor">#eef4ff</item>
-        <item name="android:navigationBarColor">#ffffff</item>
+        <item name="android:statusBarColor">#f4f5f8</item>
+        <item name="android:navigationBarColor">#f4f5f8</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="27">true</item>
         <item name="android:fontFamily">sans</item>
     </style>
 </resources>

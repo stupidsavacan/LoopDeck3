@@ -45,7 +45,7 @@ describe('backup import UI semantics', () => {
     const restoreSnapshot = vi.spyOn(studyStore, 'restoreSnapshot').mockResolvedValue();
     const root = document.createElement('div');
     document.body.append(root);
-    await renderImportScreen(screenContext({ root: root, catalog: resolveActivePacks([]), refreshCatalog: async () => {}, navigation: { home: () => {} } })
+    await renderImportScreen(screenContext({ root, catalog: resolveActivePacks([]), refreshCatalog: async () => {}, navigation: { home: () => {} } })
     );
 
     const input = root.querySelector<HTMLInputElement>('input[type="file"]')!;

@@ -1,97 +1,362 @@
+/* Cloud sync: a glass chip in the home hero, and a dialog in the app's own form language. */
 .cloud-sync-control {
-  position: fixed;
-  right: 12px;
-  top: 10px;
-  z-index: 1000;
+  /* Only the dialog lives here; the trigger is moved into the home hero by ui.ts. */
+  position: absolute;
+  top: 0;
+  right: 0;
 }
-.cloud-sync-icon {
-  border: 1px solid #aaa;
-  border-radius: 50%;
-  background: #fff;
-  color: #333;
-  width: 36px;
-  height: 36px;
-  font-size: 19px;
-  cursor: pointer;
-}
-.cloud-sync-icon[data-status='error'],
-.cloud-sync-icon[data-status='authentication'] {
-  border: 2px solid #b3261e;
-  color: #b3261e;
-}
-.cloud-sync-dialog {
-  max-width: 620px;
-  width: 90vw;
-  max-height: 85vh;
-  overflow: auto;
-  border: 1px solid #888;
-  border-radius: 12px;
-  padding: 20px;
-}
-.cloud-sync-dialog label {
-  display: block;
-  margin: 10px 0;
-}
-.cloud-sync-dialog input:not([type='checkbox']) {
-  display: block;
-  width: 100%;
-  margin: 8px 0;
-  padding: 8px;
-  box-sizing: border-box;
-}
-.cloud-sync-dialog button {
-  margin: 5px;
-  padding: 7px 10px;
-}
-.cloud-sync-dialog section {
-  border-top: 1px solid #ddd;
-  padding: 8px 0;
-}
-.cloud-error {
-  color: #b3261e;
-}
-.cloud-sync-dialog::backdrop {
-  background: #0006;
-}
-/* Sync settings belong to the home screen; every other screen keeps its top-right corner. */
-body:not(:has(.home-screen)) .cloud-sync-control {
+
+.cloud-sync-control > .cloud-sync-icon {
+  /* Outside home the trigger rests in its host and is not shown. */
   display: none;
 }
+
+.cloud-sync-icon {
+  width: 44px;
+  height: 44px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: var(--radius-control);
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+.cloud-sync-icon.in-hero {
+  position: absolute;
+  top: calc(24px + var(--safe-top));
+  right: 16px;
+  z-index: 3;
+}
+
+/* Leave room beside the date line (and the exam chip) for the trigger. */
+.hero.has-cloud-trigger .today-hero-top {
+  padding-right: 52px;
+}
+
+.cloud-sync-svg {
+  width: 22px;
+  height: 22px;
+  display: block;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .cloud-sync-icon:hover {
+    background: rgba(255, 255, 255, 0.18);
+  }
+}
+
+.cloud-sync-icon:focus-visible {
+  outline: 2px solid var(--editorial-lime);
+  outline-offset: 2px;
+}
+
+/* Errors stay readable on the dark hero: a solid danger chip with a dot, not a thin red ring. */
+.cloud-sync-icon[data-status='error'],
+.cloud-sync-icon[data-status='authentication'] {
+  border-color: rgba(255, 255, 255, 0.28);
+  background: var(--editorial-danger);
+  color: #fff;
+}
+
+.cloud-sync-icon[data-status='error']::after,
+.cloud-sync-icon[data-status='authentication']::after {
+  content: '';
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--editorial-ink);
+  border-radius: 50%;
+  background: #fff;
+}
+
+.cloud-sync-icon[data-status='syncing'] .cloud-sync-svg,
+.cloud-sync-icon[data-status='waiting'] .cloud-sync-svg {
+  opacity: 0.7;
+}
+
+/* Dialog */
 .cloud-sync-dialog {
   position: fixed;
-  border-color: #e2e5eb;
-  border-radius: 20px;
-  padding: 22px 20px 18px;
+  width: min(560px, calc(100vw - 32px));
+  max-height: min(85vh, 720px);
+  margin: auto;
+  padding: 20px 20px 24px;
+  overflow: auto;
+  border: 1px solid var(--editorial-line);
+  border-radius: var(--radius-lg);
+  background: var(--editorial-surface);
+  color: var(--editorial-ink);
+  box-shadow: var(--editorial-shadow);
+  font-family: inherit;
+  line-height: 1.6;
 }
+
+.cloud-sync-dialog::backdrop {
+  /* Literal: older WebViews do not pass custom properties into ::backdrop. */
+  background: rgba(10, 16, 32, 0.56);
+}
+
 .cloud-sync-dialog h2 {
-  margin: 0 64px 8px 0;
+  margin: 4px 64px 8px 0;
+  font-size: 1.2rem;
+  font-weight: var(--weight-black);
+  letter-spacing: -0.02em;
+  line-height: 1.3;
 }
-.cloud-sync-dialog .cloud-sync-close {
-  position: absolute;
-  top: 14px;
-  right: 14px;
+
+.cloud-sync-dialog h3 {
   margin: 0;
-  border: 1px solid #e2e5eb;
-  border-radius: 12px;
-  background: #fff;
-  font-weight: 700;
+  font-size: 0.95rem;
+  font-weight: var(--weight-black);
+  overflow-wrap: anywhere;
 }
-.cloud-sync-dialog .cloud-sync-primary {
+
+.cloud-sync-dialog p {
+  margin: 0 0 12px;
+  color: var(--editorial-subtle);
+  font-size: 0.86rem;
+}
+
+.cloud-sync-dialog .cloud-sync-lead {
+  color: var(--editorial-ink-2);
+}
+
+/* Fields: the app's single input style (shared with the PDF worksheet selects). */
+.cloud-sync-field {
+  display: grid;
+  gap: 4px;
+  margin: 0 0 12px;
+}
+
+.cloud-sync-label {
+  color: var(--editorial-ink-2);
+  font-size: 0.8rem;
+  font-weight: var(--weight-heavy);
+}
+
+.cloud-sync-dialog .cloud-sync-input {
   display: block;
   width: 100%;
-  min-height: 46px;
-  margin: 12px 0 0;
-  border: 0;
-  border-radius: 14px;
-  background: #0a1020;
-  color: #fff;
-  font-weight: 800;
+  min-height: var(--control-height);
+  margin: 0;
+  padding: 0 14px;
+  border: 1px solid var(--editorial-line-strong);
+  border-radius: var(--radius-control);
+  background: var(--editorial-surface);
+  color: var(--editorial-ink);
+  font: inherit;
+  font-size: 1rem;
+  box-shadow: none;
+  -webkit-appearance: none;
+  appearance: none;
 }
-.cloud-sync-endpoint {
-  margin-top: 14px;
-  color: #7b8496;
-  font-size: 0.85rem;
+
+.cloud-sync-dialog .cloud-sync-input::placeholder {
+  color: var(--editorial-muted);
 }
-.cloud-sync-endpoint > summary {
+
+.cloud-sync-dialog .cloud-sync-input:focus {
+  outline: none;
+  border-color: var(--editorial-blue);
+  box-shadow: var(--editorial-focus);
+}
+
+.cloud-sync-dialog .cloud-sync-input:disabled {
+  background: var(--editorial-fill);
+  color: var(--editorial-subtle);
+}
+
+/* Buttons */
+.cloud-sync-dialog button {
+  font: inherit;
   cursor: pointer;
+}
+
+.cloud-sync-dialog .cloud-sync-primary,
+.cloud-sync-dialog .cloud-sync-secondary {
+  min-height: var(--control-height);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 16px;
+  border-radius: var(--radius-control);
+  font-size: 0.9rem;
+  font-weight: var(--weight-heavy);
+  line-height: 1.25;
+  text-align: center;
+}
+
+.cloud-sync-dialog .cloud-sync-primary {
+  width: 100%;
+  margin: 4px 0 0;
+  border: 1px solid var(--editorial-ink);
+  background: var(--editorial-ink);
+  color: #fff;
+}
+
+.cloud-sync-dialog .cloud-sync-secondary {
+  border: 1px solid var(--editorial-line);
+  background: var(--editorial-surface);
+  color: var(--editorial-ink);
+}
+
+.cloud-sync-dialog .cloud-sync-danger {
+  border-color: var(--editorial-danger-soft);
+  background: var(--editorial-danger-soft);
+  color: var(--editorial-danger-ink);
+}
+
+.cloud-sync-dialog button:disabled {
+  border-color: var(--editorial-line);
+  background: var(--editorial-fill);
+  color: var(--editorial-subtle);
+  cursor: not-allowed;
+}
+
+.cloud-sync-dialog button:focus-visible,
+.cloud-sync-dialog summary:focus-visible,
+.cloud-sync-check input:focus-visible {
+  outline: 2px solid var(--editorial-blue);
+  outline-offset: 2px;
+}
+
+.cloud-sync-dialog .cloud-sync-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  min-height: 44px;
+  margin: 0;
+  padding: 0 14px;
+  border: 1px solid var(--editorial-line);
+  border-radius: var(--radius-control);
+  background: var(--editorial-surface);
+  color: var(--editorial-ink);
+  font-size: 0.82rem;
+  font-weight: var(--weight-heavy);
+}
+
+/* Initial setup: pack choices as tappable rows. */
+.cloud-sync-check {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--editorial-line);
+  border-radius: var(--radius-control);
+  color: var(--editorial-ink);
+  font-size: 0.88rem;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.cloud-sync-check input {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  accent-color: var(--editorial-ink);
+}
+
+.cloud-sync-dialog > div > .cloud-sync-secondary {
+  margin: 0 0 12px;
+}
+
+.cloud-sync-dialog > div > .cloud-sync-primary:last-child {
+  margin-top: 8px;
+}
+
+/* Logged in: status, one section per pack, account actions. */
+.cloud-sync-dialog .cloud-sync-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--editorial-fill);
+  color: var(--editorial-ink-2);
+  font-weight: var(--weight-heavy);
+}
+
+.cloud-sync-dialog .cloud-sync-status.is-ready {
+  background: var(--editorial-success-soft);
+  color: var(--editorial-success-ink);
+}
+
+.cloud-sync-dialog .cloud-sync-status.is-error,
+.cloud-sync-dialog .cloud-sync-status.is-authentication {
+  background: var(--editorial-danger-soft);
+  color: var(--editorial-danger-ink);
+}
+
+.cloud-sync-pack {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--editorial-line);
+}
+
+.cloud-sync-pack > h3,
+.cloud-sync-pack > p,
+.cloud-sync-history {
+  flex: 1 0 100%;
+}
+
+.cloud-sync-pack > p {
+  margin: 0 0 4px;
+}
+
+.cloud-sync-history {
+  display: grid;
+  gap: 8px;
+}
+
+.cloud-sync-dialog .cloud-sync-revision {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  background: var(--editorial-fill);
+  color: var(--editorial-ink-2);
+  font-size: 0.8rem;
+}
+
+.cloud-sync-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--editorial-line);
+}
+
+.cloud-sync-dialog .cloud-error {
+  margin: 12px 0 0;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--editorial-danger-soft);
+  color: var(--editorial-danger-ink);
+  font-weight: var(--weight-bold);
+}
+
+.cloud-sync-endpoint {
+  margin-top: 12px;
+}
+
+.cloud-sync-endpoint .cloud-sync-input {
+  margin-top: 4px;
 }

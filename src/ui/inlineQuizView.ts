@@ -108,7 +108,7 @@ function appendWrongAnswerExplanation(
     intro.append(el('strong', '', `${label}：`), document.createTextNode(confusionNote(explanation, explanation.pair)));
     block.append(intro, table);
     if (onDetour) {
-      const detour = el('button', 'btn rival-open', '寄り道して見分ける') as HTMLButtonElement;
+      const detour = el('button', 'btn rival-open', '寄り道して見分ける');
       detour.type = 'button';
       detour.onclick = () => onDetour(explanation);
       block.append(detour);
@@ -293,7 +293,7 @@ function appendResultTabs(container: HTMLElement, panels: ResultPanel[]): void {
   };
 
   panels.forEach((panel, index) => {
-    const tab = el('button', 'result-tab', panel.label) as HTMLButtonElement;
+    const tab = el('button', 'result-tab', panel.label);
     tab.type = 'button';
     tab.id = `${prefix}-${panel.id}`;
     tab.dataset.panel = panel.id;
@@ -364,7 +364,7 @@ export function renderQuestionImage(question: Question, resolveImageAsset: Quest
         mount.replaceChildren(fallback(IMAGE_UNSAFE_MESSAGE));
         return;
       }
-      const image = el('img', 'question-image') as HTMLImageElement;
+      const image = el('img', 'question-image');
       image.src = resolvedAsset;
       image.alt = '問題資料画像';
       image.loading = 'lazy';
@@ -396,7 +396,7 @@ export function renderQuizMeta(session: QuizSession, question: Question): HTMLEl
   progressNode.setAttribute('aria-valuemin', '0');
   progressNode.setAttribute('aria-valuemax', '100');
   progressNode.setAttribute('aria-valuenow', String(Math.round(progress)));
-  const fill = el('div', 'quiz-progress-fill') as HTMLDivElement;
+  const fill = el('div', 'quiz-progress-fill');
   fill.style.width = `${progress}%`;
   progressNode.append(fill);
 
@@ -404,14 +404,32 @@ export function renderQuizMeta(session: QuizSession, question: Question): HTMLEl
   return wrap;
 }
 
-function summaryGrid(items: Array<[string, string]>, className = 'session-summary-grid'): HTMLElement {
+type SummaryTone = 'correct' | 'wrong';
+
+function summaryGrid(items: Array<[string, string, SummaryTone?]>, className = 'session-summary-grid'): HTMLElement {
   const grid = el('div', className);
-  for (const [label, value] of items) {
-    const item = el('div', 'summary-stat');
+  for (const [label, value, tone] of items) {
+    const item = el('div', tone ? `summary-stat is-${tone}` : 'summary-stat');
     item.append(el('span', '', label), el('strong', '', value));
     grid.append(item);
   }
   return grid;
+}
+
+/** The headline of a finished session: how much of it was right, drawn like the home hero's ring. */
+function sessionResult(answered: number, correct: number, accuracy: number): HTMLElement {
+  const result = el('div', 'session-result');
+  const ring = el('div', 'session-ring');
+  ring.style.setProperty('--ratio', String(accuracy));
+  ring.setAttribute('role', 'img');
+  ring.setAttribute('aria-label', `正答率 ${accuracy}%`);
+  const center = el('div', 'session-ring-center');
+  center.append(el('strong', '', `${accuracy}%`), el('span', '', '正答率'));
+  ring.append(center);
+  const copy = el('div', 'session-result-copy');
+  copy.append(el('p', 'session-result-headline', `${answered}問中 ${correct}問正解`));
+  result.append(ring, copy);
+  return result;
 }
 
 export function renderSessionSummary(session: QuizSession, now = Date.now()): HTMLElement {
@@ -426,11 +444,12 @@ export function renderSessionSummary(session: QuizSession, now = Date.now()): HT
   const average = answered > 0 ? attempts.reduce((sum, attempt) => sum + attempt.elapsedMs, 0) / answered : 0;
 
   const summary = el('div', 'session-summary');
+  if (answered > 0) summary.append(sessionResult(answered, correct, accuracy));
   summary.append(
     summaryGrid(
       [
-        ['正解', `${correct}問`],
-        ['ミス', `${wrong}問`],
+        ['正解', `${correct}問`, 'correct'],
+        ['ミス', `${wrong}問`, 'wrong'],
         ['所要時間', formatDuration(elapsed)]
       ],
       'session-summary-grid session-summary-main'
@@ -473,7 +492,7 @@ export function renderNextActions(steps: SessionNextSteps): HTMLElement {
   section.append(el('h4', 'next-actions-title', '次にやること'));
   const list = el('div', 'next-actions-list');
   for (const action of steps.actions) {
-    const item = el('button', action.primary ? 'next-action primary' : 'next-action') as HTMLButtonElement;
+    const item = el('button', action.primary ? 'next-action primary' : 'next-action');
     item.type = 'button';
     item.dataset.action = action.id;
     item.append(el('strong', 'next-action-label', action.label));

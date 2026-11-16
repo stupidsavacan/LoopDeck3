@@ -30,7 +30,7 @@ function pack(module: ModuleInfo): LoopDeckPack {
 
 function renderSingleCard(module: ModuleInfo): { card: HTMLElement; icon: HTMLElement } {
   const root = document.createElement('div');
-  renderHomeScreen(screenContext({ root: root, catalog: resolveActivePacks([pack(module)]), navigation: { module: () => {} } })
+  renderHomeScreen(screenContext({ root, catalog: resolveActivePacks([pack(module)]), navigation: { module: () => {} } })
   );
 
   const card = root.querySelector<HTMLElement>('.module-card');
@@ -41,17 +41,18 @@ function renderSingleCard(module: ModuleInfo): { card: HTMLElement; icon: HTMLEl
 }
 
 describe('Home module card colors', () => {
-  it('uses module.color for the card border and icon background', () => {
+  it('exposes module.color to the stylesheet, which paints the icon tile', () => {
     const { card, icon } = renderSingleCard(moduleInfo({ color: '#15803D', accentColor: '#DCFCE7' }));
 
-    expect(card.style.borderColor).toBe('rgba(21, 128, 61, 0.2)');
-    expect(icon.style.background).toBe('rgb(21, 128, 61)');
+    expect(card.style.getPropertyValue('--deck-accent')).toBe('#15803D');
+    expect(icon.style.background).toBe('');
   });
 
-  it('uses module.accentColor as the soft card background', () => {
+  it('leaves the card surface and border to the stylesheet', () => {
     const { card } = renderSingleCard(moduleInfo({ color: '#15803D', accentColor: '#DCFCE7' }));
 
-    expect(card.style.background).toContain('#DCFCE7');
+    expect(card.style.background).toBe('');
+    expect(card.style.borderColor).toBe('');
   });
 
   it('keeps final-term subject colors for imported module IDs', () => {

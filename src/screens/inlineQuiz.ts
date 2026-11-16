@@ -302,6 +302,8 @@ export function renderInlineQuiz(
       }
       card.classList.add('is-answered');
       showReviewSchedule();
+      // The verdict and explanation are what the learner needs next; bring them above the fixed bar.
+      resultArea.scrollIntoView?.({ block: 'nearest' });
       return;
     }
     console.error('Failed to persist answer/SRS state', error);
@@ -424,7 +426,7 @@ export function renderInlineQuiz(
 
   if (session.settings.showExample && question.example) answerArea.append(el('p', 'example-line', question.example));
   if (answerMode === 'input') {
-    const input = el('input', 'text-input') as HTMLInputElement;
+    const input = el('input', 'text-input');
     input.placeholder = '答えを入力';
     let lastInputValue = input.value;
     input.addEventListener('input', () => {

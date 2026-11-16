@@ -6,13 +6,14 @@ import { button, el } from './dom';
 import { renderQuestionImage } from './inlineQuizView';
 import { renderQuestionVisualReferences } from './questionVisualReferences';
 
-export function renderFlashcardHeader(session: QuizSession, leading?: HTMLElement): HTMLElement {
+/** Leading slot: leave the session. Trailing slot: per-card actions. Both are empty on the result screen. */
+export function renderFlashcardHeader(session: QuizSession, leading?: HTMLElement, trailing?: HTMLElement): HTMLElement {
   const header = el('header', 'flashcard-header');
   const sample = session.choicePool.find((question) => question.id === session.queue[0]?.id) ?? session.queue[0];
-  const leadingSlot = leading ?? el('span', 'flashcard-header-leading');
   header.append(
-    leadingSlot,
-    el('span', 'flashcard-direction', getStudyQuestionModeLabel(session.settings.questionMode ?? 'as_stored', sample))
+    leading ?? el('span', 'flashcard-header-leading'),
+    el('span', 'flashcard-direction', getStudyQuestionModeLabel(session.settings.questionMode ?? 'as_stored', sample)),
+    trailing ?? el('span', 'flashcard-header-leading')
   );
   return header;
 }
@@ -122,7 +123,7 @@ export function renderFlashcardResult(session: QuizSession, onAgain: () => void,
   if (!missed.length) chips.append(el('p', '', 'なし'));
   missedSection.append(chips);
   const actions = el('div', 'flashcard-result-actions');
-  const again = button('AGAINだけもう一度', 'btn primary');
+  const again = button('知らないカードだけもう一度', 'btn primary');
   again.disabled = missed.length === 0;
   again.onclick = onAgain;
   const all = button('全部やり直す', 'btn');

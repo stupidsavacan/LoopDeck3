@@ -100,7 +100,7 @@ export async function renderExamPlanScreen(context: ScreenContext & { folderId: 
     const field = el('label', 'exam-date-field');
     field.htmlFor = 'exam-date-input';
     field.append(el('span', '', '試験日'));
-    const input = el('input', 'exam-date-input') as HTMLInputElement;
+    const input = el('input', 'exam-date-input');
     input.type = 'date';
     input.id = 'exam-date-input';
     // Required makes an empty field :invalid, so CSS can swap the browser's 「yyyy/mm/dd ()」 for a plain prompt.

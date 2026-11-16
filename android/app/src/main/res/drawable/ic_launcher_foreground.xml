@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- LoopDeck mark: a marker-yellow card behind a white card carrying the review loop. Drawn inside the adaptive-icon safe zone. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group android:translateX="3">
+    <group
+        android:pivotX="48"
+        android:pivotY="54"
+        android:rotation="-11">
+        <path
+            android:fillColor="#ffd75e"
+            android:pathData="M37,32 H59 A6,6 0 0,1 65,38 V70 A6,6 0 0,1 59,76 H37 A6,6 0 0,1 31,70 V38 A6,6 0 0,1 37,32 Z" />
+    </group>
+    <path
+        android:fillColor="#ffffff"
+        android:pathData="M45.5,30 H68.5 A6.5,6.5 0 0,1 75,36.5 V71.5 A6.5,6.5 0 0,1 68.5,78 H45.5 A6.5,6.5 0 0,1 39,71.5 V36.5 A6.5,6.5 0 0,1 45.5,30 Z" />
+    <path
+        android:pathData="M64.79,49.5 A9,9 0 1,1 53.92,45.54"
+        android:strokeColor="#1e2a4a"
+        android:strokeLineCap="round"
+        android:strokeWidth="4.4" />
+    <path
+        android:fillColor="#1e2a4a"
+        android:pathData="M59.75,43.42 L51.78,41.43 L54.93,50.07 Z" />
+    </group>
+</vector>

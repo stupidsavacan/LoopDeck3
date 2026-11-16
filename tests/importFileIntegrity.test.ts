@@ -27,6 +27,18 @@ describe('import file integrity', () => {
     });
     expect(await readImportFile(new File([JSON.stringify(pack)], 'pack.txt'))).toMatchObject({ kind: 'pack', result: { ok: false } });
   });
+  it('rejects a ZIP whose central directory understates how far an entry expands', async () => {
+    const bytes = Uint8Array.from(await validZip());
+    const view = new DataView(bytes.buffer);
+    // Shrink every declared uncompressed size, as a zip bomb would. The strict check stops at the first chunk past it;
+    // JSZip alone would reject too, but only after inflating the whole entry.
+    for (let offset = 0; offset + 46 <= bytes.length; offset += 1) {
+      if (view.getUint32(offset, true) !== 0x02014b50) continue;
+      view.setUint32(offset + 24, 1, true);
+    }
+    const imported = await readImportFile(new File([bytes.buffer], 'bomb.loopdeck.zip'));
+    expect(imported).toMatchObject({ kind: 'pack', result: { ok: false } });
+  });
   it('returns structured validation errors for malformed containers and JSON entries', async () => {
     expect(await importLoopDeckJson(new File(['{'], 'broken.json'))).toMatchObject({
       ok: false,

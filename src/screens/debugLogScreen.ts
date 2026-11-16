@@ -36,7 +36,7 @@ function renderLogCard(log: DebugLogEntry): HTMLElement {
 }
 
 export function renderDebugLogScreen(context: ScreenContext): void {
-  const { root: root } = context;
+  const { root } = context;
   const { home: navigateHome } = context.navigation;
 
   clear(root);
