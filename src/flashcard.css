@@ -633,6 +633,18 @@
   }
 }
 
+/* Tablets and desktops: a larger card, with the judgment buttons directly under it rather than at the far edge. */
+@media (min-width: 700px) and (min-height: 760px) {
+  .flashcard-stage {
+    flex: 0 0 auto;
+    padding: 48px 0 32px;
+  }
+
+  .flashcard-wrap {
+    height: min(520px, 54vh);
+  }
+}
+
 /* Narrow phones: the labels matter more than the arrow badges. */
 @media (max-width: 360px) {
   .flashcard-arrow {
