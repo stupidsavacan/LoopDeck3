@@ -404,11 +404,11 @@ body {
   padding: 96px 26px 26px;
   border: 0;
   border-radius: var(--radius-xl);
-  /* Same ink surface as the home hero; the module colour is an accent glow and the icon tile, not the whole card. */
+  /* The cover is painted in the module's own colour (blue for history, green for geography, ...). */
   background:
-    radial-gradient(circle at 88% 12%, color-mix(in srgb, var(--module-accent) 62%, transparent), transparent 46%),
-    linear-gradient(145deg, #0a1020 0%, #101932 58%, #142548 100%);
-  box-shadow: none;
+    radial-gradient(circle at 78% 18%, color-mix(in srgb, var(--module-accent) 54%, white), transparent 34%),
+    linear-gradient(140deg, var(--module-accent), color-mix(in srgb, var(--module-accent) 72%, #10162b));
+  box-shadow: 0 24px 60px color-mix(in srgb, var(--module-accent) 20%, transparent);
   color: #fff;
   overflow: hidden;
 }
