@@ -3409,7 +3409,7 @@ body {
   margin-top: auto;
 }
 
-@media (min-width: 1000px) {
+@media (min-width: 700px) {
   .home-screen .folder-content:not(.shelf),
   .home-screen .folder-content.open:not(.shelf) {
     flex-wrap: wrap;
@@ -4250,5 +4250,112 @@ summary:focus-visible {
   from {
     opacity: 0;
     transform: translateY(8px);
+  }
+}
+
+/* ==== Tablets and up (iPad, desktop HTML) ====
+   The phone layout is one column of full-width controls. From 700px that stretches every button and
+   leaves cards stranded, so content gets its own measure here. */
+@media (min-width: 700px) {
+  /* Home: the hero is a card inside the page, with its call to action beside the copy instead of under it. */
+  .home-screen {
+    padding-top: calc(12px + var(--safe-top));
+  }
+
+  .home-screen .hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 14px 28px;
+    min-height: 0;
+    margin: 0 0 24px;
+    padding: 24px 28px;
+    border-radius: var(--radius-xl);
+  }
+
+  .home-screen .hero > * {
+    grid-column: 1 / -1;
+  }
+
+  .home-screen .hero > .today-hero-body {
+    grid-column: 1;
+  }
+
+  .home-screen .hero > .today-start {
+    grid-column: 2;
+    width: clamp(210px, 28vw, 340px);
+  }
+
+  /* The cloud chip sits in the hero's corner; keep the date row clear of it. */
+  .cloud-sync-icon.in-hero {
+    top: 16px;
+    right: 16px;
+  }
+
+  .home-screen .toolbar {
+    max-width: 620px;
+  }
+
+  .home-screen .search-grid > .empty-state,
+  .home-screen .folder-list > .empty-state {
+    grid-column: 1 / -1;
+  }
+
+  /* Session end and exam plan: readable measure, no kilometre-wide buttons. */
+  .quiz-card.done {
+    width: min(720px, 100%);
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  /* Keep the page title and back button on the same measure as the result card. */
+  .today-screen:has(.quiz-card.done) > :is(.topbar, .today-screen-title) {
+    width: min(720px, 100%);
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .exam-start {
+    width: min(420px, 100%);
+  }
+
+  .exam-form {
+    max-width: 520px;
+  }
+
+  /* Review: a lone list spans the grid, and action buttons keep their labels on one line. */
+  /* Hidden siblings still count for :only-child, so test for a second visible card instead. */
+  .review-list-grid:not(:has(> :not([hidden]) ~ :not([hidden]))) > * {
+    grid-column: 1 / -1;
+  }
+
+  .review-screen .review-details .data-actions {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  }
+
+  .review-screen .review-details .data-actions .btn {
+    white-space: nowrap;
+  }
+}
+
+/* Side rail: breathing room between the rail and the page. */
+@media (min-width: 1100px) {
+  #app:has(> .bottom-nav) {
+    column-gap: 20px;
+  }
+
+  #app:has(> .bottom-nav) > main.screen {
+    padding-right: 28px;
+  }
+}
+
+/* Large monitors: the whole interface scales up a step instead of floating as a small column. */
+@media (min-width: 1700px) {
+  html {
+    font-size: 112.5%;
+  }
+
+  .screen {
+    width: min(1200px, 100%);
   }
 }
